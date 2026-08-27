@@ -1,0 +1,254 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Design tokens extracted from Figma "1Moby - Demo"
+   (file key kept out of this repo)
+   --------------------------------------------------------------- */
+@theme {
+  --color-brand: #006bff;
+  --color-brand-dark: #0061c8;
+  --color-brand-tint: #eaf3ff;
+  --color-ink: #1c1e29;
+  --color-ink-2: #21272a;
+  --color-muted: #697077;
+  --color-muted-2: #878d96;
+  --color-line: #dde1e6;
+  --color-line-2: #c1c7cd;
+  --color-surface: #f2f0f2;
+  --color-accent: #f05123;
+  --color-amber: #faa21b;
+  --color-success: #00b916;
+
+  /* heat-map / distribution pastels */
+  --color-heat-good: #c2ffd4;
+  --color-heat-mid: #f7f9c4;
+  --color-heat-low: #f7dbc7;
+  --color-heat-bad: #f7c1c7;
+
+  --font-sans: var(--font-geologica), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 12px;
+
+  /* Motion tokens. Registering them here (rather than as hand-written classes)
+     is what lets them be used with variants — `lg:animate-fade-up`,
+     `max-lg:animate-sheet-up`. Keyframes are defined further down. */
+  --animate-fade-up: fade-up 0.28s ease-out both;
+  --animate-enter: fade-up 0.24s ease-out both;
+  --animate-backdrop: backdrop-in 0.18s ease-out both;
+  --animate-sheet-up: sheet-up 0.22s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+  --animate-drawer-in: drawer-in 0.2s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+  --animate-toast-in: toast-in 0.2s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+  --animate-toast-out: toast-out 0.18s ease-in both;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #ffffff;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* thin scrollbars inside data panels, matching the Figma mocks */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 999px;
+}
+
+/* ===============================================================
+   Motion vocabulary
+   ---------------------------------------------------------------
+   Everything here is short (150–250ms), eases out, and never moves
+   more than a few pixels. `prefers-reduced-motion: reduce` collapses
+   the lot to an instant state change at the bottom of this file.
+   =============================================================== */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Entrance for cards / tiles / list rows. Siblings that carry the class
+   stagger automatically, so a grid of cards rises in sequence without the
+   page having to pass an index. */
+.animate-enter:nth-child(2) {
+  animation-delay: 0.03s;
+}
+.animate-enter:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.animate-enter:nth-child(4) {
+  animation-delay: 0.09s;
+}
+.animate-enter:nth-child(5) {
+  animation-delay: 0.12s;
+}
+.animate-enter:nth-child(6) {
+  animation-delay: 0.15s;
+}
+.animate-enter:nth-child(n + 7) {
+  animation-delay: 0.18s;
+}
+
+/* Modal / dropdown backdrop */
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Phone modals slide up from the bottom edge as a sheet. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(14px);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Navigation drawer */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-16px);
+    opacity: 0.5;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Toast — enters and leaves rather than appearing and vanishing. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background-color: var(--color-surface);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.75) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
+}
+/* on the solid brand sidebar the placeholder has to be lighter, not darker */
+.skeleton-invert {
+  background-color: rgba(255, 255, 255, 0.22);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+}
+
+/* ---------------------------------------------------------------
+   One focus ring everywhere. It lives in the base layer at zero
+   specificity, so any component utility (e.g. a white ring on the blue
+   sidebar) still overrides it.
+   --------------------------------------------------------------- */
+@layer base {
+  :where(a, button, summary, [role="button"], [role="switch"], [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Phone shell: the fixed bottom tab bar must never cover content.
+   The app layout is owned by another agent, so the clearance is set
+   here — unlayered rules beat Tailwind's `@layer utilities`, which is
+   what lets this win over the `pb-16` utility on <main>.
+   --------------------------------------------------------------- */
+@media (width < 64rem) {
+  /* `header + main` is the app shell specifically (Topbar followed by the page)
+     — the standalone /login and not-found screens have no top bar and keep
+     their own centring. */
+  body header + main {
+    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* iOS: stop the rubber-band scroll from revealing white under the tab bar */
+@supports (-webkit-touch-callout: none) {
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Reduced motion — every animation collapses to an instant state
+   change. Not optional.
+   --------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton {
+    background-image: none;
+  }
+}

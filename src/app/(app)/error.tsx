@@ -1,0 +1,63 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, RotateCcw } from "lucide-react";
+import { useT } from "@/lib/i18n";
+
+export default function AppError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  const { tt } = useT();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Surfaced in the browser console so the failure is still diagnosable.
+    console.error("Screen failed to render:", error);
+  }, [error]);
+
+  return (
+    <div className="grid min-h-[60vh] place-items-center p-6">
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-white p-8 text-center shadow-[0_8px_36px_rgba(16,24,40,.10)]">
+        <span className="mx-auto grid size-12 place-items-center rounded-full bg-accent/10 text-accent">
+          <AlertTriangle size={22} />
+        </span>
+        <h1 className="mt-4 text-xl font-medium text-ink">
+          {tt("This screen hit an error", "หน้านี้เกิดข้อผิดพลาด")}
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          {tt(
+            "The rest of the demo is still fine. Try again, or go back to the dashboard.",
+            "ส่วนอื่นของระบบยังใช้งานได้ตามปกติ ลองใหม่อีกครั้ง หรือกลับไปหน้าแดชบอร์ด",
+          )}
+        </p>
+        {error.message ? (
+          <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-surface p-3 text-left text-[11px] leading-relaxed text-muted">
+            {error.message}
+          </pre>
+        ) : null}
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-white transition-colors hover:bg-brand-dark"
+          >
+            <RotateCcw size={15} />
+            {tt("Try again", "ลองใหม่อีกครั้ง")}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            className="inline-flex h-11 items-center rounded-lg border border-line px-5 text-sm font-medium text-ink transition-colors hover:bg-surface"
+          >
+            {tt("Back to dashboard", "กลับไปแดชบอร์ด")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

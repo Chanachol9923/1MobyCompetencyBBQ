@@ -1,0 +1,55 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "1moby-demo",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "portfolio",
+      "runtimeExecutable": "F:/Portfolio/portfolio-site/node_modules/.bin/astro.CMD",
+      "runtimeArgs": [
+        "dev",
+        "--root",
+        "F:/Portfolio/portfolio-site",
+        "--port",
+        "4321",
+        "--host"
+      ],
+      "port": 4321,
+      "autoPort": true
+    },
+    {
+      "name": "qlibrary",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4180",
+        "--directory",
+        "F:/Project/QLibrary"
+      ],
+      "port": 4180,
+      "autoPort": true
+    },
+    {
+      "name": "cs319-w2",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4181",
+        "--directory",
+        "F:/School_Project/cs319/W2"
+      ],
+      "port": 4181,
+      "autoPort": true
+    }
+  ]
+}
