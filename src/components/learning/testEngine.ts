@@ -1,13 +1,16 @@
-import type { Course } from "@/data/learning";
-
 /**
  * Deterministic pre/post test generator.
  *
- * Questions are built from the course's own chapters — the correct option is a
- * behavioural indicator from the chapter, the distractors come from the other
- * chapters (or from a small generic pool when the course is short). The seed is
+ * Questions are built from the course's own chapters as they come out of the
+ * database — the correct option is a behavioural indicator from the chapter
+ * (`Chapter.bulletsEn` / `bulletsTh`), the distractors come from the other
+ * chapters, or from a small generic pool when the course is short. The seed is
  * derived from the course id and the variant, so the pre-test and the post-test
- * are different papers but each one is stable across reloads.
+ * are different papers but each one is stable across reloads and across
+ * devices: the same person retaking the post-test sees the same questions.
+ *
+ * The paper is generated in the browser; only the *score* is written to the
+ * server, as a `TestResult` row.
  */
 
 export type Bilingual = { en: string; th: string };
@@ -20,6 +23,17 @@ export type TestQuestion = {
 };
 
 export type TestVariant = "pre" | "post";
+
+/** The shape the generator needs — a subset of `PlayerView`. */
+export type TestSource = {
+  courseId: string;
+  chapters: {
+    titleEn: string;
+    titleTh: string | null;
+    bulletsEn: string[];
+    bulletsTh: string[];
+  }[];
+};
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -77,15 +91,15 @@ const STEMS: Record<TestVariant, (chapter: string) => Bilingual> = {
 
 type Indicator = Bilingual & { chapterEn: string; chapterTh: string };
 
-function indicatorsOf(course: Course): Indicator[] {
+function indicatorsOf(source: TestSource): Indicator[] {
   const out: Indicator[] = [];
-  course.chapters.forEach((ch) => {
-    ch.bullets.forEach((b, i) => {
+  source.chapters.forEach((ch) => {
+    ch.bulletsEn.forEach((b, i) => {
       out.push({
         en: b,
-        th: ch.bulletsTh?.[i] ?? b,
-        chapterEn: ch.title,
-        chapterTh: ch.titleTh ?? ch.title,
+        th: ch.bulletsTh[i] ?? b,
+        chapterEn: ch.titleEn,
+        chapterTh: ch.titleTh ?? ch.titleEn,
       });
     });
   });
@@ -95,13 +109,13 @@ function indicatorsOf(course: Course): Indicator[] {
 /* --------------------------------------------------------------- generator */
 
 export function buildCourseTest(
-  course: Course,
+  source: TestSource,
   variant: TestVariant,
 ): TestQuestion[] {
-  const pool = indicatorsOf(course);
+  const pool = indicatorsOf(source);
   if (!pool.length) return [];
 
-  const rnd = seed(`${course.id}:${variant}`);
+  const rnd = seed(`${source.courseId}:${variant}`);
   const count = Math.min(5, Math.max(3, pool.length));
 
   // rotate the starting point so pre and post do not open on the same indicator
@@ -128,7 +142,7 @@ export function buildCourseTest(
     const rotated = [...options.slice(shift), ...options.slice(0, shift)];
 
     return {
-      id: `${course.id}-${variant}-${i}`,
+      id: `${source.courseId}-${variant}-${i}`,
       stem: {
         en: STEMS[variant](correct.chapterEn).en,
         th: STEMS[variant](correct.chapterTh).th,

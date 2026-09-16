@@ -1,44 +1,60 @@
-"use client";
-
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Button, Card, PageHeading } from "@/components/ui";
+import { notFound, redirect } from "next/navigation";
 import { AssessmentWizard } from "@/components/assessment/AssessmentWizard";
-import { isMode } from "@/components/assessment/lib";
-import { PEOPLE } from "@/data/people";
-import { useT } from "@/lib/i18n";
+import { NoCycleNotice } from "@/components/assessment/NoCycleNotice";
+import { can, PERMISSIONS } from "@/lib/permissions";
+import { requireEmployee } from "@/server/session";
+import { getWizardData, isMode } from "@/server/assessment";
 
-export default function AssessmentRunPage() {
-  const params = useParams<{ mode: string; target: string }>();
-  const { t, tt } = useT();
+/**
+ * One run of the 180° assessment.
+ *
+ * The guard is the whole point of this file. `mode` and `target` arrive from the
+ * URL, which is to say from anybody, so nothing below the checks runs until the
+ * server has satisfied itself that:
+ *
+ *   - the mode is one of exactly two — there is no peer assessment;
+ *   - a self assessment is the viewer's *own* employee id, resolved from the
+ *     session rather than read off the URL, and the viewer holds
+ *     `run_self_assessment`;
+ *   - a supervisor review is of one of the viewer's own direct reports, and the
+ *     viewer holds `review_direct_reports`.
+ *
+ * The server actions behind the wizard repeat all of this for themselves — a
+ * page guard protects the screen, not the endpoint.
+ */
+export default async function AssessmentRunPage({
+  params,
+}: {
+  params: Promise<{ mode: string; target: string }>;
+}) {
+  const { mode: rawMode, target } = await params;
+  const viewer = await requireEmployee();
 
-  const mode = Array.isArray(params?.mode) ? params.mode[0] : params?.mode;
-  const target = Array.isArray(params?.target) ? params.target[0] : params?.target;
-  const known = Boolean(target && PEOPLE.some((p) => p.id === target));
+  if (!isMode(rawMode)) notFound();
+  const mode = rawMode;
 
-  if (!mode || !target || !isMode(mode) || !known) {
-    return (
-      <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
-        <PageHeading title={t("nav.assessment")} />
-        <Card className="grid place-items-center gap-3 px-6 py-16 text-center">
-          <h2 className="text-xl font-bold text-ink">
-            {tt("Assessment not found", "ไม่พบแบบประเมินนี้")}
-          </h2>
-          <p className="max-w-lg break-words text-sm leading-relaxed text-muted">
-            {tt(
-              "That assessment link is not valid. Pick a self or supervisor assessment from the hub.",
-              "ลิงก์แบบประเมินนี้ไม่ถูกต้อง กรุณาเลือกแบบประเมินตนเอง หรือแบบประเมินโดยหัวหน้า จากหน้าการประเมิน",
-            )}
-          </p>
-          <Link href="/assessment">
-            <Button className="mt-2">
-              {tt("Back to assessment hub", "กลับไปหน้าการประเมิน")}
-            </Button>
-          </Link>
-        </Card>
-      </div>
-    );
+  if (mode === "self") {
+    if (!can(viewer.permissions, PERMISSIONS.RUN_SELF_ASSESSMENT)) {
+      redirect("/forbidden");
+    }
+    // a self assessment of somebody else is not a missing page, it is a refusal
+    if (target !== viewer.employeeId) redirect("/forbidden");
+  } else {
+    if (!can(viewer.permissions, PERMISSIONS.REVIEW_DIRECT_REPORTS)) {
+      redirect("/forbidden");
+    }
+    if (!viewer.reportIds.includes(target)) redirect("/forbidden");
   }
 
-  return <AssessmentWizard mode={mode} targetId={target} />;
+  const data = await getWizardData({
+    mode,
+    targetId: target,
+    // self answers belong to the subject; a review belongs to the manager
+    reviewerId: viewer.employeeId,
+  });
+
+  // no open cycle, or the employee record vanished between the guard and here
+  if (!data) return <NoCycleNotice />;
+
+  return <AssessmentWizard data={data} />;
 }

@@ -1,4 +1,25 @@
-import type { IdpGoal } from "@/lib/store";
+/**
+ * Goal status and the geometry of the timeline strip.
+ *
+ * Nothing here reads a store or a database: a goal arrives as three facts —
+ * when it started, when it is due, and how far along it is — and the status is
+ * derived from them every time it is asked for. The percentage itself is
+ * computed once on the server (`getGoalRows` in `src/server/team.ts`, which
+ * reads a course-backed goal off the learner's chapter completions), so a
+ * course finished on another device moves this screen without anything being
+ * written twice.
+ */
+
+/** The three fields every helper below needs. */
+export type PlanGoal = {
+  id: string;
+  /** yyyy-mm-dd */
+  startDate: string;
+  /** yyyy-mm-dd */
+  dueDate: string;
+  /** 0-100, already derived */
+  progress: number;
+};
 
 export type GoalStatus = "complete" | "overdue" | "atRisk" | "onTrack";
 
@@ -10,32 +31,23 @@ export const parseDate = (iso: string) => {
 };
 
 /**
- * Status is derived, never stored: a goal is late if today is past the due
+ * Status is derived, never stored: a goal is late once today is past the due
  * date, and "at risk" when progress trails the share of the window already
  * spent by more than 15 points.
- *
- * `progress` is the live number — callers that have the store pass
- * `goalProgress(state, goal)` so a goal backed by a course follows the course.
- * Completion is derived from that number, never from the stored `complete`
- * flag, which is only a seed value.
  */
-export function goalStatus(
-  goal: IdpGoal,
-  progress: number = goal.progress,
-  now = Date.now(),
-): GoalStatus {
-  if (progress >= 100) return "complete";
+export function goalStatus(goal: PlanGoal, now = Date.now()): GoalStatus {
+  if (goal.progress >= 100) return "complete";
   const start = parseDate(goal.startDate);
   const due = parseDate(goal.dueDate);
   if (now > due) return "overdue";
   const span = Math.max(due - start, day);
   const elapsed = Math.min(Math.max(now - start, 0), span);
   const expected = (elapsed / span) * 100;
-  return progress + 15 < expected ? "atRisk" : "onTrack";
+  return goal.progress + 15 < expected ? "atRisk" : "onTrack";
 }
 
 /** Whole days left before the due date; negative when overdue. */
-export function daysLeft(goal: IdpGoal, now = Date.now()) {
+export function daysLeft(goal: PlanGoal, now = Date.now()) {
   return Math.ceil((parseDate(goal.dueDate) - now) / day);
 }
 
@@ -57,7 +69,7 @@ export const STATUS_BAR: Record<GoalStatus, string> = {
 };
 
 /** Plan window covering every goal, padded so today always fits on screen. */
-export function planWindow(goals: IdpGoal[], now = Date.now()) {
+export function planWindow(goals: PlanGoal[], now = Date.now()) {
   if (!goals.length) return { start: now, end: now + 90 * day };
   const starts = goals.map((g) => parseDate(g.startDate));
   const ends = goals.map((g) => parseDate(g.dueDate));
@@ -69,7 +81,7 @@ export function planWindow(goals: IdpGoal[], now = Date.now()) {
 
 /** Percentage offsets for a goal's bar inside the plan window. */
 export function barGeometry(
-  goal: IdpGoal,
+  goal: PlanGoal,
   win: { start: number; end: number },
 ) {
   const span = Math.max(win.end - win.start, 1);

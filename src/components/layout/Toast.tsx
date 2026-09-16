@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDemo } from "@/lib/store";
+import { useUi } from "@/lib/ui-state";
 
 const EXIT_MS = 180;
 
@@ -12,15 +12,15 @@ const EXIT_MS = 180;
  * a local copy alive for one exit animation so it slides out instead.
  */
 export function Toast() {
-  const { state } = useDemo();
+  const { toast } = useUi();
   const [message, setMessage] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
     if (timer.current) window.clearTimeout(timer.current);
-    if (state.toast) {
-      setMessage(state.toast);
+    if (toast) {
+      setMessage(toast);
       setLeaving(false);
       return;
     }
@@ -29,7 +29,7 @@ export function Toast() {
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [state.toast]);
+  }, [toast]);
 
   if (!message) return null;
 

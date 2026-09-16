@@ -1,14 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
-import {
-  Button,
-  Field,
-  Input,
-  Modal,
-  Select,
-} from "@/components/ui";
+import { Button, Field, Input, Modal, Select } from "@/components/ui";
 import {
   IconAction,
   SearchInput,
@@ -17,148 +11,102 @@ import {
   Th,
   downloadCsv,
 } from "@/components/admin/shared";
-import { useDemo } from "@/lib/store";
+import type {
+  ActionResult,
+  OrgEntity,
+  OrgUnitRow,
+} from "@/components/admin/content-types";
+import { deleteOrgUnit, saveOrgUnit } from "@/server/admin-content";
 import { useT } from "@/lib/i18n";
 
-export type OrgField = {
-  key: string;
-  label: string;
-  type?: "text" | "number" | "select";
-  options?: string[];
-};
-
-export type OrgRow = { id: string } & Record<string, string | number>;
-
-type Draft = Record<string, string>;
-
-function toDraft(fields: OrgField[], row?: OrgRow): Draft {
-  const d: Draft = {};
-  fields.forEach((f) => {
-    d[f.key] = row ? String(row[f.key] ?? "") : f.type === "number" ? "0" : "";
-  });
-  return d;
-}
-
 /**
- * Generic tab used by Position / Role / Department / Division. The store only
- * tracks employees, so these rows live in the page's local state seeded from
- * the org constants — add / edit / delete all work against that state.
+ * Department / Division / Position, against the real tables.
+ *
+ * All three are the same operation — a named unit, optionally filed under a
+ * department — so they share one component and one server action. The counts
+ * are `_count` from the query, not figures somebody typed in: a department with
+ * eleven people says eleven because eleven rows point at it.
  */
 export function OrgTab({
   entity,
-  noun,
-  addLabel,
-  fields,
   rows,
-  onChange,
-  filterKey,
-  filterLabel,
+  departments,
+  onResult,
 }: {
-  /** Stable English slug used for ids, CSV file names and the activity log. */
-  entity: string;
-  /** Singular name in the active language, e.g. "Position" / "ตำแหน่ง". */
-  noun: string;
-  /** Button copy from Figma, e.g. "Create New Position". */
-  addLabel: string;
-  fields: OrgField[];
-  rows: OrgRow[];
-  onChange: (next: OrgRow[]) => void;
-  filterKey?: string;
-  /** Accessible name for the filter dropdown, already translated. */
-  filterLabel?: string;
+  entity: OrgEntity;
+  rows: OrgUnitRow[];
+  /** the parent options — empty for the department tab itself */
+  departments: OrgUnitRow[];
+  onResult: (result: ActionResult) => void;
 }) {
-  const { notify, logActivity } = useDemo();
   const { t, tt } = useT();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const [editing, setEditing] = useState<OrgRow | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState<Draft>({});
-  const [confirm, setConfirm] = useState<OrgRow | null>(null);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<OrgUnitRow | null>(null);
+  const [name, setName] = useState("");
+  const [parentId, setParentId] = useState("");
+  const [confirm, setConfirm] = useState<OrgUnitRow | null>(null);
+  const [busy, startTransition] = useTransition();
 
-  const filterOptions = useMemo(() => {
-    if (!filterKey) return [];
-    return Array.from(new Set(rows.map((r) => String(r[filterKey] ?? "")))).filter(
-      Boolean,
-    );
-  }, [rows, filterKey]);
+  const noun =
+    entity === "department"
+      ? { en: "Department", th: "ฝ่าย", label: t("label.department") }
+      : entity === "division"
+        ? { en: "Division", th: "แผนก", label: t("label.division") }
+        : { en: "Position", th: "ตำแหน่ง", label: t("label.position") };
+
+  const hasParent = entity !== "department";
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
-      const matchQ =
-        !q ||
-        fields.some((f) => String(r[f.key] ?? "").toLowerCase().includes(q));
-      const matchF =
-        !filterKey || filter === "all" || String(r[filterKey] ?? "") === filter;
-      return matchQ && matchF;
+      if (hasParent && filter !== "all" && r.parentId !== filter) return false;
+      if (!q) return true;
+      return `${r.name} ${r.parentName ?? ""}`.toLowerCase().includes(q);
     });
-  }, [rows, query, filter, filterKey, fields]);
+  }, [rows, query, filter, hasParent]);
+
+  function run(fn: () => Promise<ActionResult>) {
+    startTransition(async () => onResult(await fn()));
+  }
 
   function openAdd() {
-    setDraft(toDraft(fields));
-    setAdding(true);
-  }
-
-  function openEdit(row: OrgRow) {
-    setDraft(toDraft(fields, row));
-    setEditing(row);
-  }
-
-  function closeForm() {
-    setAdding(false);
     setEditing(null);
+    setName("");
+    setParentId(hasParent ? (departments[0]?.id ?? "") : "");
+    setOpen(true);
   }
 
-  function buildRow(id: string): OrgRow {
-    const row: OrgRow = { id };
-    fields.forEach((f) => {
-      row[f.key] =
-        f.type === "number" ? Number(draft[f.key] ?? 0) || 0 : (draft[f.key] ?? "");
-    });
-    return row;
+  function openEdit(row: OrgUnitRow) {
+    setEditing(row);
+    setName(row.name);
+    setParentId(row.parentId ?? "");
+    setOpen(true);
   }
 
   function save() {
-    const nameKey = fields[0]!.key;
-    const value = String(draft[nameKey] ?? "").trim();
-    if (!value) {
-      notify(tt(`${noun} name is required`, `กรุณากรอกชื่อ${noun}`));
-      return;
-    }
-    if (editing) {
-      const next = rows.map((r) => (r.id === editing.id ? buildRow(editing.id) : r));
-      onChange(next);
-      logActivity(`Updated ${entity}`, value);
-      notify(tt(`${noun} updated`, `อัปเดต${noun}แล้ว`));
-    } else {
-      const id = `${entity}-${Date.now()}`;
-      onChange([...rows, buildRow(id)]);
-      logActivity(`Added ${entity}`, value);
-      notify(tt(`${noun} “${value}” added`, `เพิ่ม${noun} “${value}” แล้ว`));
-    }
-    closeForm();
-  }
-
-  function remove(row: OrgRow) {
-    const value = String(row[fields[0]!.key] ?? "");
-    onChange(rows.filter((r) => r.id !== row.id));
-    logActivity(`Removed ${entity}`, value);
-    notify(tt(`${noun} “${value}” removed`, `ลบ${noun} “${value}” แล้ว`));
-    setConfirm(null);
+    const payload = {
+      entity,
+      id: editing?.id ?? "",
+      name,
+      parentId: hasParent ? parentId : "",
+    };
+    setOpen(false);
+    run(() => saveOrgUnit(payload));
   }
 
   function exportList() {
     downloadCsv(
       `1moby-${entity}-list.csv`,
-      fields.map((f) => f.label),
-      visible.map((r) => fields.map((f) => r[f.key] ?? "")),
-    );
-    notify(
-      tt(
-        `${noun} list exported as CSV (${visible.length} rows)`,
-        `ส่งออกรายการ${noun}เป็น CSV แล้ว (${visible.length} แถว)`,
-      ),
+      hasParent
+        ? [noun.label, t("label.department"), t("label.headcount")]
+        : [noun.label, tt("Divisions", "แผนก"), t("label.headcount")],
+      visible.map((r) => [
+        r.name,
+        hasParent ? (r.parentName ?? "—") : r.childCount,
+        r.employeeCount,
+      ]),
     );
   }
 
@@ -168,20 +116,20 @@ export function OrgTab({
         <SearchInput
           value={query}
           onChange={setQuery}
-          placeholder={tt(`Search ${noun.toLowerCase()}...`, `ค้นหา${noun}...`)}
+          placeholder={tt(`Search ${noun.en.toLowerCase()}...`, `ค้นหา${noun.th}...`)}
           className="w-full sm:w-64"
         />
-        {filterKey ? (
+        {hasParent ? (
           <Select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-full sm:w-52"
-            aria-label={filterLabel ?? filterKey}
+            aria-label={t("label.department")}
           >
             <option value="all">{t("label.all")}</option>
-            {filterOptions.map((o) => (
-              <option key={o} value={o}>
-                {o}
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
               </option>
             ))}
           </Select>
@@ -193,7 +141,7 @@ export function OrgTab({
           </Button>
           <Button size="sm" onClick={openAdd}>
             <Plus size={15} />
-            {addLabel}
+            {tt(`Create New ${noun.en}`, `สร้าง${noun.th}ใหม่`)}
           </Button>
         </div>
       </div>
@@ -202,32 +150,35 @@ export function OrgTab({
         <table className="w-full min-w-[720px] border-collapse">
           <thead>
             <tr className="border-y border-line/70 bg-surface/60">
-              {fields.map((f) => (
-                <Th key={f.key}>{f.label}</Th>
-              ))}
+              <Th>{noun.label}</Th>
+              <Th>
+                {hasParent ? t("label.department") : tt("Divisions", "จำนวนแผนก")}
+              </Th>
+              <Th>{t("label.headcount")}</Th>
               <Th className="text-right">{t("label.actions")}</Th>
             </tr>
           </thead>
           <tbody>
             {visible.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0">
-                {fields.map((f, i) => (
-                  <Td key={f.key} className={i === 0 ? "font-bold" : "text-muted"}>
-                    {String(r[f.key] ?? "")}
-                  </Td>
-                ))}
+                <Td className="font-bold">{r.name}</Td>
+                <Td className="text-muted">
+                  {hasParent ? (r.parentName ?? "—") : r.childCount}
+                </Td>
+                <Td className="text-muted">{r.employeeCount}</Td>
                 <Td>
                   <div className="flex justify-end gap-2">
                     <IconAction
                       tone="brand"
-                      aria-label={t("action.edit")}
+                      aria-label={`${t("action.edit")} ${r.name}`}
                       onClick={() => openEdit(r)}
                     >
                       <Pencil size={14} />
                     </IconAction>
                     <IconAction
                       tone="danger"
-                      aria-label={t("action.delete")}
+                      disabled={busy}
+                      aria-label={`${t("action.delete")} ${r.name}`}
                       onClick={() => setConfirm(r)}
                     >
                       <Trash2 size={14} />
@@ -238,10 +189,10 @@ export function OrgTab({
             ))}
             {visible.length === 0 ? (
               <tr>
-                <Td colSpan={fields.length + 1} className="py-10 text-center text-muted">
+                <Td colSpan={4} className="py-10 text-center text-muted">
                   {tt(
-                    `Nothing here yet — use “${addLabel}” to create one.`,
-                    `ยังไม่มีข้อมูล — กด “${addLabel}” เพื่อสร้างรายการใหม่`,
+                    `Nothing here yet — use "Create New ${noun.en}".`,
+                    `ยังไม่มีข้อมูล — กด "สร้าง${noun.th}ใหม่" เพื่อเพิ่มรายการ`,
                   )}
                 </Td>
               </tr>
@@ -251,89 +202,99 @@ export function OrgTab({
       </TableWrap>
 
       <Modal
-        open={adding || Boolean(editing)}
-        onClose={closeForm}
+        open={open}
+        onClose={() => setOpen(false)}
         title={
           editing
-            ? tt(`Edit ${noun}`, `แก้ไข${noun}`)
-            : tt(`Add New ${noun}`, `เพิ่ม${noun}ใหม่`)
-        }
-        subtitle={
-          editing
-            ? tt("Update the details below.", "แก้ไขรายละเอียดด้านล่าง")
-            : tt(`Create a new ${noun.toLowerCase()}.`, `สร้าง${noun}ใหม่`)
+            ? tt(`Edit ${noun.en}`, `แก้ไข${noun.th}`)
+            : tt(`Add New ${noun.en}`, `เพิ่ม${noun.th}ใหม่`)
         }
         footer={
           <>
-            <Button variant="outline" onClick={closeForm}>
+            <Button variant="outline" onClick={() => setOpen(false)}>
               {t("action.cancel")}
             </Button>
-            <Button onClick={save}>
+            <Button onClick={save} disabled={busy}>
               {editing ? t("action.saveChanges") : t("action.add")}
             </Button>
           </>
         }
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          {fields.map((f) => (
-            <Field key={f.key} label={f.label}>
-              {f.type === "select" ? (
-                <Select
-                  value={draft[f.key] ?? ""}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, [f.key]: e.target.value }))
-                  }
-                >
-                  <option value="">
-                    {tt(`Select ${f.label.toLowerCase()}`, `เลือก${f.label}`)}
+        <div className="grid gap-4">
+          <Field label={`${noun.label} *`}>
+            <Input
+              value={name}
+              placeholder={tt(`Enter ${noun.en.toLowerCase()} name`, `กรอกชื่อ${noun.th}`)}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+          {hasParent ? (
+            <Field
+              label={
+                entity === "division"
+                  ? `${t("label.department")} *`
+                  : t("label.department")
+              }
+              hint={
+                entity === "division"
+                  ? tt(
+                      "A division always belongs to a department.",
+                      "แผนกต้องสังกัดฝ่ายเสมอ",
+                    )
+                  : undefined
+              }
+            >
+              <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                {entity === "position" ? (
+                  <option value="">{tt("Company-wide", "ใช้ได้ทั้งบริษัท")}</option>
+                ) : null}
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
                   </option>
-                  {(f.options ?? []).map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <Input
-                  type={f.type === "number" ? "number" : "text"}
-                  value={draft[f.key] ?? ""}
-                  placeholder={tt(`Enter ${f.label.toLowerCase()}`, `กรอก${f.label}`)}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, [f.key]: e.target.value }))
-                  }
-                />
-              )}
+                ))}
+              </Select>
             </Field>
-          ))}
+          ) : null}
         </div>
       </Modal>
 
       <Modal
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
-        title={tt(`Delete ${noun}`, `ลบ${noun}`)}
+        title={tt(`Delete ${noun.en.toLowerCase()}`, `ลบ${noun.th}`)}
         width="max-w-md"
         footer={
           <>
             <Button variant="outline" onClick={() => setConfirm(null)}>
               {t("action.cancel")}
             </Button>
-            <Button variant="danger" onClick={() => confirm && remove(confirm)}>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                const target = confirm;
+                setConfirm(null);
+                if (target) run(() => deleteOrgUnit({ entity, id: target.id }));
+              }}
+            >
               {t("action.delete")}
             </Button>
           </>
         }
       >
-        <p className="text-sm text-muted">
+        <p className="text-sm leading-relaxed text-muted">
           {tt("Remove", "ลบ")}{" "}
-          <span className="font-medium text-ink">
-            {confirm ? String(confirm[fields[0]!.key] ?? "") : ""}
-          </span>{" "}
-          {tt(
-            `from the ${noun.toLowerCase()} list?`,
-            `ออกจากรายการ${noun}หรือไม่?`,
-          )}{" "}
-          {t("admin.onlyDemoData")}
+          <span className="font-medium text-ink">{confirm?.name}</span>?{" "}
+          {confirm && confirm.employeeCount > 0
+            ? tt(
+                `${confirm.employeeCount} people are filed under it, so this will be refused until they are moved.`,
+                `มีพนักงาน ${confirm.employeeCount} คนอยู่ภายใต้รายการนี้ ระบบจะปฏิเสธจนกว่าจะย้ายออกก่อน`,
+              )
+            : tt(
+                "Nothing is filed under it, so this is safe.",
+                "ไม่มีข้อมูลใดอยู่ภายใต้รายการนี้ จึงลบได้อย่างปลอดภัย",
+              )}
         </p>
       </Modal>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Award,
   ExternalLink,
@@ -10,70 +11,69 @@ import {
   StickyNote,
   Trash2,
 } from "lucide-react";
-import {
-  Button,
-  Field,
-  Input,
-  Modal,
-  Select,
-  Textarea,
-} from "@/components/ui";
+import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
+import { pick } from "@/components/learning/model";
 import { useT } from "@/lib/i18n";
-import { useDemo, type GoalEvidence, type IdpGoal } from "@/lib/store";
+import type { CertificateOption, EvidenceItem } from "@/server/learning";
+import {
+  attachEvidenceAction,
+  removeEvidenceAction,
+  type AttachEvidenceInput,
+  type EvidenceError,
+} from "./actions";
 
-type Kind = GoalEvidence["kind"];
+type Kind = EvidenceItem["kind"];
 
 const KIND_ICON: Record<Kind, typeof Award> = {
-  certificate: Award,
-  link: Link2,
-  note: StickyNote,
-};
-
-const newId = () =>
-  `ev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-
-const isHttpUrl = (value: string) => {
-  try {
-    const u = new URL(value.trim());
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
+  CERTIFICATE: Award,
+  LINK: Link2,
+  NOTE: StickyNote,
 };
 
 /**
  * "แนบหลักฐานการเรียนรู้" — the employee's own record of what they did to close
- * the gap. Certificates already issued by the LMS are the strongest evidence,
- * so they get a picker and a one-click suggestion; links and notes cover
- * coaching, on-the-job work and anything the LMS never saw.
+ * the gap.
+ *
+ * The rows are `GoalEvidence` and every change goes through a server action:
+ * the certificate picker only ever offers this viewer's real `Certificate`
+ * rows, and the server re-checks the goal, the certificate and the link before
+ * it writes. Nothing here decides what is allowed, only what to draw.
  */
 export function GoalEvidencePanel({
-  goal,
-  personId,
+  goalId,
+  goalName,
+  /** the course the manager put in the plan, for the one-click suggestion */
+  planCourseId,
+  items,
+  certificates,
 }: {
-  goal: IdpGoal;
-  personId: string;
+  goalId: string;
+  goalName: string;
+  planCourseId: string | null;
+  items: EvidenceItem[];
+  certificates: CertificateOption[];
 }) {
-  const { state, update, notify, logActivity } = useDemo();
   const { t, tt, lang } = useT();
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<Kind>("certificate");
+  const [kind, setKind] = useState<Kind>("CERTIFICATE");
   const [certId, setCertId] = useState("");
   const [url, setUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<GoalEvidence | null>(null);
+  const [error, setError] = useState<EvidenceError | null>(null);
+  const [removing, setRemoving] = useState<EvidenceItem | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  const items = goal.evidence ?? [];
-  const myCertificates = state.certificates.filter(
-    (c) => c.personId === personId,
-  );
-  const attached = new Set(items.map((e) => `${e.kind}:${e.ref}`));
-  const courseCertificate = myCertificates.find(
-    (c) => c.courseId === goal.courseId && !attached.has(`certificate:${c.id}`),
-  );
+  const attached = new Set(items.map((e) => `${e.kind}:${e.reference}`));
+  /** the certificate this goal's own course already issued */
+  const courseCertificate = planCourseId
+    ? certificates.find(
+        (c) =>
+          c.courseId === planCourseId && !attached.has(`CERTIFICATE:${c.id}`),
+      )
+    : undefined;
 
   const dateFmt = (iso: string) =>
     new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", {
@@ -83,41 +83,37 @@ export function GoalEvidencePanel({
     });
 
   const kindLabel = (k: Kind) =>
-    k === "certificate"
+    k === "CERTIFICATE"
       ? tt("Certificate", "ใบรับรอง")
-      : k === "link"
+      : k === "LINK"
         ? tt("Link", "ลิงก์")
         : t("label.notes");
 
-  /** immutable write into this person's own plan */
-  const writeEvidence = (next: (prev: GoalEvidence[]) => GoalEvidence[]) =>
-    update((s) => ({
-      ...s,
-      idp: {
-        ...s.idp,
-        [personId]: (s.idp[personId] ?? []).map((g) =>
-          g.id === goal.id ? { ...g, evidence: next(g.evidence ?? []) } : g,
-        ),
-      },
-    }));
-
-  const attach = (draft: Omit<GoalEvidence, "id" | "addedAt">) => {
-    writeEvidence((prev) => [
-      ...prev,
-      { ...draft, id: newId(), addedAt: new Date().toISOString().slice(0, 10) },
-    ]);
-    logActivity(
-      "Attached learning evidence",
-      goal.competencyName,
-      `${kindLabel(draft.kind)} · ${draft.label}`,
-    );
-    notify(
-      tt(
-        `Evidence attached to ${goal.competencyName}`,
-        `แนบหลักฐานให้เป้าหมาย ${goal.competencyName} แล้ว`,
+  const errorText = (code: EvidenceError) =>
+    ({
+      not_authorised: tt(
+        "You can only attach evidence to your own plan.",
+        "คุณแนบหลักฐานได้เฉพาะในแผนพัฒนาของคุณเอง",
       ),
-    );
-  };
+      invalid: tt("Check the form and try again.", "ตรวจสอบข้อมูลแล้วลองใหม่"),
+      not_found: tt("That goal no longer exists.", "ไม่พบเป้าหมายนี้แล้ว"),
+      bad_url: tt(
+        "Enter a full link starting with http:// or https://",
+        "กรุณากรอกลิงก์เต็มที่ขึ้นต้นด้วย http:// หรือ https://",
+      ),
+      short_note: tt(
+        "Write a few words about what you did.",
+        "กรุณาเขียนอธิบายสั้น ๆ ว่าคุณทำอะไรไปบ้าง",
+      ),
+      no_certificate: tt(
+        "Choose one of your certificates.",
+        "กรุณาเลือกใบรับรองของคุณหนึ่งรายการ",
+      ),
+      already_attached: tt(
+        "That is already attached to this goal.",
+        "หลักฐานนี้ถูกแนบกับเป้าหมายนี้อยู่แล้ว",
+      ),
+    })[code];
 
   const closeModal = () => {
     setOpen(false);
@@ -128,68 +124,44 @@ export function GoalEvidencePanel({
     setNote("");
   };
 
-  const save = () => {
-    if (kind === "certificate") {
-      const certificate = myCertificates.find((c) => c.id === certId);
-      if (!certificate) {
-        setError(
-          tt(
-            "Choose one of your certificates.",
-            "กรุณาเลือกใบรับรองของคุณหนึ่งรายการ",
-          ),
-        );
+  const run = (input: AttachEvidenceInput, onDone?: () => void) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await attachEvidenceAction(input);
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
-      attach({
-        kind,
-        label: certificate.courseTitle,
-        ref: certificate.id,
-      });
-    } else if (kind === "link") {
-      if (!isHttpUrl(url)) {
-        setError(
-          tt(
-            "Enter a full link starting with http:// or https://",
-            "กรุณากรอกลิงก์เต็มที่ขึ้นต้นด้วย http:// หรือ https://",
-          ),
-        );
-        return;
-      }
-      const href = url.trim();
-      attach({
-        kind,
-        label: linkLabel.trim() || new URL(href).hostname,
-        ref: href,
-      });
-    } else {
-      const body = note.trim();
-      if (body.length < 4) {
-        setError(
-          tt(
-            "Write a few words about what you did.",
-            "กรุณาเขียนอธิบายสั้น ๆ ว่าคุณทำอะไรไปบ้าง",
-          ),
-        );
-        return;
-      }
-      attach({
-        kind,
-        label: body.length > 60 ? `${body.slice(0, 57)}…` : body,
-        ref: body,
-      });
-    }
-    closeModal();
+      onDone?.();
+      router.refresh();
+    });
   };
 
-  const remove = (item: GoalEvidence) => {
-    writeEvidence((prev) => prev.filter((e) => e.id !== item.id));
-    logActivity(
-      "Removed learning evidence",
-      goal.competencyName,
-      `${kindLabel(item.kind)} · ${item.label}`,
-    );
-    notify(tt("Evidence removed", "ลบหลักฐานแล้ว"));
-    setRemoving(null);
+  const save = () => {
+    if (kind === "CERTIFICATE") {
+      if (!certId) {
+        setError("no_certificate");
+        return;
+      }
+      run({ kind: "CERTIFICATE", goalId, certificateId: certId }, closeModal);
+    } else if (kind === "LINK") {
+      run({ kind: "LINK", goalId, url, label: linkLabel }, closeModal);
+    } else {
+      run({ kind: "NOTE", goalId, note }, closeModal);
+    }
+  };
+
+  const remove = (item: EvidenceItem) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await removeEvidenceAction({ evidenceId: item.id });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setRemoving(null);
+      router.refresh();
+    });
   };
 
   return (
@@ -211,10 +183,6 @@ export function GoalEvidencePanel({
         <ul className="mt-3 space-y-2">
           {items.map((item) => {
             const Icon = KIND_ICON[item.kind];
-            const certificate =
-              item.kind === "certificate"
-                ? state.certificates.find((c) => c.id === item.ref)
-                : undefined;
             return (
               <li
                 key={item.id}
@@ -224,9 +192,9 @@ export function GoalEvidencePanel({
                   <Icon size={14} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  {item.kind === "link" ? (
+                  {item.kind === "LINK" ? (
                     <a
-                      href={item.ref}
+                      href={item.reference}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex max-w-full items-center gap-1 truncate text-sm font-medium text-brand hover:underline"
@@ -241,25 +209,23 @@ export function GoalEvidencePanel({
                   )}
                   <p className="mt-0.5 text-[11px] text-muted">
                     {kindLabel(item.kind)}
-                    {certificate
-                      ? ` · ${tt("Score", "คะแนน")} ${certificate.score}%`
+                    {item.certificateScore !== null
+                      ? ` · ${tt("Score", "คะแนน")} ${item.certificateScore}%`
                       : ""}
+                    {item.certificateCode ? ` · ${item.certificateCode}` : ""}
                     {" · "}
-                    {dateFmt(item.addedAt)}
+                    {dateFmt(item.createdAt)}
                   </p>
-                  {item.kind === "note" ? (
+                  {item.kind === "NOTE" ? (
                     <p className="mt-1 whitespace-pre-line text-xs text-muted">
-                      {item.ref}
+                      {item.reference}
                     </p>
                   ) : null}
                 </div>
                 <button
                   type="button"
                   onClick={() => setRemoving(item)}
-                  aria-label={tt(
-                    `Remove ${item.label}`,
-                    `ลบ ${item.label}`,
-                  )}
+                  aria-label={tt(`Remove ${item.label}`, `ลบ ${item.label}`)}
                   className="grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-white hover:text-accent max-lg:size-11"
                 >
                   <Trash2 size={15} />
@@ -282,18 +248,19 @@ export function GoalEvidencePanel({
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-brand-tint px-3 py-2.5">
           <p className="min-w-0 text-xs text-brand">
             {tt(
-              `You already earned a certificate for ${courseCertificate.courseTitle}.`,
-              `คุณได้รับใบรับรองของหลักสูตร ${courseCertificate.courseTitle} แล้ว`,
+              `You already earned a certificate for ${pick(lang, courseCertificate.titleEn, courseCertificate.titleTh)}.`,
+              `คุณได้รับใบรับรองของหลักสูตร ${pick(lang, courseCertificate.titleEn, courseCertificate.titleTh)} แล้ว`,
             )}
           </p>
           <Button
             size="sm"
             variant="secondary"
+            disabled={pending}
             onClick={() =>
-              attach({
-                kind: "certificate",
-                label: courseCertificate.courseTitle,
-                ref: courseCertificate.id,
+              run({
+                kind: "CERTIFICATE",
+                goalId,
+                certificateId: courseCertificate.id,
               })
             }
           >
@@ -303,14 +270,18 @@ export function GoalEvidencePanel({
         </div>
       ) : null}
 
+      {!open && error ? (
+        <p className="mt-3 text-xs text-accent">{errorText(error)}</p>
+      ) : null}
+
       {/* --------------------------------------------------------- attach */}
       <Modal
         open={open}
         onClose={closeModal}
         title={tt("Attach evidence", "แนบหลักฐานการเรียนรู้")}
         subtitle={tt(
-          `Evidence for “${goal.competencyName}”`,
-          `หลักฐานสำหรับ “${goal.competencyName}”`,
+          `Evidence for “${goalName}”`,
+          `หลักฐานสำหรับ “${goalName}”`,
         )}
         width="max-w-lg"
         footer={
@@ -318,7 +289,9 @@ export function GoalEvidencePanel({
             <Button variant="outline" onClick={closeModal}>
               {t("action.cancel")}
             </Button>
-            <Button onClick={save}>{t("action.save")}</Button>
+            <Button onClick={save} disabled={pending}>
+              {t("action.save")}
+            </Button>
           </>
         }
       >
@@ -331,20 +304,18 @@ export function GoalEvidencePanel({
                 setError(null);
               }}
             >
-              <option value="certificate">
+              <option value="CERTIFICATE">
                 {tt("Certificate from the LMS", "ใบรับรองจากระบบการเรียนรู้")}
               </option>
-              <option value="link">
+              <option value="LINK">
                 {tt("Link to your work", "ลิงก์ผลงานของคุณ")}
               </option>
-              <option value="note">
-                {tt("Note", "บันทึกข้อความ")}
-              </option>
+              <option value="NOTE">{tt("Note", "บันทึกข้อความ")}</option>
             </Select>
           </Field>
 
-          {kind === "certificate" ? (
-            myCertificates.length ? (
+          {kind === "CERTIFICATE" ? (
+            certificates.length ? (
               <Field
                 label={tt("Choose a certificate", "เลือกใบรับรอง")}
                 hint={tt(
@@ -359,12 +330,12 @@ export function GoalEvidencePanel({
                     setError(null);
                   }}
                 >
-                  <option value="">
-                    {tt("Select…", "เลือก…")}
-                  </option>
-                  {myCertificates.map((c) => (
+                  <option value="">{tt("Select…", "เลือก…")}</option>
+                  {certificates.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.courseTitle} — {c.score}% · {c.issuedAt}
+                      {pick(lang, c.titleEn, c.titleTh)}
+                      {c.score !== null ? ` — ${c.score}%` : ""} ·{" "}
+                      {c.issuedAt.slice(0, 10)}
                     </option>
                   ))}
                 </Select>
@@ -379,7 +350,7 @@ export function GoalEvidencePanel({
             )
           ) : null}
 
-          {kind === "link" ? (
+          {kind === "LINK" ? (
             <>
               <Field
                 label={tt("Link", "ลิงก์")}
@@ -405,16 +376,13 @@ export function GoalEvidencePanel({
                 <Input
                   value={linkLabel}
                   onChange={(e) => setLinkLabel(e.target.value)}
-                  placeholder={tt(
-                    "Workshop recap deck",
-                    "สไลด์สรุปเวิร์กช็อป",
-                  )}
+                  placeholder={tt("Workshop recap deck", "สไลด์สรุปเวิร์กช็อป")}
                 />
               </Field>
             </>
           ) : null}
 
-          {kind === "note" ? (
+          {kind === "NOTE" ? (
             <Field
               label={t("label.notes")}
               hint={tt(
@@ -436,7 +404,7 @@ export function GoalEvidencePanel({
             </Field>
           ) : null}
 
-          {error ? <p className="text-xs text-accent">{error}</p> : null}
+          {error ? <p className="text-xs text-accent">{errorText(error)}</p> : null}
         </div>
       </Modal>
 
@@ -453,6 +421,7 @@ export function GoalEvidencePanel({
             </Button>
             <Button
               variant="danger"
+              disabled={pending}
               onClick={() => removing && remove(removing)}
             >
               {t("action.delete")}
@@ -462,8 +431,8 @@ export function GoalEvidencePanel({
       >
         <p className="text-sm text-muted">
           {tt(
-            `“${removing?.label ?? ""}” will be detached from ${goal.competencyName}. Your certificate itself is not deleted.`,
-            `“${removing?.label ?? ""}” จะถูกนำออกจากเป้าหมาย ${goal.competencyName} ทั้งนี้ใบรับรองของคุณจะไม่ถูกลบ`,
+            `“${removing?.label ?? ""}” will be detached from ${goalName}. Your certificate itself is not deleted.`,
+            `“${removing?.label ?? ""}” จะถูกนำออกจากเป้าหมาย ${goalName} ทั้งนี้ใบรับรองของคุณจะไม่ถูกลบ`,
           )}
         </p>
       </Modal>

@@ -1,155 +1,99 @@
 /**
- * Shared logic for the 180° assessment system (Self / Supervisor).
+ * The client-side half of the 180° assessment.
  *
- * Everything here is pure so the wizard, the hub and the result page all agree
- * on which steps exist, which competencies are actually assessed for a role and
- * how the weighted total is produced.
+ * The data lives in Postgres and `src/server/assessment.ts` reads it; this
+ * module carries only what a browser bundle needs — the shapes it receives, how
+ * the steps are derived from them, and the weighted-total formula the wizard
+ * has to recompute on every click without a round trip.
+ *
+ * Everything here is pure. Nothing reads a database, a store or a session, so
+ * the hub (a server component) and the wizard (a client one) can share it and
+ * cannot disagree about what a step, a total or a status is.
  */
 
-import {
-  COMPETENCIES,
-  expectedFor,
-  isAssessed,
-  verdictFor,
-  type Competency,
-  type GapVerdict,
-  type Group,
-} from "@/data/competencies";
-import { FRAMEWORK } from "@/data/framework";
-import type { Person } from "@/data/people";
 import type {
-  AssessmentState,
-  DemoState,
-  KpiItem,
-  Weights,
-} from "@/lib/store";
-import { currentCycle } from "@/data/cycle";
+  AssessmentStatus,
+  CompetencyGroup,
+  CompetencyQuestion,
+  CycleSummary,
+  KpiRow,
+  LevelDetail,
+  Mode,
+} from "@/server/assessment";
 
-/* ------------------------------------------------------------------- cycle */
-
-/**
- * One open cycle, derived from today in `@/data/cycle` so the wizard, the admin
- * console and the IDP timeline can never disagree about which quarter it is.
- */
-export const CYCLE = currentCycle();
+// `import type` is erased at compile time, so naming a server-only module
+// costs the client bundle nothing.
+export type {
+  AssessmentStatus,
+  CompetencyGroup,
+  CompetencyQuestion,
+  CycleSummary,
+  KpiRow,
+  LevelDetail,
+  Mode,
+};
 
 /* -------------------------------------------------------------------- mode */
 
-export type Mode = "self" | "supervisor";
-
 export const MODES: Mode[] = ["self", "supervisor"];
 
-export const isMode = (v: string): v is Mode =>
-  v === "self" || v === "supervisor";
+export const isMode = (value: string): value is Mode =>
+  value === "self" || value === "supervisor";
 
-/** i18n key in DICT for the mode name. */
+/** DICT key for the mode name. */
 export const MODE_KEY: Record<Mode, string> = {
   self: "mode.self",
   supervisor: "mode.supervisor",
 };
 
+/* ------------------------------------------------------------------ groups */
+
+export const GROUP_ORDER: CompetencyGroup[] = [
+  "CORE",
+  "FUNCTIONAL",
+  "MANAGERIAL",
+];
+
+/** Reuses the shared vocabulary rather than a second copy of the wording. */
+export const groupDictKey = (group: CompetencyGroup) =>
+  `group.${group.toLowerCase()}`;
+
 /* ------------------------------------------------------------------- steps */
 
-export type StepKey = "kpi" | Group | "complete";
+export type StepKey = "kpi" | CompetencyGroup | "complete";
 
-export const GROUP_STEP_KEY: Record<Group, string> = {
-  core: "group.core",
-  functional: "group.functional",
-  managerial: "group.managerial",
-};
-
-/** DICT key for a step label. */
-export function stepKeyOf(step: StepKey): string {
+export function stepDictKey(step: StepKey): string {
   if (step === "kpi") return "group.kpi";
   if (step === "complete") return "label.complete";
-  return GROUP_STEP_KEY[step];
-}
-
-/** Competencies of a group that this specific job role is assessed on. */
-export function competenciesFor(jobRole: string, group: Group): Competency[] {
-  return COMPETENCIES.filter(
-    (c) => c.group === group && isAssessed(jobRole, c.id),
-  );
-}
-
-/** Every competency this job role is assessed on, in framework order. */
-export function allCompetenciesFor(jobRole: string): Competency[] {
-  return COMPETENCIES.filter((c) => isAssessed(jobRole, c.id));
+  return groupDictKey(step);
 }
 
 /**
- * Steps are derived from the *target* person's job role. An Executive has no
- * Managerial step at all because none of the four managerial competencies are
- * assessed for that role.
+ * Steps come from the *target's* career role, through the competencies the
+ * server already filtered to the ones that role is assessed on. An Executive
+ * has no Managerial step at all, because none of the managerial competencies
+ * carry an expected level for that role.
  */
-export function stepsFor(jobRole: string): StepKey[] {
-  const groups: Group[] = (["core", "functional", "managerial"] as Group[]).filter(
-    (g) => competenciesFor(jobRole, g).length > 0,
+export function stepsFor(competencies: { group: CompetencyGroup }[]): StepKey[] {
+  const groups = GROUP_ORDER.filter((g) =>
+    competencies.some((c) => c.group === g),
   );
   return ["kpi", ...groups, "complete"];
 }
 
 /* ------------------------------------------------------------------ levels */
 
-export type MergedLevel = {
-  score: number;
-  labelEn: string;
-  labelTh: string;
-  descTh: string;
-  behaviorTh: string;
-};
-
-/**
- * The generated framework occasionally holds two rows for the same score
- * (the workbook had merged cells). Fold them into one entry per score so the
- * rating scale always renders exactly four boxes.
- */
-const LEVEL_CACHE = new Map<string, MergedLevel[]>();
-
-/** the workbook export escaped its newlines - turn "\n" back into a real break */
-const unescape = (s: string) =>
-  (s ?? "").replace(/\\n/g, "\n").replace(/\r/g, "").trim();
-
-export function levelsFor(competencyId: string): MergedLevel[] {
-  const cached = LEVEL_CACHE.get(competencyId);
-  if (cached) return cached;
-  const source = FRAMEWORK.find((f) => f.id === competencyId)?.levels ?? [];
-  const merged: MergedLevel[] = [1, 2, 3, 4].map((score) => {
-    const rows = source.filter((l) => l.score === score);
-    return {
-      score,
-      labelEn: rows[0]?.labelEn ?? "",
-      labelTh: rows[0]?.labelTh ?? "",
-      descTh: rows
-        .map((r) => unescape(r.descTh))
-        .filter(Boolean)
-        .join("\n"),
-      behaviorTh: rows
-        .map((r) => unescape(r.behaviorTh))
-        .filter(Boolean)
-        .join("\n"),
-    };
-  });
-  LEVEL_CACHE.set(competencyId, merged);
-  return merged;
-}
-
-/** The Thai sub-competency headline ("High-Impact & Measurable Outcome- ..."). */
-export function subTitleTh(competencyId: string): string {
-  return FRAMEWORK.find((f) => f.id === competencyId)?.subTh ?? "";
-}
-
 const EXAMPLE_MARK = "ตัวอย่าง:";
 
 /**
- * The workbook export escaped its newlines, so behaviour text arrives as a
- * literal backslash-n. Normalise, split the bullet list off the worked example.
+ * The Thai behaviour text is a bullet list followed by a `ตัวอย่าง:` worked
+ * example. Split the two so the example can sit behind its own disclosure.
  */
-export function parseBehavior(raw: string): {
+export function parseBehavior(raw: string | null): {
   bullets: string[];
   example: string;
 } {
-  const text = unescape(raw);
+  const text = (raw ?? "").replace(/\\n/g, "\n").replace(/\r/g, "").trim();
   const at = text.indexOf(EXAMPLE_MARK);
   const head = at >= 0 ? text.slice(0, at) : text;
   const example = at >= 0 ? text.slice(at + EXAMPLE_MARK.length).trim() : "";
@@ -161,8 +105,9 @@ export function parseBehavior(raw: string): {
 }
 
 /**
- * English has no per-level copy in the client workbook. These are faithful
- * renderings of LEVEL_LABEL_TH so an English reader sees the same scale.
+ * The workbook has no English per-level copy — `CompetencyLevel.descEn` is null
+ * for every row. These are faithful renderings of the Thai scale so an English
+ * reader sees the same four steps rather than four blanks.
  */
 export const LEVEL_DESC_EN: Record<number, string> = {
   4: "Does this consistently and sets the example for everyone else.",
@@ -171,93 +116,50 @@ export const LEVEL_DESC_EN: Record<number, string> = {
   1: "Does not yet show this behaviour, or acts against it.",
 };
 
-/* ------------------------------------------------------------------ records */
-
-export const reviewKey = (reviewerId: string, targetId: string) =>
-  `${reviewerId}:${targetId}`;
-
-export const EMPTY_RECORD: AssessmentState = { answers: {}, submittedAt: null };
-
-export function getRecord(
-  state: DemoState,
-  mode: Mode,
-  reviewerId: string,
-  targetId: string,
-): AssessmentState | undefined {
-  if (mode === "self") return state.selfAssessment[targetId];
-  return state.managerReview[reviewKey(reviewerId, targetId)];
-}
-
-/** Immutable update of the right bucket for a mode. */
-export function withRecord(
-  s: DemoState,
-  mode: Mode,
-  reviewerId: string,
-  targetId: string,
-  fn: (prev: AssessmentState) => AssessmentState,
-): DemoState {
-  if (mode === "self") {
-    const prev = s.selfAssessment[targetId] ?? EMPTY_RECORD;
-    return {
-      ...s,
-      selfAssessment: { ...s.selfAssessment, [targetId]: fn(prev) },
-    };
-  }
-  const key = reviewKey(reviewerId, targetId);
-  const prev = s.managerReview[key] ?? EMPTY_RECORD;
-  return { ...s, managerReview: { ...s.managerReview, [key]: fn(prev) } };
-}
-
 /* --------------------------------------------------------------------- KPI */
 
-export const kpiKey = (kpiItemId: string) => `kpi:${kpiItemId}`;
-
-export function kpiItemsFor(state: DemoState, personId: string): KpiItem[] {
-  return state.kpi[personId] ?? [];
+export function kpiWeightTotal(items: { weight: number }[]): number {
+  return items.reduce((a, i) => a + i.weight, 0);
 }
 
-/** Weighted 1–4 KPI score. Null until at least one KPI is rated. */
+/**
+ * Weighted 1–4 KPI score. Null until at least one KPI is rated; the divisor is
+ * the weight of the KPIs that *have* been rated, so a half-finished step still
+ * reads as a score out of 4 rather than a score dragged toward zero.
+ */
 export function kpiScore(
-  items: KpiItem[],
-  answers: Record<string, number>,
+  items: KpiRow[],
+  scores: Record<string, number | null>,
 ): number | null {
   let sum = 0;
   let used = 0;
-  items.forEach((i) => {
-    const s = answers[kpiKey(i.id)];
-    if (s) {
-      sum += s * i.weight;
-      used += i.weight;
-    }
-  });
+  for (const item of items) {
+    const score = scores[item.id] ?? item.score;
+    if (!score) continue;
+    sum += score * item.weight;
+    used += item.weight;
+  }
   return used ? Number((sum / used).toFixed(2)) : null;
-}
-
-export function kpiWeightTotal(items: KpiItem[]): number {
-  return items.reduce((a, i) => a + i.weight, 0);
 }
 
 /* ------------------------------------------------------------------ scores */
 
-export function groupScore(
-  jobRole: string,
-  group: Group,
-  answers: Record<string, number>,
-): number | null {
-  const rated = competenciesFor(jobRole, group).filter((c) => answers[c.id]);
-  if (!rated.length) return null;
-  return Number(
-    (rated.reduce((a, c) => a + (answers[c.id] ?? 0), 0) / rated.length).toFixed(
-      2,
-    ),
-  );
-}
+export type PartKey = "kpi" | "core" | "functional" | "managerial";
+
+export const PART_DICT_KEY: Record<PartKey, string> = {
+  kpi: "group.kpi",
+  core: "group.core",
+  functional: "group.functional",
+  managerial: "group.managerial",
+};
+
+export type Weights = CycleSummary["weights"];
 
 export type WeightRow = {
-  key: "kpi" | Group;
-  /** the configured weight from state.weights */
+  key: PartKey;
+  /** the weight HR configured on the cycle */
   weight: number;
-  /** weight after removing parts this role has no score for */
+  /** that weight after the parts this role has no score for are removed */
   effWeight: number;
   score: number | null;
 };
@@ -270,41 +172,60 @@ export type WeightedResult = {
   percent: number | null;
 };
 
+/** Mean of the competencies of one group that have been rated. */
+export function groupScore(
+  competencies: { id: string; group: CompetencyGroup }[],
+  group: CompetencyGroup,
+  scores: Record<string, number | undefined>,
+): number | null {
+  const rated = competencies
+    .filter((c) => c.group === group)
+    .map((c) => scores[c.id])
+    .filter((s): s is number => Boolean(s));
+  if (!rated.length) return null;
+  return Number((rated.reduce((a, b) => a + b, 0) / rated.length).toFixed(2));
+}
+
 /**
- * Weighted total = Σ (part score × part weight). Parts a role is not assessed
- * on (Managerial for an Executive) drop out and their weight is redistributed
- * proportionally across the parts that remain, so the total is always out of 4.
+ * Weighted total = Σ (part score × part weight), out of 4.
+ *
+ * A part the career role is not assessed on — Managerial for an Executive —
+ * drops out entirely and its weight is shared across the parts that remain in
+ * proportion, so the total is always comparable with anybody else's.
  */
-export function weightedTotal(
-  jobRole: string,
-  answers: Record<string, number>,
-  kpiItems: KpiItem[],
-  weights: Weights,
-): WeightedResult {
-  const raw: { key: "kpi" | Group; weight: number; score: number | null }[] = [
-    { key: "kpi", weight: weights.kpi, score: kpiScore(kpiItems, answers) },
-    { key: "core", weight: weights.core, score: groupScore(jobRole, "core", answers) },
+export function weightedTotal(input: {
+  weights: Weights;
+  competencies: { id: string; group: CompetencyGroup }[];
+  scores: Record<string, number | undefined>;
+  kpis: KpiRow[];
+  kpiScores: Record<string, number | null>;
+}): WeightedResult {
+  const { weights, competencies, scores } = input;
+
+  const raw: { key: PartKey; weight: number; score: number | null }[] = [
+    { key: "kpi", weight: weights.kpi, score: kpiScore(input.kpis, input.kpiScores) },
+    { key: "core", weight: weights.core, score: groupScore(competencies, "CORE", scores) },
     {
       key: "functional",
       weight: weights.functional,
-      score: groupScore(jobRole, "functional", answers),
+      score: groupScore(competencies, "FUNCTIONAL", scores),
     },
     {
       key: "managerial",
       weight: weights.managerial,
-      score: groupScore(jobRole, "managerial", answers),
+      score: groupScore(competencies, "MANAGERIAL", scores),
     },
   ];
 
-  // managerial disappears entirely for roles that are not assessed on it
   const applicable = raw.filter(
     (r) =>
       r.key === "kpi" ||
-      competenciesFor(jobRole, r.key as Group).length > 0,
+      competencies.some((c) => c.group === r.key.toUpperCase()),
   );
 
-  const scored = applicable.filter((r) => r.score !== null);
-  const denom = scored.reduce((a, r) => a + r.weight, 0);
+  const denom = applicable
+    .filter((r) => r.score !== null)
+    .reduce((a, r) => a + r.weight, 0);
 
   const rows: WeightRow[] = applicable.map((r) => ({
     ...r,
@@ -317,134 +238,69 @@ export function weightedTotal(
   if (!denom) return { rows, total: null, percent: null };
 
   const total = Number(
-    rows
-      .reduce((a, r) => a + (r.score ?? 0) * (r.effWeight / 100), 0)
-      .toFixed(2),
+    rows.reduce((a, r) => a + (r.score ?? 0) * (r.effWeight / 100), 0).toFixed(2),
   );
   return { rows, total, percent: Number(((total / 4) * 100).toFixed(1)) };
 }
 
-/* ------------------------------------------------------------------- gaps */
-
-export type GapRow = {
-  competency: Competency;
-  score: number | null;
-  expected: number | null;
-  gap: number | null;
-  verdict: GapVerdict | null;
-};
-
-export function gapRows(
-  jobRole: string,
-  answers: Record<string, number>,
-): GapRow[] {
-  return allCompetenciesFor(jobRole).map((competency) => {
-    const score = answers[competency.id] ?? null;
-    const expected = expectedFor(jobRole, competency.id);
-    const gap =
-      score !== null && expected !== null ? score - expected : null;
-    return {
-      competency,
-      score,
-      expected,
-      gap,
-      verdict: gap === null ? null : verdictFor(gap),
-    };
-  });
-}
-
-export function verdictCounts(rows: GapRow[]): Record<GapVerdict, number> {
-  const counts: Record<GapVerdict, number> = {
-    strength: 0,
-    standard: 0,
-    development: 0,
-    critical: 0,
+/**
+ * The same formula from parts the server already scored — the hub reads its
+ * weighted total straight out of Postgres rather than shipping every answer to
+ * the browser to add up again.
+ */
+export function weightedFromParts(
+  weights: Weights,
+  parts: { key: PartKey; score: number | null }[],
+  groups: CompetencyGroup[],
+): WeightedResult {
+  const weightOf: Record<PartKey, number> = {
+    kpi: weights.kpi,
+    core: weights.core,
+    functional: weights.functional,
+    managerial: weights.managerial,
   };
-  rows.forEach((r) => {
-    if (r.verdict) counts[r.verdict] += 1;
-  });
-  return counts;
+  const applicable = parts.filter(
+    (p) => p.key === "kpi" || groups.includes(p.key.toUpperCase() as CompetencyGroup),
+  );
+  const denom = applicable
+    .filter((p) => p.score !== null)
+    .reduce((a, p) => a + weightOf[p.key], 0);
+
+  const rows: WeightRow[] = applicable.map((p) => ({
+    key: p.key,
+    weight: weightOf[p.key],
+    score: p.score,
+    effWeight:
+      denom && p.score !== null
+        ? Number(((weightOf[p.key] / denom) * 100).toFixed(1))
+        : 0,
+  }));
+
+  if (!denom) return { rows, total: null, percent: null };
+  const total = Number(
+    rows.reduce((a, r) => a + (r.score ?? 0) * (r.effWeight / 100), 0).toFixed(2),
+  );
+  return { rows, total, percent: Number(((total / 4) * 100).toFixed(1)) };
 }
 
 /* ---------------------------------------------------------------- progress */
 
-export type Status = "not-started" | "in-progress" | "submitted";
-
-export function requiredCount(jobRole: string, kpiItems: KpiItem[]): number {
-  return allCompetenciesFor(jobRole).length + kpiItems.length;
-}
-
-export function answeredCount(
-  jobRole: string,
-  kpiItems: KpiItem[],
-  record: AssessmentState | undefined,
-): number {
-  const a = record?.answers ?? {};
-  const comps = allCompetenciesFor(jobRole).filter((c) => a[c.id]).length;
-  const kpis = kpiItems.filter((i) => a[kpiKey(i.id)]).length;
-  return comps + kpis;
-}
-
-export function statusOf(record: AssessmentState | undefined): Status {
-  if (!record) return "not-started";
-  if (record.submittedAt) return "submitted";
-  return Object.keys(record.answers).length ? "in-progress" : "not-started";
-}
-
-export const STATUS_KEY: Record<Status, string> = {
+export const STATUS_DICT_KEY: Record<AssessmentStatus, string> = {
   "not-started": "status.notStarted",
   "in-progress": "status.inProgress",
   submitted: "status.submitted",
 };
 
-/* ------------------------------------------------- the official supervisor */
-
-export type ManagerAnswers = {
-  answers: Record<string, number>;
-  /** "review" = a supervisor submitted it in this demo session */
-  source: "review" | "seed";
-  submittedAt: string | null;
-};
-
-/**
- * The supervisor view of a person: a submitted manager review if one exists,
- * otherwise the seeded managerScores from the client workbook.
- */
-export function managerAnswersFor(
-  state: DemoState,
-  target: Person,
-): ManagerAnswers | null {
-  const direct = state.managerReview[reviewKey(target.reportTo, target.id)];
-  if (direct?.submittedAt) {
-    return {
-      answers: direct.answers,
-      source: "review",
-      submittedAt: direct.submittedAt,
-    };
-  }
-  const suffix = `:${target.id}`;
-  const any = Object.entries(state.managerReview).find(
-    ([k, v]) => k.endsWith(suffix) && v.submittedAt,
-  );
-  if (any) {
-    return {
-      answers: any[1].answers,
-      source: "review",
-      submittedAt: any[1].submittedAt,
-    };
-  }
-  if (Object.keys(target.managerScores).length) {
-    return { answers: target.managerScores, source: "seed", submittedAt: null };
-  }
-  return null;
+export function percentOf(answered: number, required: number): number {
+  return required ? Math.round((answered / required) * 100) : 0;
 }
 
-/* ---------------------------------------------------------------- routing */
+/* ----------------------------------------------------------------- routing */
 
 export const runHref = (mode: Mode, targetId: string) =>
   `/assessment/${mode}/${targetId}`;
 
-/* --------------------------------------------------------------- format */
+/* ------------------------------------------------------------------ format */
 
 export function formatDateTime(iso: string, lang: "en" | "th") {
   try {
@@ -457,6 +313,21 @@ export function formatDateTime(iso: string, lang: "en" | "th") {
   }
 }
 
+export function formatDate(iso: string, lang: "en" | "th") {
+  try {
+    return new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", {
+      dateStyle: "medium",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function signed(n: number) {
   return n > 0 ? `+${n}` : `${n}`;
+}
+
+/** English is the fallback whenever a Thai column is empty. */
+export function pick(lang: "en" | "th", en: string, th?: string | null) {
+  return lang === "th" && th ? th : en;
 }

@@ -162,19 +162,3 @@ export type ScopePerson = {
   worstNameTh: string | null;
   worstGap: number | null;
 };
-
-/* ----------------------------------------------------------------- legacy
- *
- * `/idp` has not been converted off the demo store yet and still asks this
- * module which competency groups a demo person is assessed on. The two exports
- * below exist only for that page and go away with it.
- */
-
-import { assessedFor, type Group } from "@/data/competencies";
-import type { Person } from "@/data/people";
-
-export const GROUP_ORDER: Group[] = ["core", "functional", "managerial"];
-
-export function groupsFor(person: Person): Group[] {
-  return GROUP_ORDER.filter((g) => assessedFor(person.jobRole, g).length > 0);
-}

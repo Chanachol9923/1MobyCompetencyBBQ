@@ -1,46 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { Search } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { AnimatedNumber, Button, Card, Input, ResponsiveTable } from "@/components/ui";
+import { AnimatedNumber, Card, Input, ResponsiveTable } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { useDemo } from "@/lib/store";
-import { useT } from "@/lib/i18n";
-
-/* --------------------------------------------------------------- guard */
 
 /**
- * Wraps an admin screen. Anything that is not the admin role gets a small
- * "admin only" card with a way back to the dashboard. Together with the
- * per-role sidebar in `components/layout/nav.ts` this is the app's real RBAC
- * guard — the matrix on /admin/employee is a configuration surface only.
+ * The furniture the admin screens share: tables that fold on a phone, the CSV
+ * helpers, the tiles and the small controls.
+ *
+ * There is deliberately no `AdminOnly` wrapper here any more. Access is decided
+ * on the server — every page calls `requirePermission` and every action calls an
+ * `assert*` of its own — so a client component that hides a screen after it has
+ * already been rendered would be theatre, and a stale client-side notion of
+ * "the admin role" is exactly the thing the permission model replaced.
  */
-export function AdminOnly({ children }: { children: ReactNode }) {
-  const { state } = useDemo();
-  const { t, tt } = useT();
-  if (state.role !== "admin") {
-    return (
-      <div className="max-w-[1200px] p-6 lg:p-10">
-        <Card className="max-w-md p-6">
-          <h2 className="text-lg font-bold text-ink">
-            {tt("Admin only", "สำหรับผู้ดูแลระบบเท่านั้น")}
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            {tt(
-              "This section is restricted to the administrator account. Sign in as Neo (Role Admin) to manage the organisation.",
-              "ส่วนนี้จำกัดเฉพาะบัญชีผู้ดูแลระบบ กรุณาเข้าสู่ระบบด้วยบัญชี Neo (ผู้ดูแลระบบ) เพื่อจัดการองค์กร",
-            )}
-          </p>
-          <Link href="/dashboard" className="mt-4 inline-block">
-            <Button>{t("nav.dashboard")}</Button>
-          </Link>
-        </Card>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
 
 /* ------------------------------------------------------------------ csv */
 
@@ -49,13 +23,8 @@ function esc(value: string | number) {
   return /["\n,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Builds a CSV client side and hands it to the browser through a Blob URL. */
-export function downloadCsv(
-  filename: string,
-  header: string[],
-  rows: (string | number)[][],
-) {
-  const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
+/** Hands a finished CSV string to the browser through a Blob URL. */
+export function saveCsv(filename: string, csv: string) {
   // BOM keeps Excel happy with UTF-8 content.
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -66,6 +35,23 @@ export function downloadCsv(
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Builds a CSV client side from rows already on screen and downloads it.
+ *
+ * Fine for a table the viewer is looking at. Anything that means "the whole
+ * company" is built server-side instead, behind `export_employee_list`, and
+ * handed to `saveCsv` — a browser cannot be the thing that decides who may
+ * export what.
+ */
+export function downloadCsv(
+  filename: string,
+  header: string[],
+  rows: (string | number)[][],
+) {
+  const csv = [header, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
+  saveCsv(filename, csv);
 }
 
 /* -------------------------------------------------------------- layout */

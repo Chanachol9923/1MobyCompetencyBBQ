@@ -3,34 +3,44 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, ClipboardCheck, TrendingUp, X } from "lucide-react";
 import { Button, Modal, Pill, Progress } from "@/components/ui";
-import { PASS_MARK, type Course } from "@/data/learning";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { buildCourseTest, scoreTest, type TestVariant } from "./testEngine";
+import { PASS_MARK } from "./model";
+import {
+  buildCourseTest,
+  scoreTest,
+  type TestSource,
+  type TestVariant,
+} from "./testEngine";
 
 /* -------------------------------------------------------------------- modal */
 
 export function CourseTestModal({
   open,
   onClose,
-  course,
+  title,
+  source,
   variant,
   onSubmit,
+  pending = false,
 }: {
   open: boolean;
   onClose: () => void;
-  course: Course;
+  /** the course title, already picked by language */
+  title: string;
+  source: TestSource;
   variant: TestVariant;
   /** called once, with the percentage score, the moment the paper is handed in */
   onSubmit: (score: number) => void;
+  pending?: boolean;
 }) {
   const { tt, lang } = useT();
-  // keyed on the course id, not the object: the store hands us a fresh course
-  // object on every state change and the paper must not regenerate mid-test
+  // keyed on the course id, not the object: a re-render must not regenerate the
+  // paper under the learner mid-test
   const questions = useMemo(
-    () => buildCourseTest(course, variant),
+    () => buildCourseTest(source, variant),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [course.id, variant],
+    [source.courseId, variant],
   );
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [score, setScore] = useState<number | null>(null);
@@ -44,7 +54,7 @@ export function CourseTestModal({
   const answered = answers.filter((a) => a !== null).length;
   const allAnswered = questions.length > 0 && answered === questions.length;
 
-  const title =
+  const heading =
     variant === "pre"
       ? tt("Pre-test", "แบบทดสอบก่อนเรียน")
       : tt("Post-test", "แบบทดสอบหลังเรียน");
@@ -60,7 +70,7 @@ export function CourseTestModal({
       open={open}
       onClose={onClose}
       width="max-w-2xl"
-      title={`${title} — ${lang === "th" ? course.titleTh ?? course.title : course.title}`}
+      title={`${heading} — ${title}`}
       subtitle={
         score === null
           ? tt(
@@ -75,13 +85,15 @@ export function CourseTestModal({
             <Button variant="outline" onClick={onClose}>
               {tt("Cancel", "ยกเลิก")}
             </Button>
-            <Button onClick={submit} disabled={!allAnswered}>
+            <Button onClick={submit} disabled={!allAnswered || pending}>
               <ClipboardCheck size={16} />
               {tt("Submit answers", "ส่งคำตอบ")}
             </Button>
           </>
         ) : (
-          <Button onClick={onClose}>{tt("Done", "เสร็จสิ้น")}</Button>
+          <Button onClick={onClose} disabled={pending}>
+            {tt("Done", "เสร็จสิ้น")}
+          </Button>
         )
       }
     >
@@ -110,9 +122,7 @@ export function CourseTestModal({
                         key={oi}
                         type="button"
                         onClick={() =>
-                          setAnswers((a) =>
-                            a.map((v, i) => (i === qi ? oi : v)),
-                          )
+                          setAnswers((a) => a.map((v, i) => (i === qi ? oi : v)))
                         }
                         className={cn(
                           "flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
@@ -124,13 +134,16 @@ export function CourseTestModal({
                         <span
                           className={cn(
                             "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
-                            picked ? "border-brand bg-brand text-white" : "border-line-2",
+                            picked
+                              ? "border-brand bg-brand text-white"
+                              : "border-line-2",
                           )}
                         >
                           {picked ? <Check size={10} /> : null}
                         </span>
                         <span className="min-w-0 flex-1">
-                          {String.fromCharCode(65 + oi)}. {lang === "th" ? o.th : o.en}
+                          {String.fromCharCode(65 + oi)}.{" "}
+                          {lang === "th" ? o.th : o.en}
                         </span>
                       </button>
                     );
@@ -216,6 +229,11 @@ export function CourseTestModal({
 
 /* ------------------------------------------------------------ result panel */
 
+/**
+ * The two scores side by side. `pre === null` means the learner skipped the
+ * pre-test — there is no `TestResult` row for it, so the baseline is genuinely
+ * unknown rather than a zero.
+ */
 export function TestResultPanel({
   pre,
   post,
@@ -249,7 +267,10 @@ export function TestResultPanel({
           value={pre === null ? tt("Unknown", "ไม่ทราบ") : `${pre}%`}
           hint={
             pre === null
-              ? tt("Baseline unknown — pre-test skipped", "ไม่ทราบคะแนนตั้งต้น เนื่องจากข้ามแบบทดสอบก่อนเรียน")
+              ? tt(
+                  "Baseline unknown — pre-test skipped",
+                  "ไม่ทราบคะแนนตั้งต้น เนื่องจากข้ามแบบทดสอบก่อนเรียน",
+                )
               : undefined
           }
           tone="muted"

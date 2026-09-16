@@ -1,50 +1,50 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BookOpen, Clock, PlayCircle } from "lucide-react";
-import { Button, Card, Pill, Progress } from "@/components/ui";
-import { courseKinds, type Course } from "@/data/learning";
+import { Button, Card, Progress } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { KindBadge } from "./ChapterContent";
+import {
+  FALLBACK_COVER,
+  categoryDictKey,
+  pick,
+  type CourseCategory,
+} from "./model";
+import type { CatalogueCourse } from "@/server/learning";
 
-const CATEGORY_TONE: Record<Course["category"], string> = {
-  Core: "bg-brand-tint text-brand",
-  Functional: "bg-success/10 text-success border border-success/30",
-  Managerial: "bg-accent/10 text-accent border border-accent/30",
+const CATEGORY_TONE: Record<CourseCategory, string> = {
+  CORE: "bg-brand-tint text-brand",
+  FUNCTIONAL: "bg-success/10 text-success border border-success/30",
+  MANAGERIAL: "bg-accent/10 text-accent border border-accent/30",
 };
 
-const CATEGORY_KEY: Record<Course["category"], string> = {
-  Core: "group.core",
-  Functional: "group.functional",
-  Managerial: "group.managerial",
-};
-
-export function CourseCard({
-  course,
-  progress,
-}: {
-  course: Course;
-  progress: number;
-}) {
-  const router = useRouter();
+/**
+ * One catalogue card. The percentage is this viewer's own progress, computed on
+ * the server from `ChapterProgress`, so the card says the same thing on every
+ * device the person signs in from.
+ */
+export function CourseCard({ course }: { course: CatalogueCourse }) {
   const { t, tt, lang } = useT();
+  const progress = course.progress;
   const started = progress > 0;
   const done = progress >= 100;
-  const title = lang === "th" ? course.titleTh ?? course.title : course.title;
-  const description =
-    lang === "th" ? course.descriptionTh ?? course.description : course.description;
+  const title = pick(lang, course.titleEn, course.titleTh);
+  const description = course.descriptionEn
+    ? pick(lang, course.descriptionEn, course.descriptionTh)
+    : null;
+  const href = `/lms/${course.slug}`;
 
   return (
     <Card className="flex flex-col overflow-hidden">
-      <button
-        type="button"
-        onClick={() => router.push(`/lms/${course.id}`)}
+      <Link
+        href={href}
+        aria-label={tt(`Open ${course.titleEn}`, `เปิดหลักสูตร ${title}`)}
         className={cn(
           "relative grid h-32 place-items-center bg-gradient-to-br text-white/90 transition-transform hover:scale-[1.01]",
-          course.cover,
+          course.cover ?? FALLBACK_COVER,
         )}
-        aria-label={tt(`Open ${course.title}`, `เปิดหลักสูตร ${title}`)}
       >
         <PlayCircle size={40} strokeWidth={1.5} />
         {done ? (
@@ -52,25 +52,29 @@ export function CourseCard({
             {tt("Completed", "เรียนจบแล้ว")}
           </span>
         ) : null}
-      </button>
+      </Link>
 
       <div className="flex min-w-0 flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 text-sm font-bold leading-snug text-ink">{title}</h3>
+          <h3 className="min-w-0 text-sm font-bold leading-snug text-ink">
+            {title}
+          </h3>
           <span
             className={cn(
               "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
               CATEGORY_TONE[course.category],
             )}
           >
-            {t(CATEGORY_KEY[course.category])}
+            {t(categoryDictKey(course.category))}
           </span>
         </div>
 
-        <p className="mt-1.5 line-clamp-2 text-xs text-muted">{description}</p>
+        {description ? (
+          <p className="mt-1.5 line-clamp-2 text-xs text-muted">{description}</p>
+        ) : null}
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {courseKinds(course).map((k) => (
+          {course.kinds.map((k) => (
             <KindBadge key={k} kind={k} />
           ))}
         </div>
@@ -80,11 +84,9 @@ export function CourseCard({
             <Clock size={13} /> {course.hours} {tt("hours", "ชั่วโมง")}
           </span>
           <span className="inline-flex items-center gap-1">
-            <BookOpen size={13} /> {course.lessons} {tt("lessons", "บทเรียน")}
+            <BookOpen size={13} /> {course.chapterCount}{" "}
+            {tt("lessons", "บทเรียน")}
           </span>
-          {course.status === "Draft" ? (
-            <Pill>{tt("Draft", "ฉบับร่าง")}</Pill>
-          ) : null}
         </div>
 
         <div className="mt-4">
@@ -96,17 +98,15 @@ export function CourseCard({
         </div>
 
         <div className="mt-4 flex-1" />
-        <Button
-          className="w-full"
-          variant={done ? "outline" : "primary"}
-          onClick={() => router.push(`/lms/${course.id}`)}
-        >
-          {done
-            ? tt("Review course", "ทบทวนหลักสูตร")
-            : started
-              ? t("action.continue")
-              : tt("Start course", "เริ่มเรียน")}
-        </Button>
+        <Link href={href} className="block">
+          <Button className="w-full" variant={done ? "outline" : "primary"}>
+            {done
+              ? tt("Review course", "ทบทวนหลักสูตร")
+              : started
+                ? t("action.continue")
+                : tt("Start course", "เริ่มเรียน")}
+          </Button>
+        </Link>
       </div>
     </Card>
   );

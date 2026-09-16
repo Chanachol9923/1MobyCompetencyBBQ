@@ -1,191 +1,212 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Loader2,
   RotateCcw,
   Send,
 } from "lucide-react";
-import { Button, Card, PageHeading, Pill } from "@/components/ui";
+import { Button, Card, Modal, PageHeading, Pill } from "@/components/ui";
 import { useT } from "@/lib/i18n";
-import { useDemo } from "@/lib/store";
-import { directReportsOf, findPerson } from "@/data/people";
-import { expectedFor, type Group } from "@/data/competencies";
 import { CompetencyRatingCard } from "./CompetencyRatingCard";
 import { KpiStep } from "./KpiStep";
 import { ResultStep } from "./ResultStep";
 import { Stepper } from "./Stepper";
 import {
-  CYCLE,
   MODE_KEY,
-  competenciesFor,
   formatDateTime,
-  getRecord,
-  kpiItemsFor,
-  kpiKey,
-  managerAnswersFor,
-  stepKeyOf,
+  groupDictKey,
+  pick,
+  stepDictKey,
   stepsFor,
-  withRecord,
-  type Mode,
+  type CompetencyGroup,
+  type CompetencyQuestion,
   type StepKey,
 } from "./lib";
+import type { WizardData } from "@/server/assessment";
+import {
+  reopenAssessmentAction,
+  saveKpiItemsAction,
+  saveKpiScoreAction,
+  saveScoreAction,
+  submitAssessmentAction,
+  type ActionError,
+  type KpiItemInput,
+} from "@/app/(app)/assessment/actions";
 
-export function AssessmentWizard({
-  mode,
-  targetId,
-}: {
-  mode: Mode;
-  targetId: string;
-}) {
-  const { state, person, update, notify, addPoints, logActivity, pushNotification } =
-    useDemo();
+/**
+ * The 180° wizard, over Postgres.
+ *
+ * Answers are written as they are made — one `AssessmentScore` upsert per
+ * rating — so a half-finished assessment survives a refresh, and "submit" only
+ * has to stamp `submittedAt`. The component keeps an optimistic copy of the
+ * answers so the scale responds instantly, but the database is what it reloads
+ * from, never this state.
+ *
+ * Which steps exist comes from the *target's* career role: the server already
+ * dropped every competency that role has no expected level for, so an Executive
+ * simply has no Managerial step.
+ */
+export function AssessmentWizard({ data }: { data: WizardData }) {
   const { t, tt, lang } = useT();
+  const [pending, startTransition] = useTransition();
+
   const [step, setStep] = useState(0);
+  const [scores, setScores] = useState<Record<string, number | undefined>>(
+    () => ({ ...data.scores }),
+  );
+  const [kpiScores, setKpiScores] = useState<Record<string, number | null>>({});
+  const [error, setError] = useState<ActionError | null>(null);
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const [confirmReopen, setConfirmReopen] = useState(false);
 
-  const me = person?.id ?? "";
-  const target = useMemo(() => findPerson(targetId), [targetId]);
+  const { competencies, kpis, cycle, subject, mode } = data;
+  const steps = useMemo(() => stepsFor(competencies), [competencies]);
 
-  const steps: StepKey[] = useMemo(
-    () => stepsFor(target.jobRole),
-    [target.jobRole],
+  const kpiScoreOf = (id: string, fallback: number | null) =>
+    kpiScores[id] ?? fallback;
+
+  const stepComplete = useMemo(
+    () =>
+      steps.map((key) => {
+        if (key === "kpi") {
+          return kpis.every((i) => kpiScoreOf(i.id, i.score) !== null);
+        }
+        if (key === "complete") return true;
+        return competencies
+          .filter((c) => c.group === key)
+          .every((c) => Boolean(scores[c.id]));
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [steps, kpis, kpiScores, competencies, scores],
   );
-  const kpiItems = useMemo(
-    () => kpiItemsFor(state, target.id),
-    [state, target.id],
-  );
-
-  const record = person ? getRecord(state, mode, me, target.id) : undefined;
-  const answers = record?.answers ?? {};
-  const submittedAt = record?.submittedAt ?? null;
-  const managerAnswers = useMemo(
-    () => managerAnswersFor(state, target),
-    [state, target],
-  );
-
-  const stepComplete = useMemo(() => {
-    const done = (key: StepKey) => {
-      if (key === "kpi") return kpiItems.every((i) => answers[kpiKey(i.id)]);
-      if (key === "complete") return true;
-      return competenciesFor(target.jobRole, key as Group).every(
-        (c) => answers[c.id],
-      );
-    };
-    return steps.map(done);
-  }, [steps, kpiItems, answers, target.jobRole]);
 
   const allDone = stepComplete.every(Boolean);
+  const submittedAt = data.submittedAt;
 
-  if (!person) return null;
+  /* ------------------------------------------------------------- errors */
 
-  /* ------------------------------------------------------------- guards */
+  const ERROR_TEXT: Record<ActionError, [string, string]> = {
+    not_authorised: [
+      "You are not allowed to change this assessment.",
+      "คุณไม่มีสิทธิ์แก้ไขแบบประเมินนี้",
+    ],
+    invalid: ["That value was not accepted.", "ค่าที่ส่งไปไม่ถูกต้อง"],
+    no_cycle: [
+      "There is no assessment cycle to write into.",
+      "ยังไม่มีรอบการประเมินให้บันทึก",
+    ],
+    cycle_closed: [
+      "This assessment cycle is not open.",
+      "รอบการประเมินนี้ยังไม่เปิดหรือปิดไปแล้ว",
+    ],
+    not_found: ["That record no longer exists.", "ไม่พบข้อมูลนี้แล้ว"],
+    not_assessed: [
+      "This career role is not assessed on that competency.",
+      "ตำแหน่งนี้ไม่ได้ถูกประเมินในสมรรถนะดังกล่าว",
+    ],
+    already_submitted: [
+      "This assessment has already been submitted. Re-open it to make changes.",
+      "แบบประเมินนี้ถูกส่งไปแล้ว หากต้องการแก้ไขให้เปิดรอบใหม่",
+    ],
+    not_submitted: [
+      "This assessment has not been submitted yet.",
+      "แบบประเมินนี้ยังไม่ได้ถูกส่ง",
+    ],
+    incomplete: [
+      "Rate every KPI and competency before submitting.",
+      "ให้คะแนน KPI และสมรรถนะให้ครบก่อนส่ง",
+    ],
+    bad_weights: [
+      "KPI weights must total 100%.",
+      "น้ำหนักของ KPI ต้องรวมได้ 100%",
+    ],
+  };
 
-  const authorised =
-    mode === "self"
-      ? target.id === me
-      : directReportsOf(me).some((p) => p.id === target.id);
-
-  if (!authorised) {
-    return (
-      <div className="max-w-[1200px] p-6 lg:p-10">
-        <PageHeading title={t("nav.assessment")} />
-        <Card className="grid place-items-center gap-3 px-6 py-16 text-center">
-          <h2 className="text-xl font-bold text-ink">
-            {tt(
-              "This assessment is not available to you",
-              "คุณไม่มีสิทธิ์เข้าถึงแบบประเมินนี้",
-            )}
-          </h2>
-          <p className="max-w-lg break-words text-sm leading-relaxed text-muted">
-            {tt(
-              "Supervisor reviews are limited to your direct reports.",
-              "การประเมินโดยหัวหน้าทำได้เฉพาะผู้ใต้บังคับบัญชาโดยตรงของคุณเท่านั้น",
-            )}
-          </p>
-          <Link href="/assessment">
-            <Button className="mt-2">
-              {tt("Back to assessment hub", "กลับไปหน้าการประเมิน")}
-            </Button>
-          </Link>
-        </Card>
-      </div>
-    );
-  }
+  const errorText = error ? tt(ERROR_TEXT[error][0], ERROR_TEXT[error][1]) : null;
 
   /* ---------------------------------------------------------- mutations */
 
-  const setAnswer = (key: string, value: number) => {
-    update((s) =>
-      withRecord(s, mode, me, target.id, (prev) => ({
-        ...prev,
-        answers: { ...prev.answers, [key]: value },
-      })),
-    );
+  const rate = (competencyId: string, score: number) => {
+    const previous = scores[competencyId];
+    setScores((s) => ({ ...s, [competencyId]: score }));
+    setError(null);
+    startTransition(async () => {
+      const result = await saveScoreAction({
+        mode,
+        targetId: subject.id,
+        competencyId,
+        score,
+      });
+      if (!result.ok) {
+        // the database refused it — put the scale back rather than leave the
+        // browser showing an answer nobody saved
+        setScores((s) => ({ ...s, [competencyId]: previous }));
+        setError(result.error);
+      }
+    });
+  };
+
+  const rateKpi = (kpiItemId: string, score: number) => {
+    const item = kpis.find((k) => k.id === kpiItemId);
+    const previous = kpiScoreOf(kpiItemId, item?.score ?? null);
+    setKpiScores((s) => ({ ...s, [kpiItemId]: score }));
+    setError(null);
+    startTransition(async () => {
+      const result = await saveKpiScoreAction({
+        mode,
+        targetId: subject.id,
+        kpiItemId,
+        score,
+      });
+      if (!result.ok) {
+        setKpiScores((s) => ({ ...s, [kpiItemId]: previous }));
+        setError(result.error);
+      }
+    });
+  };
+
+  const saveKpiItems = (items: KpiItemInput[]) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await saveKpiItemsAction({
+        mode,
+        targetId: subject.id,
+        items,
+      });
+      if (!result.ok) setError(result.error);
+    });
   };
 
   const submit = () => {
-    const now = new Date().toISOString();
-    update((s) => {
-      let next = withRecord(s, mode, me, target.id, (prev) => ({
-        ...prev,
-        submittedAt: now,
-      }));
-      if (mode === "supervisor") {
-        // the supervisor review is the official record - write the KPI scores back
-        const items = (next.kpi[target.id] ?? []).map((i) => ({
-          ...i,
-          score: answers[kpiKey(i.id)] ?? i.score,
-        }));
-        next = { ...next, kpi: { ...next.kpi, [target.id]: items } };
-      }
-      return next;
-    });
-
-    if (mode === "self") {
-      addPoints(me, 30);
-      logActivity("Submitted self assessment", target.name, CYCLE.nameEn);
-      notify(
-        tt(
-          "Self assessment submitted +30 points",
-          "ส่งแบบประเมินตนเองแล้ว +30 คะแนน",
-        ),
-      );
-    } else {
-      logActivity("Submitted manager review", target.name, CYCLE.nameEn);
-      pushNotification({
-        audience: target.id,
-        title: tt(
-          "Your manager submitted your review",
-          "หัวหน้าของคุณส่งผลการประเมินแล้ว",
-        ),
-        body: tt(
-          `${person.name} submitted your ${CYCLE.nameEn} supervisor review. Open Assessment to see your result and gap analysis.`,
-          `${person.name} ส่งผลการประเมินรอบ ${CYCLE.nameTh} ของคุณแล้ว เปิดหน้าการประเมินเพื่อดูผลและการวิเคราะห์ส่วนต่าง`,
-        ),
-        kind: "assessment",
-        channel: "Both",
-        href: "/assessment",
+    setError(null);
+    startTransition(async () => {
+      const result = await submitAssessmentAction({
+        mode,
+        targetId: subject.id,
       });
-      notify(tt("Supervisor review submitted", "ส่งผลการประเมินโดยหัวหน้าแล้ว"));
-    }
-    setJustSubmitted(true);
+      if (result.ok) setJustSubmitted(true);
+      else setError(result.error);
+    });
   };
 
-  const startNewCycle = () => {
-    update((s) =>
-      withRecord(s, mode, me, target.id, () => ({
-        answers: {},
-        submittedAt: null,
-      })),
-    );
-    logActivity("Started a new assessment cycle", target.name, CYCLE.nameEn);
-    setJustSubmitted(false);
-    setStep(0);
-    notify(tt("New assessment cycle started", "เริ่มรอบการประเมินใหม่แล้ว"));
+  const reopen = () => {
+    setConfirmReopen(false);
+    setError(null);
+    startTransition(async () => {
+      const result = await reopenAssessmentAction({
+        mode,
+        targetId: subject.id,
+      });
+      if (result.ok) {
+        setJustSubmitted(false);
+        setStep(0);
+      } else setError(result.error);
+    });
   };
 
   /* -------------------------------------------------------------- header */
@@ -194,12 +215,10 @@ export function AssessmentWizard({
   const heading = (
     <PageHeading
       title={t("nav.assessment")}
-      subtitle={`${modeName} · ${target.name} — ${target.position} (${target.level})`}
+      subtitle={`${modeName} · ${subject.name} — ${subject.position ?? subject.jobRole} (${subject.level})`}
       right={
         <div className="flex items-center gap-2">
-          <Pill tone="brand">
-            {lang === "th" ? CYCLE.nameTh : CYCLE.nameEn}
-          </Pill>
+          <Pill tone="brand">{pick(lang, cycle.nameEn, cycle.nameTh)}</Pill>
           <Link href="/assessment">
             <Button variant="outline" size="sm">
               <ArrowLeft size={15} />
@@ -211,11 +230,29 @@ export function AssessmentWizard({
     />
   );
 
+  const banner = errorText ? (
+    <Card className="mb-6 border-accent/40 bg-accent/5 p-4">
+      <p className="break-words text-sm text-accent">{errorText}</p>
+    </Card>
+  ) : null;
+
+  const resultStep = (
+    <ResultStep
+      mode={mode}
+      weights={cycle.weights}
+      competencies={competencies}
+      scores={scores}
+      kpis={kpis}
+      kpiScores={kpiScores}
+      counterpart={data.counterpart}
+    />
+  );
+
   /* ------------------------------------------------------------- success */
 
   if (justSubmitted) {
     return (
-      <div className="max-w-[1200px] p-6 lg:p-10">
+      <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
         {heading}
         <Card className="grid place-items-center gap-3 px-6 py-14 text-center">
           <CheckCircle2 className="text-success" size={56} strokeWidth={1.5} />
@@ -225,12 +262,12 @@ export function AssessmentWizard({
           <p className="max-w-xl break-words text-sm leading-relaxed text-muted">
             {mode === "self"
               ? tt(
-                  "Your self assessment has been recorded. Your supervisor will complete their review before the cycle closes.",
-                  "บันทึกผลการประเมินตนเองเรียบร้อยแล้ว หัวหน้าของคุณจะประเมินให้เสร็จก่อนปิดรอบ",
+                  "Your self assessment has been recorded and you earned 30 points. Your supervisor will complete their review before the cycle closes.",
+                  "บันทึกผลการประเมินตนเองเรียบร้อยแล้ว และคุณได้รับ 30 คะแนน หัวหน้าของคุณจะประเมินให้เสร็จก่อนปิดรอบ",
                 )
               : tt(
-                  `${target.name} has been notified that the review is in.`,
-                  `ระบบได้แจ้ง ${target.name} ว่าผลการประเมินถูกส่งแล้ว`,
+                  `${subject.name} has been notified that the review is in.`,
+                  `ระบบได้แจ้ง ${subject.name} ว่าผลการประเมินถูกส่งแล้ว`,
                 )}
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -256,12 +293,13 @@ export function AssessmentWizard({
     );
   }
 
-  /* ------------------------------------------------------ already submitted */
+  /* ------------------------------------------------ already submitted */
 
   if (submittedAt) {
     return (
-      <div className="max-w-[1200px] p-6 lg:p-10">
+      <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
         {heading}
+        {banner}
         <Card className="mb-6 flex flex-wrap items-center gap-4 border-success/40 bg-success/5 p-5">
           <CheckCircle2 className="shrink-0 text-success" size={22} />
           <div className="min-w-0 flex-1">
@@ -272,65 +310,91 @@ export function AssessmentWizard({
               )}
             </p>
             <p className="break-words text-xs text-muted">
-              {tt("Submitted", "ส่งเมื่อ")} {formatDateTime(submittedAt, lang)}
+              {tt("Submitted", "ส่งเมื่อ")} {formatDateTime(submittedAt, lang)} ·{" "}
+              {tt(
+                "This is the record for the cycle and is read-only.",
+                "นี่คือผลของรอบนี้ และไม่สามารถแก้ไขได้",
+              )}
             </p>
           </div>
-          <Button variant="outline" onClick={startNewCycle}>
+          <Button
+            variant="outline"
+            onClick={() => setConfirmReopen(true)}
+            disabled={pending}
+          >
             <RotateCcw size={16} />
-            {tt("Start a new cycle", "เริ่มรอบใหม่")}
+            {tt("Re-open for editing", "เปิดแก้ไขอีกครั้ง")}
           </Button>
         </Card>
 
-        <ResultStep
-          mode={mode}
-          target={target}
-          answers={answers}
-          kpiItems={kpiItems}
-          weights={state.weights}
-          managerAnswers={managerAnswers}
-        />
+        {resultStep}
+
+        <Modal
+          open={confirmReopen}
+          onClose={() => setConfirmReopen(false)}
+          title={tt("Re-open this assessment?", "เปิดแบบประเมินนี้อีกครั้ง?")}
+          subtitle={pick(lang, cycle.nameEn, cycle.nameTh)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setConfirmReopen(false)}>
+                {t("action.cancel")}
+              </Button>
+              <Button onClick={reopen} disabled={pending}>
+                {tt("Re-open", "เปิดอีกครั้ง")}
+              </Button>
+            </>
+          }
+        >
+          <p className="break-words text-sm leading-relaxed text-muted">
+            {mode === "self"
+              ? tt(
+                  "Your answers are kept as the starting point — nothing is erased. The assessment goes back to in progress until you submit it again, and the points you already earned are not paid twice.",
+                  "คำตอบเดิมจะถูกเก็บไว้เป็นจุดเริ่มต้น ไม่มีการลบข้อมูล แบบประเมินจะกลับไปเป็นสถานะกำลังดำเนินการจนกว่าคุณจะส่งใหม่ และคะแนนที่ได้รับแล้วจะไม่ถูกให้ซ้ำ",
+                )
+              : tt(
+                  `Your scores are kept as the starting point — nothing is erased. Until you submit again, ${subject.name} will not see this review as their result.`,
+                  `คะแนนเดิมจะถูกเก็บไว้เป็นจุดเริ่มต้น ไม่มีการลบข้อมูล และจนกว่าคุณจะส่งใหม่ ${subject.name} จะยังไม่เห็นผลการประเมินนี้`,
+                )}
+          </p>
+        </Modal>
       </div>
     );
   }
 
   /* -------------------------------------------------------------- wizard */
 
-  const currentKey = steps[step] ?? "complete";
+  const currentKey: StepKey = steps[step] ?? "complete";
   const isComplete = currentKey === "complete";
   const canAdvance = stepComplete[step] ?? false;
-
-  const stepItems = steps.map((k) => ({ key: k, label: t(stepKeyOf(k)) }));
+  const stepItems = steps.map((k) => ({ key: k, label: t(stepDictKey(k)) }));
+  const groupCount = competencies.filter((c) => c.group === currentKey).length;
 
   return (
-    <div className="max-w-[1200px] p-6 lg:p-10">
+    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       {heading}
+      {banner}
 
       <Stepper steps={stepItems} current={step} onJump={(i) => setStep(i)} />
 
       <div className="mt-8">
         {currentKey === "kpi" ? (
           <KpiStep
-            items={kpiItems}
-            answers={answers}
-            onChange={(id, score) => setAnswer(kpiKey(id), score)}
+            items={kpis}
+            scores={kpiScores}
+            onScore={rateKpi}
+            onSaveItems={saveKpiItems}
+            saving={pending}
           />
         ) : isComplete ? (
-          <ResultStep
-            mode={mode}
-            target={target}
-            answers={answers}
-            kpiItems={kpiItems}
-            weights={state.weights}
-            managerAnswers={managerAnswers}
-          />
+          resultStep
         ) : (
           <GroupStep
             mode={mode}
-            group={currentKey as Group}
-            jobRole={target.jobRole}
-            targetName={target.name}
-            answers={answers}
-            onChange={setAnswer}
+            group={currentKey}
+            subjectName={subject.name}
+            competencies={competencies}
+            scores={scores}
+            onChange={rate}
           />
         )}
       </div>
@@ -350,7 +414,7 @@ export function AssessmentWizard({
           <Button
             size="lg"
             onClick={submit}
-            disabled={!allDone}
+            disabled={!allDone || pending}
             title={
               allDone
                 ? undefined
@@ -360,7 +424,11 @@ export function AssessmentWizard({
                   )
             }
           >
-            <Send size={18} />
+            {pending ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Send size={18} />
+            )}
             {tt("Submit assessment", "ส่งแบบประเมิน")}
           </Button>
         ) : (
@@ -391,8 +459,8 @@ export function AssessmentWizard({
                 "ให้คะแนน KPI ให้ครบทุกข้อเพื่อไปต่อ",
               )
             : tt(
-                `Rate all ${competenciesFor(target.jobRole, currentKey as Group).length} competencies to continue.`,
-                `ให้คะแนนสมรรถนะทั้ง ${competenciesFor(target.jobRole, currentKey as Group).length} ข้อเพื่อไปต่อ`,
+                `Rate all ${groupCount} competencies to continue.`,
+                `ให้คะแนนสมรรถนะทั้ง ${groupCount} ข้อเพื่อไปต่อ`,
               )}
         </p>
       ) : null}
@@ -405,6 +473,13 @@ export function AssessmentWizard({
           )}
         </p>
       ) : null}
+
+      <p className="mt-6 break-words text-xs leading-relaxed text-muted">
+        {tt(
+          "Every rating is saved as you make it — you can close this page and pick it up later.",
+          "ทุกคะแนนจะถูกบันทึกทันทีที่ให้ คุณสามารถปิดหน้านี้แล้วกลับมาทำต่อได้",
+        )}
+      </p>
     </div>
   );
 }
@@ -414,46 +489,38 @@ export function AssessmentWizard({
 function GroupStep({
   mode,
   group,
-  jobRole,
-  targetName,
-  answers,
+  subjectName,
+  competencies,
+  scores,
   onChange,
 }: {
-  mode: Mode;
-  group: Group;
-  jobRole: string;
-  targetName: string;
-  answers: Record<string, number>;
+  mode: "self" | "supervisor";
+  group: CompetencyGroup;
+  subjectName: string;
+  competencies: CompetencyQuestion[];
+  scores: Record<string, number | undefined>;
   onChange: (competencyId: string, rating: number) => void;
 }) {
   const { t, tt } = useT();
-  const list = competenciesFor(jobRole, group);
-  const answered = list.filter((c) => answers[c.id]).length;
+  const list = competencies.filter((c) => c.group === group);
+  const answered = list.filter((c) => scores[c.id]).length;
 
   const intro =
     mode === "self"
       ? tt(
-          "Rate yourself against the description of each level. The expected level for your role is marked on the scale.",
+          "Rate yourself against the description of each level. The expected level for your career role is marked on the scale.",
           "ให้คะแนนตนเองตามคำอธิบายของแต่ละระดับ ระดับที่คาดหวังของตำแหน่งคุณถูกทำเครื่องหมายไว้บนสเกล",
         )
       : tt(
-          `Rate ${targetName} against the expected level for their job role. This review is the official record.`,
-          `ให้คะแนน ${targetName} เทียบกับระดับที่คาดหวังของตำแหน่ง ผลนี้จะเป็นผลอย่างเป็นทางการ`,
+          `Rate ${subjectName} against the expected level for their career role. This review is the official record.`,
+          `ให้คะแนน ${subjectName} เทียบกับระดับที่คาดหวังของตำแหน่ง ผลนี้จะเป็นผลอย่างเป็นทางการ`,
         );
 
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-ink">
-            {t(
-              group === "core"
-                ? "group.core"
-                : group === "functional"
-                  ? "group.functional"
-                  : "group.managerial",
-            )}
-          </h2>
+          <h2 className="text-xl font-bold text-ink">{t(groupDictKey(group))}</h2>
           <p className="mt-0.5 max-w-2xl break-words text-sm leading-relaxed text-muted">
             {intro}
           </p>
@@ -469,8 +536,7 @@ function GroupStep({
             key={c.id}
             index={i + 1}
             competency={c}
-            expected={expectedFor(jobRole, c.id)}
-            value={answers[c.id]}
+            value={scores[c.id]}
             onChange={(r) => onChange(c.id, r)}
           />
         ))}

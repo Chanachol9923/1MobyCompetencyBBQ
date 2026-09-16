@@ -1,69 +1,85 @@
 "use client";
 
-import { Card, CardHeader, Pill, Progress } from "@/components/ui";
+import { Card, CardHeader, Pill, Progress, ResponsiveTable } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { GAP_VERDICT_LABEL, type GapVerdict } from "@/data/competencies";
-import type { Person } from "@/data/people";
-import type { KpiItem, Weights } from "@/lib/store";
+import { VERDICT_LABEL, VERDICT_ORDER, verdictFor } from "@/components/profile/gap";
 import { VerdictPill } from "./StatusPill";
 import {
-  gapRows,
-  kpiKey,
+  PART_DICT_KEY,
+  groupDictKey,
+  pick,
   signed,
-  verdictCounts,
   weightedTotal,
-  type ManagerAnswers,
+  type CompetencyQuestion,
+  type KpiRow,
   type Mode,
+  type Weights,
 } from "./lib";
 
-const PART_KEY: Record<string, string> = {
-  kpi: "group.kpi",
-  core: "group.core",
-  functional: "group.functional",
-  managerial: "group.managerial",
-};
-
-const VERDICT_ORDER: GapVerdict[] = [
-  "strength",
-  "standard",
-  "development",
-  "critical",
-];
-
-const VERDICT_COLOR: Record<GapVerdict, string> = {
+const VERDICT_COLOR = {
   strength: "text-success",
   standard: "text-brand",
   development: "text-[#b57408]",
   critical: "text-accent",
-};
+} as const;
 
+/**
+ * The result step: the weighted total with its formula spelled out, the gap
+ * table, and — in self mode — the 180° comparison against the supervisor's own
+ * scores.
+ *
+ * The maths is recomputed in the browser from the answers on screen so the
+ * figure moves as the wizard is filled in, but it is the same pure function the
+ * hub uses on the server, so the two can never disagree.
+ */
 export function ResultStep({
   mode,
-  target,
-  answers,
-  kpiItems,
   weights,
-  managerAnswers,
+  competencies,
+  scores,
+  kpis,
+  kpiScores,
+  counterpart,
 }: {
   mode: Mode;
-  target: Person;
-  answers: Record<string, number>;
-  kpiItems: KpiItem[];
   weights: Weights;
-  managerAnswers: ManagerAnswers | null;
+  competencies: CompetencyQuestion[];
+  scores: Record<string, number | undefined>;
+  kpis: KpiRow[];
+  kpiScores: Record<string, number | null>;
+  /** the other half of the 180°, when it has been submitted */
+  counterpart: { scores: Record<string, number>; submittedAt: string } | null;
 }) {
   const { t, tt, lang } = useT();
 
-  const result = weightedTotal(target.jobRole, answers, kpiItems, weights);
-  const rows = gapRows(target.jobRole, answers);
-  const counts = verdictCounts(rows);
+  const result = weightedTotal({
+    weights,
+    competencies,
+    scores,
+    kpis,
+    kpiScores,
+  });
+
+  const rows = competencies.map((c) => {
+    const score = scores[c.id] ?? null;
+    const gap = score === null ? null : score - c.expected;
+    return { competency: c, score, gap, verdict: gap === null ? null : verdictFor(gap) };
+  });
+
+  const counts = { strength: 0, standard: 0, development: 0, critical: 0 };
+  for (const r of rows) if (r.verdict) counts[r.verdict] += 1;
+
   const redistributed = result.rows.some(
     (r) => r.score !== null && Math.abs(r.effWeight - r.weight) > 0.05,
   );
 
-  // 180°: self against the supervisor view
-  const compare = mode === "self" && managerAnswers !== null;
+  // 180°: a self assessment sits next to the supervisor's view of the same person
+  const compare = counterpart !== null;
+  const counterpartLabel =
+    mode === "self"
+      ? tt("Supervisor", "หัวหน้า")
+      : tt("Self", "ตนเอง");
 
   return (
     <div className="space-y-6">
@@ -72,8 +88,8 @@ export function ResultStep({
         <CardHeader
           title={tt("Weighted result", "ผลคะแนนถ่วงน้ำหนัก")}
           subtitle={tt(
-            "KPI (results) plus competency (behaviour), combined with the weights set by HR.",
-            "คะแนน KPI (ผลลัพธ์) รวมกับสมรรถนะ (พฤติกรรม) ตามน้ำหนักที่ฝ่ายบุคคลกำหนด",
+            "KPI (results) plus competency (behaviour), combined with the weights set by HR on this cycle.",
+            "คะแนน KPI (ผลลัพธ์) รวมกับสมรรถนะ (พฤติกรรม) ตามน้ำหนักที่ฝ่ายบุคคลกำหนดไว้ในรอบนี้",
           )}
           right={
             <Pill tone={result.total === null ? "neutral" : "brand"}>
@@ -84,9 +100,7 @@ export function ResultStep({
         <div className="px-5 pb-5">
           <div className="flex flex-wrap items-end gap-6">
             <div>
-              <p className="text-xs text-muted">
-                {tt("Total score", "คะแนนรวม")}
-              </p>
+              <p className="text-xs text-muted">{tt("Total score", "คะแนนรวม")}</p>
               <p className="mt-0.5 text-4xl font-bold text-brand">
                 {result.total === null ? "—" : result.total.toFixed(2)}
                 <span className="text-lg font-medium text-muted"> / 4</span>
@@ -115,7 +129,7 @@ export function ResultStep({
                     )}
                   >
                     <span className="text-xs font-medium text-muted">
-                      {t(PART_KEY[r.key] ?? r.key)}
+                      {t(PART_DICT_KEY[r.key])}
                     </span>
                     <b>{r.score === null ? "—" : r.score.toFixed(2)}</b>
                     <span className="text-xs text-muted">
@@ -132,7 +146,7 @@ export function ResultStep({
             {redistributed ? (
               <p className="mt-2 break-words text-xs leading-relaxed text-muted">
                 {tt(
-                  `Configured weights are KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}%. Parts this role is not assessed on are removed and their weight is shared out proportionally.`,
+                  `Configured weights are KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}%. Parts this career role is not assessed on are removed and their weight is shared out proportionally.`,
                   `น้ำหนักที่ตั้งไว้คือ KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}% ส่วนที่ตำแหน่งนี้ไม่ถูกประเมินจะถูกตัดออก และเฉลี่ยน้ำหนักไปยังส่วนที่เหลือตามสัดส่วน`,
                 )}
               </p>
@@ -146,7 +160,7 @@ export function ResultStep({
         {VERDICT_ORDER.map((v) => (
           <Card key={v} className="p-4">
             <p className="break-words text-xs text-muted">
-              {GAP_VERDICT_LABEL[v][lang]}
+              {VERDICT_LABEL[v][lang]}
             </p>
             <p className={cn("mt-1 text-2xl font-bold", VERDICT_COLOR[v])}>
               {counts[v]}
@@ -160,17 +174,15 @@ export function ResultStep({
         <CardHeader
           title={tt("Competency detail", "รายละเอียดสมรรถนะ")}
           subtitle={tt(
-            "Gap = score − expected level for this job role. Only competencies this role is assessed on are shown.",
+            "Gap = score − expected level for this career role. Only competencies this role is assessed on are shown.",
             "ส่วนต่าง = คะแนน − ระดับที่คาดหวังของตำแหน่งนี้ แสดงเฉพาะสมรรถนะที่ตำแหน่งนี้ถูกประเมิน",
           )}
         />
-        <div className="overflow-x-auto px-5 pb-5">
+        <ResponsiveTable className="px-5 pb-5">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-muted">
-                <th className="py-2 font-medium">
-                  {tt("Competency", "สมรรถนะ")}
-                </th>
+                <th className="py-2 font-medium">{t("label.competency")}</th>
                 <th className="py-2 font-medium">{tt("Group", "กลุ่ม")}</th>
                 <th className="py-2 text-center font-medium">
                   {mode === "self"
@@ -179,7 +191,7 @@ export function ResultStep({
                 </th>
                 {compare ? (
                   <th className="py-2 text-center font-medium">
-                    {tt("Supervisor", "หัวหน้า")}
+                    {counterpartLabel}
                   </th>
                 ) : null}
                 {compare ? (
@@ -190,9 +202,7 @@ export function ResultStep({
                 <th className="py-2 text-center font-medium">
                   {t("label.expected")}
                 </th>
-                <th className="py-2 text-center font-medium">
-                  {t("label.gap")}
-                </th>
+                <th className="py-2 text-center font-medium">{t("label.gap")}</th>
                 <th className="py-2 text-right font-medium">
                   {tt("Verdict", "ผลการวิเคราะห์")}
                 </th>
@@ -200,10 +210,10 @@ export function ResultStep({
             </thead>
             <tbody>
               {rows.map((r) => {
-                const mgr = managerAnswers?.answers[r.competency.id] ?? null;
+                const other = counterpart?.scores[r.competency.id] ?? null;
                 const diff =
-                  compare && r.score !== null && mgr !== null
-                    ? r.score - mgr
+                  compare && r.score !== null && other !== null
+                    ? r.score - other
                     : null;
                 return (
                   <tr
@@ -211,10 +221,10 @@ export function ResultStep({
                     className="border-b border-line/60 last:border-0"
                   >
                     <td className="py-2.5 pr-3 font-medium text-ink">
-                      {r.competency.name}
+                      {pick(lang, r.competency.nameEn, r.competency.nameTh)}
                     </td>
                     <td className="py-2.5 pr-3 text-muted">
-                      {t(PART_KEY[r.competency.group] ?? r.competency.group)}
+                      {t(groupDictKey(r.competency.group))}
                     </td>
                     <td className="py-2.5 text-center">
                       {r.score ? (
@@ -225,8 +235,8 @@ export function ResultStep({
                     </td>
                     {compare ? (
                       <td className="py-2.5 text-center">
-                        {mgr ? (
-                          <b className="text-ink">{mgr}</b>
+                        {other ? (
+                          <b className="text-ink">{other}</b>
                         ) : (
                           <span className="text-line-2">—</span>
                         )}
@@ -251,7 +261,7 @@ export function ResultStep({
                       </td>
                     ) : null}
                     <td className="py-2.5 text-center text-muted">
-                      {r.expected ?? "—"}
+                      {r.competency.expected}
                     </td>
                     <td className="py-2.5 text-center">
                       {r.gap === null ? (
@@ -281,28 +291,25 @@ export function ResultStep({
               })}
             </tbody>
           </table>
+        </ResponsiveTable>
 
-          {compare ? (
-            <p className="mt-3 break-words text-xs leading-relaxed text-muted">
-              {tt(
-                `Diff is your own rating minus your supervisor's — a positive number means you rated yourself higher. ${
-                  managerAnswers?.source === "seed"
-                    ? "The supervisor column comes from the last completed review cycle."
-                    : "The supervisor column comes from the review submitted in this cycle."
-                }`,
-                `ช่อง “ต่างกัน” คือคะแนนที่คุณให้ตนเอง ลบด้วยคะแนนจากหัวหน้า ค่าบวกหมายถึงคุณประเมินตนเองสูงกว่า ${
-                  managerAnswers?.source === "seed"
-                    ? "คะแนนหัวหน้ามาจากรอบการประเมินก่อนหน้า"
-                    : "คะแนนหัวหน้ามาจากผลการประเมินที่ส่งในรอบนี้"
-                }`,
-              )}
-            </p>
-          ) : null}
-        </div>
+        {compare ? (
+          <p className="break-words px-5 pb-5 text-xs leading-relaxed text-muted">
+            {mode === "self"
+              ? tt(
+                  "Diff is your own rating minus your supervisor's — a positive number means you rated yourself higher. The supervisor column comes from the review submitted in this cycle.",
+                  "ช่อง “ต่างกัน” คือคะแนนที่คุณให้ตนเอง ลบด้วยคะแนนจากหัวหน้า ค่าบวกหมายถึงคุณประเมินตนเองสูงกว่า คะแนนหัวหน้ามาจากผลการประเมินที่ส่งในรอบนี้",
+                )
+              : tt(
+                  "Diff is your rating minus their own — a positive number means you rated them higher than they rated themselves.",
+                  "ช่อง “ต่างกัน” คือคะแนนที่คุณให้ ลบด้วยคะแนนที่เจ้าตัวประเมินตนเอง ค่าบวกหมายถึงคุณให้คะแนนสูงกว่าที่เจ้าตัวให้ตนเอง",
+                )}
+          </p>
+        ) : null}
       </Card>
 
       {/* -------------------------------------------------------- KPI recap */}
-      {kpiItems.length ? (
+      {kpis.length ? (
         <Card>
           <CardHeader
             title={tt("KPI detail", "รายละเอียด KPI")}
@@ -311,16 +318,14 @@ export function ResultStep({
               "ส่วนของผลลัพธ์การทำงาน",
             )}
           />
-          <div className="overflow-x-auto px-5 pb-5">
+          <ResponsiveTable className="px-5 pb-5">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-muted">
                   <th className="py-2 font-medium">{tt("KPI", "ตัวชี้วัด")}</th>
-                  <th className="py-2 font-medium">
-                    {tt("Target", "เป้าหมาย")}
-                  </th>
+                  <th className="py-2 font-medium">{tt("Target", "เป้าหมาย")}</th>
                   <th className="py-2 text-right font-medium">
-                    {tt("Weight", "น้ำหนัก")}
+                    {t("label.weight")}
                   </th>
                   <th className="py-2 text-center font-medium">
                     {tt("Score", "คะแนน")}
@@ -328,32 +333,35 @@ export function ResultStep({
                 </tr>
               </thead>
               <tbody>
-                {kpiItems.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-line/60 align-top last:border-0"
-                  >
-                    <td className="py-2.5 pr-3 font-medium leading-relaxed text-ink">
-                      {item.name}
-                    </td>
-                    <td className="py-2.5 pr-3 leading-relaxed text-muted">
-                      {item.target}
-                    </td>
-                    <td className="py-2.5 text-right text-muted">
-                      {item.weight}%
-                    </td>
-                    <td className="py-2.5 text-center">
-                      {answers[kpiKey(item.id)] ? (
-                        <b className="text-ink">{answers[kpiKey(item.id)]}</b>
-                      ) : (
-                        <span className="text-line-2">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {kpis.map((item) => {
+                  const value = kpiScores[item.id] ?? item.score;
+                  return (
+                    <tr
+                      key={item.id}
+                      className="border-b border-line/60 align-top last:border-0"
+                    >
+                      <td className="py-2.5 pr-3 font-medium leading-relaxed text-ink">
+                        {item.name}
+                      </td>
+                      <td className="py-2.5 pr-3 leading-relaxed text-muted">
+                        {item.target}
+                      </td>
+                      <td className="py-2.5 text-right text-muted">
+                        {item.weight}%
+                      </td>
+                      <td className="py-2.5 text-center">
+                        {value ? (
+                          <b className="text-ink">{value}</b>
+                        ) : (
+                          <span className="text-line-2">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTable>
         </Card>
       ) : null}
     </div>

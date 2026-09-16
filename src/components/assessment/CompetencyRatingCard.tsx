@@ -5,47 +5,59 @@ import { ChevronDown, Target } from "lucide-react";
 import { Card } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { RATING_LABELS, type Competency } from "@/data/competencies";
 import {
   LEVEL_DESC_EN,
-  levelsFor,
   parseBehavior,
-  subTitleTh,
+  pick,
+  type CompetencyQuestion,
+  type LevelDetail,
 } from "./lib";
 
 /* --------------------------------------------------------------- one box */
 
+/**
+ * One rating option, carrying that level's own description straight from
+ * `CompetencyLevel`. The Thai behaviour text holds a `ตัวอย่าง:` worked example,
+ * which stays behind a disclosure so the four boxes remain scannable.
+ */
 function LevelBox({
-  competencyId,
-  score,
+  level,
   selected,
   expected,
   indicators,
+  readOnly,
   onSelect,
 }: {
-  competencyId: string;
-  score: number;
+  level: LevelDetail | undefined;
   selected: boolean;
   expected: boolean;
   indicators: string[];
+  readOnly: boolean;
   onSelect: () => void;
 }) {
-  const { tt, lang } = useT();
+  const { t, tt, lang } = useT();
   const [open, setOpen] = useState(false);
 
-  const level = levelsFor(competencyId).find((l) => l.score === score);
-  const label =
-    lang === "th"
-      ? level?.labelTh || RATING_LABELS[score]
-      : RATING_LABELS[score];
-  const description =
-    lang === "th"
-      ? level?.descTh || ""
-      : LEVEL_DESC_EN[score] || "";
+  const score = level?.score ?? 0;
+  const label = pick(lang, level?.labelEn || t(`rating.${score}`), level?.labelTh);
+  const description = pick(
+    lang,
+    level?.descEn || LEVEL_DESC_EN[score] || "",
+    level?.descTh,
+  );
 
-  const { bullets, example } = parseBehavior(level?.behaviorTh ?? "");
-  const behaviourList = lang === "th" ? bullets : bullets.length ? bullets : indicators;
-  const hasDisclosure = behaviourList.length > 0 || Boolean(example);
+  const thai = parseBehavior(level?.behaviorTh ?? null);
+  const english = parseBehavior(level?.behaviorEn ?? null);
+  const source = lang === "th" ? thai : english;
+  // English has no behaviour text in the workbook — fall back to the Thai
+  // worked example and the competency's own English indicators
+  const bullets = source.bullets.length
+    ? source.bullets
+    : lang === "th"
+      ? []
+      : indicators;
+  const example = source.example || thai.example;
+  const hasDisclosure = bullets.length > 0 || Boolean(example);
 
   return (
     <div
@@ -66,8 +78,13 @@ function LevelBox({
       <button
         type="button"
         aria-pressed={selected}
+        disabled={readOnly}
         onClick={onSelect}
-        className="flex flex-1 flex-col items-center gap-1.5 rounded-t-lg px-3 pb-3 pt-5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className={cn(
+          "flex flex-1 flex-col items-center gap-1.5 rounded-t-lg px-3 pb-3 pt-5 text-left",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
+          readOnly && "cursor-default",
+        )}
       >
         <span
           className={cn(
@@ -98,7 +115,7 @@ function LevelBox({
             type="button"
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
-            className="flex w-full items-center justify-between gap-2 text-[11px] font-medium text-brand hover:text-brand-dark"
+            className="flex w-full items-center justify-between gap-2 text-[11px] font-medium text-brand hover:text-brand-dark max-lg:min-h-11"
           >
             <span>{tt("See example", "ดูตัวอย่าง")}</span>
             <ChevronDown
@@ -108,9 +125,9 @@ function LevelBox({
           </button>
           {open ? (
             <div className="mt-2 space-y-2">
-              {behaviourList.length ? (
+              {bullets.length ? (
                 <ul className="list-disc space-y-1 pl-4 text-[11px] font-light leading-relaxed text-muted">
-                  {behaviourList.map((b, i) => (
+                  {bullets.map((b, i) => (
                     <li key={i} className="break-words">
                       {b}
                     </li>
@@ -140,20 +157,23 @@ function LevelBox({
 export function CompetencyRatingCard({
   index,
   competency,
-  expected,
   value,
   onChange,
   readOnly = false,
 }: {
   index: number;
-  competency: Competency;
-  expected: number | null;
+  competency: CompetencyQuestion;
   value?: number;
   onChange: (rating: number) => void;
   readOnly?: boolean;
 }) {
   const { t, tt, lang } = useT();
-  const sub = subTitleTh(competency.id);
+  const name = pick(lang, competency.nameEn, competency.nameTh);
+  const definition = pick(
+    lang,
+    competency.definitionEn ?? "",
+    competency.definitionTh,
+  );
 
   return (
     <Card className="p-5 lg:p-6">
@@ -164,54 +184,65 @@ export function CompetencyRatingCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="text-lg font-bold text-ink">{competency.name}</h3>
-            {expected !== null ? (
-              <span className="text-xs text-muted">
-                {t("label.expected")}: <b className="text-ink">{expected}</b> / 4
-              </span>
-            ) : null}
+            <h3 className="text-lg font-bold text-ink">{name}</h3>
+            <span className="text-xs text-muted">
+              {t("label.expected")}:{" "}
+              <b className="text-ink">{competency.expected}</b> / 4
+            </span>
           </div>
 
-          <p className="mt-1 break-words text-sm leading-relaxed text-muted">
-            {lang === "th" ? competency.definitionTh : competency.definition}
-          </p>
-
-          {lang === "th" && sub ? (
-            <p className="mt-1 break-words text-xs leading-relaxed text-line-2">
-              {sub}
+          {definition ? (
+            <p className="mt-1 break-words text-sm leading-relaxed text-muted">
+              {definition}
             </p>
           ) : null}
 
-          {lang === "en" && competency.indicators.length ? (
+          {lang === "th" && competency.subTh ? (
+            <p className="mt-1 break-words text-xs leading-relaxed text-line-2">
+              {competency.subTh}
+            </p>
+          ) : null}
+
+          {lang === "en" && competency.indicatorsEn.length ? (
             <>
               <p className="mt-4 text-sm font-medium text-ink">
                 {tt("Behavioral Indicators:", "พฤติกรรมบ่งชี้:")}
               </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm font-light leading-relaxed text-muted">
-                {competency.indicators.map((ind) => (
+                {competency.indicatorsEn.map((ind) => (
                   <li key={ind}>{ind}</li>
                 ))}
               </ul>
             </>
           ) : null}
 
-          <fieldset className="mt-6" disabled={readOnly}>
+          <fieldset className="mt-6">
             <legend className="sr-only">
               {tt(
-                `Rate ${competency.name} from 1 to 4`,
-                `ให้คะแนน ${competency.name} ตั้งแต่ 1 ถึง 4`,
+                `Rate ${name} from 1 to 4`,
+                `ให้คะแนน ${name} ตั้งแต่ 1 ถึง 4`,
               )}
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[1, 2, 3, 4].map((r) => (
+              {[1, 2, 3, 4].map((score) => (
                 <LevelBox
-                  key={r}
-                  competencyId={competency.id}
-                  score={r}
-                  selected={value === r}
-                  expected={expected === r}
-                  indicators={competency.indicators}
-                  onSelect={() => !readOnly && onChange(r)}
+                  key={score}
+                  level={
+                    competency.levels.find((l) => l.score === score) ?? {
+                      score,
+                      labelEn: "",
+                      labelTh: "",
+                      descEn: null,
+                      descTh: null,
+                      behaviorEn: null,
+                      behaviorTh: null,
+                    }
+                  }
+                  selected={value === score}
+                  expected={competency.expected === score}
+                  indicators={competency.indicatorsEn}
+                  readOnly={readOnly}
+                  onSelect={() => !readOnly && onChange(score)}
                 />
               ))}
             </div>

@@ -2,7 +2,6 @@
 
 import { Pill } from "@/components/ui";
 import { useT } from "@/lib/i18n";
-import { goalProgress, useDemo, type IdpGoal } from "@/lib/store";
 import {
   STATUS_BAR,
   STATUS_TONE,
@@ -12,6 +11,7 @@ import {
   parseDate,
   planWindow,
   type GoalStatus,
+  type PlanGoal,
 } from "./status";
 
 export function useStatusLabel() {
@@ -31,28 +31,31 @@ export function StatusPill({ status }: { status: GoalStatus }) {
   return <Pill tone={STATUS_TONE[status]}>{label(status)}</Pill>;
 }
 
+/** A goal on the strip: the dates, the derived percentage and a label. */
+export type TimelineGoal = PlanGoal & { name: string };
+
 /**
  * Gantt-ish strip across the whole plan period: one row per goal, the bar is
  * the goal's window and the solid fill inside it is its progress.
+ *
+ * The percentage arrives already derived from the server, so a goal backed by a
+ * course follows that course's chapter completions without this component
+ * knowing the LMS exists.
  */
 export function GoalTimeline({
   goals,
   onSelect,
 }: {
-  goals: IdpGoal[];
+  goals: TimelineGoal[];
   onSelect?: (goalId: string) => void;
 }) {
   const { tt, lang } = useT();
-  const { state } = useDemo();
   const statusLabel = useStatusLabel();
   const now = Date.now();
   const win = planWindow(goals, now);
   const ticks = monthTicks(win);
   const span = Math.max(win.end - win.start, 1);
-  const todayAt = Math.max(
-    0,
-    Math.min(100, ((now - win.start) / span) * 100),
-  );
+  const todayAt = Math.max(0, Math.min(100, ((now - win.start) / span) * 100));
   const locale = lang === "th" ? "th-TH" : "en-GB";
 
   const fmt = (iso: string) =>
@@ -74,7 +77,7 @@ export function GoalTimeline({
     <div className="scroll-thin overflow-x-auto">
       <div className="min-w-[640px]">
         {/* month scale */}
-        <div className="relative ml-[190px] mb-2 h-5 border-b border-line/70">
+        <div className="relative mb-2 ml-[190px] h-5 border-b border-line/70">
           {ticks.map((tick) => (
             <span
               key={tick.at}
@@ -91,9 +94,7 @@ export function GoalTimeline({
 
         <ul className="space-y-2">
           {goals.map((g) => {
-            // a goal that points at a course follows the course's progress
-            const progress = goalProgress(state, g);
-            const status = goalStatus(g, progress, now);
+            const status = goalStatus(g, now);
             const geo = barGeometry(g, win);
             const Row = onSelect ? "button" : "div";
             return (
@@ -108,7 +109,7 @@ export function GoalTimeline({
                 >
                   <span className="w-[182px] shrink-0">
                     <span className="block truncate text-[13px] font-bold text-ink">
-                      {g.competencyName}
+                      {g.name}
                     </span>
                     <span className="block truncate text-[11px] text-muted">
                       {fmt(g.startDate)} → {fmt(g.dueDate)}
@@ -125,17 +126,17 @@ export function GoalTimeline({
                     <span
                       className="absolute inset-y-1 overflow-hidden rounded-[5px] bg-line-2/40"
                       style={{ left: `${geo.left}%`, width: `${geo.width}%` }}
-                      title={`${g.competencyName} · ${statusLabel(status)} · ${progress}%`}
+                      title={`${g.name} · ${statusLabel(status)} · ${g.progress}%`}
                     >
                       <span
                         className={`block h-full rounded-[5px] ${STATUS_BAR[status]}`}
-                        style={{ width: `${Math.min(100, progress)}%` }}
+                        style={{ width: `${Math.min(100, g.progress)}%` }}
                       />
                     </span>
                   </span>
 
                   <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-muted">
-                    {progress}%
+                    {g.progress}%
                   </span>
                 </Row>
               </li>

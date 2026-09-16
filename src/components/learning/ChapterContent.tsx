@@ -12,22 +12,22 @@ import {
   PlayCircle,
 } from "lucide-react";
 import { Button, Pill } from "@/components/ui";
-import {
-  CHAPTER_KIND_LABEL,
-  chapterKind,
-  type Chapter,
-  type ChapterKind,
-  type Course,
-} from "@/data/learning";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import {
+  CHAPTER_KIND_LABEL,
+  FALLBACK_COVER,
+  pick,
+  type ChapterKind,
+} from "./model";
+import type { PlayerChapter } from "@/server/learning";
 
 /* ------------------------------------------------------------ kind badges */
 
 export const KIND_ICON: Record<ChapterKind, typeof PlayCircle> = {
-  video: PlayCircle,
-  pdf: FileText,
-  article: BookOpen,
+  VIDEO: PlayCircle,
+  PDF: FileText,
+  ARTICLE: BookOpen,
 };
 
 export function KindBadge({
@@ -43,9 +43,9 @@ export function KindBadge({
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-        kind === "video" && "bg-accent/10 text-accent",
-        kind === "pdf" && "bg-brand-tint text-brand",
-        kind === "article" && "bg-success/10 text-success",
+        kind === "VIDEO" && "bg-accent/10 text-accent",
+        kind === "PDF" && "bg-brand-tint text-brand",
+        kind === "ARTICLE" && "bg-success/10 text-success",
         className,
       )}
     >
@@ -56,65 +56,35 @@ export function KindBadge({
 
 /* ---------------------------------------------------------------- content */
 
-/**
- * Renders one chapter according to its content type. Mount with
- * `key={chapter.id}` so local playback / page state resets per chapter.
- */
-export function ChapterContent({
-  course,
-  chapter,
-  index,
-  complete,
-  onComplete,
-}: {
-  course: Course;
-  chapter: Chapter;
+/** What a panel needs to know about the course around the chapter. */
+export type PanelCourse = {
+  titleEn: string;
+  titleTh: string | null;
+  cover: string | null;
+};
+
+type PanelProps = {
+  course: PanelCourse;
+  chapter: PlayerChapter;
   /** zero-based position in the course */
   index: number;
   complete: boolean;
   onComplete: () => void;
-}) {
-  const kind = chapterKind(chapter);
-  if (kind === "pdf") {
-    return (
-      <PdfPanel
-        course={course}
-        chapter={chapter}
-        index={index}
-        complete={complete}
-        onComplete={onComplete}
-      />
-    );
-  }
-  if (kind === "article") {
-    return (
-      <ArticlePanel
-        course={course}
-        chapter={chapter}
-        index={index}
-        complete={complete}
-        onComplete={onComplete}
-      />
-    );
-  }
-  return (
-    <VideoPanel
-      course={course}
-      chapter={chapter}
-      index={index}
-      complete={complete}
-      onComplete={onComplete}
-    />
-  );
-}
-
-type PanelProps = {
-  course: Course;
-  chapter: Chapter;
-  index: number;
-  complete: boolean;
-  onComplete: () => void;
 };
+
+/**
+ * Renders one chapter according to its content type. Mount with
+ * `key={chapter.id}` so local playback / page state resets per chapter.
+ *
+ * Reaching the end of a video, the last page of a PDF or pressing "I have read
+ * this" on an article all call `onComplete`, which is the server action that
+ * writes the `ChapterProgress` row. The panel itself never records anything.
+ */
+export function ChapterContent(props: PanelProps) {
+  if (props.chapter.kind === "PDF") return <PdfPanel {...props} />;
+  if (props.chapter.kind === "ARTICLE") return <ArticlePanel {...props} />;
+  return <VideoPanel {...props} />;
+}
 
 /* ---------------------------------------------------------------- overlay */
 
@@ -124,8 +94,8 @@ function PanelHeader({
   index,
   right,
 }: {
-  course: Course;
-  chapter: Chapter;
+  course: PanelCourse;
+  chapter: PlayerChapter;
   index: number;
   right: React.ReactNode;
 }) {
@@ -134,11 +104,11 @@ function PanelHeader({
     <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 text-white">
       <div className="min-w-0">
         <p className="truncate text-sm font-bold">
-          {lang === "th" ? course.titleTh ?? course.title : course.title}
+          {pick(lang, course.titleEn, course.titleTh)}
         </p>
         <p className="truncate text-xs text-white/70">
           {tt("Chapter", "บทที่")} {index + 1} |{" "}
-          {lang === "th" ? chapter.titleTh ?? chapter.title : chapter.title}
+          {pick(lang, chapter.titleEn, chapter.titleTh)}
         </p>
       </div>
       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px]">
@@ -185,13 +155,17 @@ function VideoPanel({ course, chapter, index, complete, onComplete }: PanelProps
       <div
         className={cn(
           "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-30",
-          course.cover,
+          course.cover ?? FALLBACK_COVER,
         )}
       />
       <button
         type="button"
         onClick={() => setPlaying((p) => !p)}
-        aria-label={playing ? tt("Pause chapter", "หยุดชั่วคราว") : tt("Play chapter", "เล่นบทเรียน")}
+        aria-label={
+          playing
+            ? tt("Pause chapter", "หยุดชั่วคราว")
+            : tt("Play chapter", "เล่นบทเรียน")
+        }
         className="absolute inset-0 grid place-items-center"
       >
         <span className="grid size-20 place-items-center rounded-full bg-accent text-white shadow-xl transition-transform hover:scale-105 active:scale-95 lg:size-24">
@@ -251,18 +225,22 @@ function PdfPanel({ course, chapter, index, complete, onComplete }: PanelProps) 
     }
   }, [page, pages, onComplete]);
 
-  const title = lang === "th" ? chapter.titleTh ?? chapter.title : chapter.title;
-  const summary = lang === "th" ? chapter.summaryTh ?? chapter.summary : chapter.summary;
+  const title = pick(lang, chapter.titleEn, chapter.titleTh);
+  const summary = pick(lang, chapter.summaryEn ?? title, chapter.summaryTh);
   const bullets =
-    lang === "th" && chapter.bulletsTh?.length ? chapter.bulletsTh : chapter.bullets;
-  const bullet = bullets[(page - 1) % Math.max(1, bullets.length)];
+    lang === "th" && chapter.bulletsTh.length
+      ? chapter.bulletsTh
+      : chapter.bulletsEn;
+  const bullet = bullets.length
+    ? bullets[(page - 1) % bullets.length]
+    : summary;
 
   return (
     <div className="relative h-[420px] w-full overflow-hidden rounded-xl bg-ink sm:aspect-video sm:h-auto">
       <div
         className={cn(
           "pointer-events-none absolute inset-0 bg-gradient-to-br opacity-25",
-          course.cover,
+          course.cover ?? FALLBACK_COVER,
         )}
       />
 
@@ -328,7 +306,9 @@ function PdfPanel({ course, chapter, index, complete, onComplete }: PanelProps) 
               {tt("Page", "หน้า")} {page} {tt("of", "จาก")} {pages}
             </span>
             <span>
-              {page >= pages ? tt("End of document", "จบเอกสาร") : tt("Reading", "กำลังอ่าน")}
+              {page >= pages
+                ? tt("End of document", "จบเอกสาร")
+                : tt("Reading", "กำลังอ่าน")}
             </span>
           </div>
         </div>
@@ -358,28 +338,32 @@ function PdfPanel({ course, chapter, index, complete, onComplete }: PanelProps) 
 
 function ArticlePanel({ course, chapter, index, complete, onComplete }: PanelProps) {
   const { tt, lang } = useT();
-  const title = lang === "th" ? chapter.titleTh ?? chapter.title : chapter.title;
-  const summary = lang === "th" ? chapter.summaryTh ?? chapter.summary : chapter.summary;
-  const body =
-    (lang === "th" ? chapter.bodyTh ?? chapter.body : chapter.body) ?? summary;
+  const title = pick(lang, chapter.titleEn, chapter.titleTh);
+  const summary = pick(lang, chapter.summaryEn ?? title, chapter.summaryTh);
+  const body = pick(lang, chapter.bodyEn ?? summary, chapter.bodyTh);
   const paragraphs = body.split(/\n{2,}/).filter(Boolean);
 
   return (
     <article className="overflow-hidden rounded-xl border border-line/70 bg-white shadow-[0_2px_10px_rgba(16,24,40,.06)]">
-      <div className={cn("h-2 w-full bg-gradient-to-r", course.cover)} />
+      <div
+        className={cn(
+          "h-2 w-full bg-gradient-to-r",
+          course.cover ?? FALLBACK_COVER,
+        )}
+      />
       <div className="p-5 lg:p-6">
         <div className="flex flex-wrap items-center gap-2">
-          <KindBadge kind="article" />
+          <KindBadge kind="ARTICLE" />
           <span className="text-[11px] text-muted">
             {tt("Chapter", "บทที่")} {index + 1} · {chapter.minutes}{" "}
             {tt("min read", "นาทีในการอ่าน")}
           </span>
-          {complete ? (
-            <Pill tone="success">{tt("Read", "อ่านแล้ว")}</Pill>
-          ) : null}
+          {complete ? <Pill tone="success">{tt("Read", "อ่านแล้ว")}</Pill> : null}
         </div>
 
-        <h2 className="mt-2 text-xl font-medium tracking-tight text-ink">{title}</h2>
+        <h2 className="mt-2 text-xl font-medium tracking-tight text-ink">
+          {title}
+        </h2>
         <p className="mt-1 text-sm font-bold text-ink">{summary}</p>
 
         <div className="scroll-thin mt-4 max-h-[320px] space-y-3 overflow-y-auto pr-1">

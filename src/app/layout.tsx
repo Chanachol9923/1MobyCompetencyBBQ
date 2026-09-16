@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geologica } from "next/font/google";
 import "./globals.css";
-import { DemoProvider } from "@/lib/store";
+import { UiProvider } from "@/lib/ui-state";
 import { Toast } from "@/components/layout/Toast";
 
 const geologica = Geologica({
@@ -23,10 +23,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={geologica.variable}>
       <body className="min-h-screen bg-white antialiased">
-        <DemoProvider>
+        <UiProvider>
           {children}
           <Toast />
-        </DemoProvider>
+        </UiProvider>
       </body>
     </html>
   );

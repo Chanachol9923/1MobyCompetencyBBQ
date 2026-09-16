@@ -2,32 +2,22 @@
 
 import { Pill } from "@/components/ui";
 import { useT } from "@/lib/i18n";
-import { GAP_VERDICT_LABEL, type GapVerdict } from "@/data/competencies";
-import { STATUS_KEY, type Status } from "./lib";
+import { STATUS_DICT_KEY, type AssessmentStatus } from "./lib";
 
-const TONE: Record<Status, "neutral" | "warn" | "success"> = {
+const TONE: Record<AssessmentStatus, "neutral" | "warn" | "success"> = {
   "not-started": "neutral",
   "in-progress": "warn",
   submitted: "success",
 };
 
-export function StatusPill({ status }: { status: Status }) {
+export function StatusPill({ status }: { status: AssessmentStatus }) {
   const { t } = useT();
-  return <Pill tone={TONE[status]}>{t(STATUS_KEY[status])}</Pill>;
+  return <Pill tone={TONE[status]}>{t(STATUS_DICT_KEY[status])}</Pill>;
 }
 
-const VERDICT_TONE: Record<GapVerdict, "success" | "brand" | "warn" | "danger"> = {
-  strength: "success",
-  standard: "brand",
-  development: "warn",
-  critical: "danger",
-};
-
-export function VerdictPill({ verdict }: { verdict: GapVerdict }) {
-  const { lang } = useT();
-  return (
-    <Pill tone={VERDICT_TONE[verdict]}>{GAP_VERDICT_LABEL[verdict][lang]}</Pill>
-  );
-}
-
-export { VERDICT_TONE };
+/**
+ * The gap verdict wording lives with the rest of the converted gap engine in
+ * `components/profile` — re-exported here so the assessment screens have one
+ * import rather than two, and so there is still only one copy of the labels.
+ */
+export { VerdictPill } from "@/components/profile/VerdictPill";

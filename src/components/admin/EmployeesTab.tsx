@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Download, Pencil, Plus, Trash2 } from "lucide-react";
-import { Avatar, Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
+import { useMemo, useState, useTransition } from "react";
+import { Download, KeyRound, Pencil, Power, PowerOff, Plus } from "lucide-react";
+import { Avatar, Button, Field, Input, Modal, Pill, Select, Textarea } from "@/components/ui";
 import {
   IconAction,
   Note,
@@ -12,220 +12,146 @@ import {
   Th,
   downloadCsv,
 } from "@/components/admin/shared";
-import { COMPETENCIES } from "@/data/competencies";
+import type {
+  ActionResult,
+  AdminEmployeeRow,
+  EmployeeAdminData,
+} from "@/components/admin/content-types";
 import {
-  DEPARTMENTS,
-  DIVISIONS,
-  JOB_ROLES,
-  POSITIONS,
-  findPerson,
-  type Person,
-} from "@/data/people";
-import { useDemo } from "@/lib/store";
+  createEmployee,
+  setEmployeeActive,
+  updateEmployee,
+} from "@/server/admin-content";
 import { useT } from "@/lib/i18n";
 
-const LEVELS = [
-  "Level 1: Operation",
-  "Level 2: Senior Operation",
-  "Level 3: Supervise",
-  "Level 4: Management",
-  "Level 5: Strategy",
-];
-
-const BUSINESS_UNITS = Array.from(new Set(DEPARTMENTS.map((d) => d.name)));
-
 type Draft = {
-  employeeId: string;
+  employeeCode: string;
   name: string;
   nickname: string;
   email: string;
-  level: string;
   grade: string;
-  position: string;
-  jobRole: string;
   businessUnit: string;
-  department: string;
-  division: string;
-  /** a person id, or "-" for nobody */
-  reportTo: string;
   remark: string;
+  jobRoleId: string;
+  departmentId: string;
+  divisionId: string;
+  positionId: string;
+  managerId: string;
 };
 
-const emptyDraft = (): Draft => ({
-  employeeId: "",
+const emptyDraft = (jobRoleId: string): Draft => ({
+  employeeCode: "",
   name: "",
   nickname: "",
   email: "",
-  level: LEVELS[0]!,
-  grade: "EX1",
-  position: POSITIONS[0]!.name,
-  jobRole: JOB_ROLES[0]!.name,
-  businessUnit: BUSINESS_UNITS[0]!,
-  department: DEPARTMENTS[0]!.name,
-  division: DIVISIONS[0]!.name,
-  reportTo: "-",
+  grade: "",
+  businessUnit: "",
   remark: "",
+  jobRoleId,
+  departmentId: "",
+  divisionId: "",
+  positionId: "",
+  managerId: "",
 });
 
-const fromPerson = (p: Person): Draft => ({
-  employeeId: p.employeeId,
+const fromRow = (p: AdminEmployeeRow): Draft => ({
+  employeeCode: p.employeeCode,
   name: p.name,
-  nickname: p.nickname,
+  nickname: p.nickname ?? "",
   email: p.email,
-  level: p.level,
-  grade: p.grade,
-  position: p.position,
-  jobRole: p.jobRole,
-  businessUnit: p.businessUnit,
-  department: p.department,
-  division: p.division,
-  reportTo: p.reportTo || "-",
-  remark: p.remark,
+  grade: p.grade ?? "",
+  businessUnit: p.businessUnit ?? "",
+  remark: p.remark ?? "",
+  jobRoleId: p.jobRoleId,
+  departmentId: p.departmentId ?? "",
+  divisionId: p.divisionId ?? "",
+  positionId: p.positionId ?? "",
+  managerId: p.managerId ?? "",
 });
 
-function baseScores() {
-  const scores: Record<string, number> = {};
-  COMPETENCIES.forEach((c) => (scores[c.id] = 3));
-  return scores;
-}
-
-export function EmployeesTab() {
-  const { state, update, notify, logActivity } = useDemo();
+/**
+ * The staff data set from the requirement pack — Employee_ID, Level, Role,
+ * Business Unit, Department, Division, Report to and Remark — with create, edit
+ * and deactivate against the `Employee` table.
+ *
+ * Level is not a field here: it comes from the career role, because the career
+ * role is what the expected-level matrix is keyed on. Letting the two drift
+ * apart is what makes a competency framework stop meaning anything.
+ */
+export function EmployeesTab({
+  data,
+  onResult,
+}: {
+  data: EmployeeAdminData;
+  onResult: (result: ActionResult) => void;
+}) {
   const { t, tt } = useT();
+  const { employees, departments, divisions, positions, jobRoles, counts } = data;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [showInactive, setShowInactive] = useState(false);
   const [mode, setMode] = useState<"closed" | "add" | "edit">("closed");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<Person | null>(null);
-
-  const employees = state.employees;
-
-  /** `reportTo` holds a person id — resolve it to a readable name. */
-  const managerName = (id: string) => {
-    if (!id || id === "-") return "—";
-    const local = employees.find((p) => p.id === id);
-    if (local) return local.name;
-    const seeded = findPerson(id);
-    return seeded.id === id ? seeded.name : id;
-  };
+  const [editing, setEditing] = useState<AdminEmployeeRow | null>(null);
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(jobRoles[0]?.id ?? ""));
+  const [confirm, setConfirm] = useState<AdminEmployeeRow | null>(null);
+  const [busy, startTransition] = useTransition();
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return employees.filter((p) => {
-      const matchQ =
-        !q ||
-        [
-          p.name,
-          p.nickname,
-          p.employeeId,
-          p.position,
-          p.jobRole,
-          p.level,
-          p.businessUnit,
-          p.department,
-          p.division,
-        ].some((v) => (v ?? "").toLowerCase().includes(q));
-      const matchF = filter === "all" || p.department === filter;
-      return matchQ && matchF;
+      if (!showInactive && !p.active) return false;
+      if (filter !== "all" && p.departmentId !== filter) return false;
+      if (!q) return true;
+      return [
+        p.name,
+        p.nickname ?? "",
+        p.employeeCode,
+        p.email,
+        p.positionName ?? "",
+        p.jobRoleName,
+        p.level,
+        p.businessUnit ?? "",
+        p.departmentName ?? "",
+        p.divisionName ?? "",
+      ].some((v) => v.toLowerCase().includes(q));
     });
-  }, [employees, query, filter]);
+  }, [employees, query, filter, showInactive]);
+
+  /** Only the divisions of the department currently picked in the form. */
+  const draftDivisions = useMemo(
+    () => divisions.filter((d) => !draft.departmentId || d.parentId === draft.departmentId),
+    [divisions, draft.departmentId],
+  );
+
+  function run(fn: () => Promise<ActionResult>) {
+    startTransition(async () => onResult(await fn()));
+  }
 
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
 
   function openAdd() {
-    setDraft(emptyDraft());
-    setEditingId(null);
+    setDraft(emptyDraft(jobRoles[0]?.id ?? ""));
+    setEditing(null);
     setMode("add");
   }
 
-  function openEdit(p: Person) {
-    setDraft(fromPerson(p));
-    setEditingId(p.id);
+  function openEdit(p: AdminEmployeeRow) {
+    setDraft(fromRow(p));
+    setEditing(p);
     setMode("edit");
   }
 
   function save() {
-    if (!draft.name.trim()) {
-      notify(tt("Employee name is required", "กรุณากรอกชื่อพนักงาน"));
-      return;
-    }
-    const patch = {
-      employeeId: draft.employeeId.trim(),
-      name: draft.name.trim(),
-      nickname: draft.nickname.trim() || draft.name.trim().split(" ")[0]!,
-      email: draft.email.trim(),
-      level: draft.level,
-      grade: draft.grade.trim(),
-      position: draft.position,
-      title: draft.position,
-      jobRole: draft.jobRole,
-      businessUnit: draft.businessUnit,
-      department: draft.department,
-      division: draft.division,
-      reportTo: draft.reportTo,
-      remark: draft.remark.trim(),
-    };
-
-    if (mode === "edit" && editingId) {
-      update((s) => ({
-        ...s,
-        employees: s.employees.map((p) =>
-          p.id === editingId
-            ? {
-                ...p,
-                ...patch,
-                employeeId: patch.employeeId || p.employeeId,
-                email: patch.email || p.email,
-              }
-            : p,
-        ),
-      }));
-      logActivity("Updated employee", patch.name, `${patch.jobRole} · ${patch.level}`);
-      notify(tt(`${patch.name} updated`, `อัปเดตข้อมูล ${patch.name} แล้ว`));
-    } else {
-      const id = `${patch.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()
-        .toString()
-        .slice(-4)}`;
-      const person: Person = {
-        id,
-        ...patch,
-        employeeId:
-          patch.employeeId || String(1000 + Math.floor(Math.random() * 8999)),
-        email: patch.email || `${id}@1moby.demo`,
-        grade: patch.grade || "EX1",
-        scores: baseScores(),
-        selfScores: {},
-        managerScores: baseScores(),
-        skillIndex: 3,
-        phase: 0,
-        points: 0,
-        activity: "Just added",
-      };
-      update((s) => ({
-        ...s,
-        employees: [...s.employees, person],
-        points: { ...s.points, [id]: 0 },
-        idp: { ...s.idp, [id]: [] },
-      }));
-      logActivity("Added employee", person.name, `${person.jobRole} · ${person.level}`);
-      notify(
-        tt(
-          `${person.name} added to the organisation`,
-          `เพิ่ม ${person.name} เข้าองค์กรแล้ว`,
-        ),
-      );
-    }
+    const payload = { ...draft };
+    const target = editing;
     setMode("closed");
-  }
-
-  function remove(p: Person) {
-    update((s) => ({ ...s, employees: s.employees.filter((e) => e.id !== p.id) }));
-    logActivity("Removed employee", p.name, p.employeeId);
-    notify(tt(`${p.name} removed`, `ลบ ${p.name} แล้ว`));
-    setConfirm(null);
+    run(() =>
+      target
+        ? updateEmployee({ ...payload, employeeId: target.id })
+        : createEmployee(payload),
+    );
   }
 
   function exportList() {
@@ -247,29 +173,25 @@ export function EmployeesTab() {
         t("label.remark"),
       ],
       visible.map((p) => [
-        p.employeeId,
+        p.employeeCode,
         p.name,
-        p.nickname,
+        p.nickname ?? "",
         p.email,
         p.level,
-        p.jobRole,
-        p.position,
-        p.grade,
-        p.businessUnit,
-        p.department,
-        p.division,
-        managerName(p.reportTo),
-        p.remark,
+        p.jobRoleName,
+        p.positionName ?? "",
+        p.grade ?? "",
+        p.businessUnit ?? "",
+        p.departmentName ?? "",
+        p.divisionName ?? "",
+        p.managerName ?? "",
+        p.remark ?? "",
       ]),
     );
-    logActivity("Exported employee list", `${visible.length} rows`);
-    notify(
-      tt(
-        `Employee list exported as CSV (${visible.length} rows)`,
-        `ส่งออกรายชื่อพนักงานเป็น CSV แล้ว (${visible.length} แถว)`,
-      ),
-    );
   }
+
+  const levelOfDraftRole =
+    jobRoles.find((r) => r.id === draft.jobRoleId)?.level ?? "—";
 
   return (
     <div>
@@ -287,18 +209,30 @@ export function EmployeesTab() {
           aria-label={t("label.department")}
         >
           <option value="all">{t("label.all")}</option>
-          {DEPARTMENTS.map((d) => (
-            <option key={d.id} value={d.name}>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>
               {d.name}
             </option>
           ))}
         </Select>
+        <label className="flex items-center gap-2 text-xs text-muted max-lg:min-h-11">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="size-4 accent-[#006bff]"
+          />
+          {tt(
+            `Show deactivated (${counts.inactive})`,
+            `แสดงที่ปิดใช้งาน (${counts.inactive})`,
+          )}
+        </label>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportList}>
             <Download size={14} className="text-brand" />
             {t("action.exportCsv")}
           </Button>
-          <Button size="sm" onClick={openAdd}>
+          <Button size="sm" onClick={openAdd} disabled={jobRoles.length === 0}>
             <Plus size={15} />
             {tt("Add New Employees", "เพิ่มพนักงานใหม่")}
           </Button>
@@ -330,25 +264,45 @@ export function EmployeesTab() {
                   <div className="flex items-center gap-3">
                     <Avatar name={p.name} size={32} />
                     <span className="min-w-0">
-                      <span className="block font-bold">{p.name}</span>
+                      <span className="flex items-center gap-1.5 font-bold">
+                        {p.name}
+                        {p.hasLogin ? (
+                          <KeyRound
+                            size={11}
+                            className="shrink-0 text-brand"
+                            aria-label={tt("Has a login", "มีบัญชีเข้าสู่ระบบ")}
+                          />
+                        ) : null}
+                      </span>
                       <span className="block text-[10px] text-muted">
-                        {p.nickname}
+                        {p.nickname ?? p.email}
                       </span>
                     </span>
                   </div>
                 </Td>
-                <Td className="font-bold">{p.employeeId}</Td>
+                <Td className="font-bold">{p.employeeCode}</Td>
                 <Td className="whitespace-nowrap text-muted">{p.level}</Td>
-                <Td className="font-bold">{p.jobRole}</Td>
-                <Td className="text-muted">{p.position}</Td>
-                <Td className="text-muted">{p.grade}</Td>
-                <Td className="text-muted">{p.businessUnit}</Td>
-                <Td className="font-bold">{p.department}</Td>
-                <Td className="max-w-[220px] text-muted">{p.division}</Td>
+                <Td className="font-bold">{p.jobRoleName}</Td>
+                <Td className="text-muted">{p.positionName ?? "—"}</Td>
+                <Td className="text-muted">{p.grade ?? "—"}</Td>
+                <Td className="text-muted">{p.businessUnit ?? "—"}</Td>
+                <Td className="font-bold">{p.departmentName ?? "—"}</Td>
+                <Td className="max-w-[220px] text-muted">{p.divisionName ?? "—"}</Td>
                 <Td className="whitespace-nowrap text-muted">
-                  {managerName(p.reportTo)}
+                  {p.managerName ?? "—"}
+                  {p.reportCount ? (
+                    <span className="ml-1 text-[10px] text-brand">
+                      {tt(`(+${p.reportCount})`, `(+${p.reportCount})`)}
+                    </span>
+                  ) : null}
                 </Td>
-                <Td className="max-w-[180px] text-muted">{p.remark || "—"}</Td>
+                <Td className="max-w-[180px] text-muted">
+                  {p.active ? (
+                    (p.remark ?? "—")
+                  ) : (
+                    <Pill tone="neutral">{tt("Deactivated", "ปิดใช้งาน")}</Pill>
+                  )}
+                </Td>
                 <Td>
                   <div className="flex justify-end gap-2">
                     <IconAction
@@ -359,11 +313,20 @@ export function EmployeesTab() {
                       <Pencil size={14} />
                     </IconAction>
                     <IconAction
-                      tone="danger"
-                      aria-label={`${t("action.delete")} ${p.name}`}
-                      onClick={() => setConfirm(p)}
+                      tone={p.active ? "danger" : "muted"}
+                      disabled={busy}
+                      aria-label={
+                        p.active
+                          ? tt(`Deactivate ${p.name}`, `ปิดใช้งาน ${p.name}`)
+                          : tt(`Reactivate ${p.name}`, `เปิดใช้งาน ${p.name}`)
+                      }
+                      onClick={() =>
+                        p.active
+                          ? setConfirm(p)
+                          : run(() => setEmployeeActive({ employeeId: p.id, active: true }))
+                      }
                     >
-                      <Trash2 size={14} />
+                      {p.active ? <PowerOff size={14} /> : <Power size={14} />}
                     </IconAction>
                   </div>
                 </Td>
@@ -383,18 +346,19 @@ export function EmployeesTab() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line/70 p-5">
         <p className="text-xs text-muted">
           {tt(
-            `${visible.length} of ${employees.length} employees`,
-            `${visible.length} จาก ${employees.length} คน`,
+            `${visible.length} of ${counts.active} active employees · ${counts.withLogin} have a login`,
+            `${visible.length} จาก ${counts.active} คนที่ทำงานอยู่ · มีบัญชีเข้าสู่ระบบ ${counts.withLogin} คน`,
           )}
         </p>
         <Note className="max-w-xl">
           {tt(
-            "Columns follow the requirement pack's Data Set: Employee_ID, Level, Role, Business Unit, Department, Division, Report to and Remark. Scroll sideways to see them all.",
-            "คอลัมน์เป็นไปตามชุดข้อมูลในเอกสารความต้องการ: รหัสพนักงาน ระดับ บทบาท หน่วยธุรกิจ ฝ่าย แผนก ผู้บังคับบัญชา และหมายเหตุ เลื่อนตารางไปด้านข้างเพื่อดูทั้งหมด",
+            "Columns follow the requirement pack's Data Set: Employee_ID, Level, Role, Business Unit, Department, Division, Report to and Remark. Level follows the career role, because that is what the expected-level matrix is keyed on.",
+            "คอลัมน์เป็นไปตามชุดข้อมูลในเอกสารความต้องการ: รหัสพนักงาน ระดับ บทบาท หน่วยธุรกิจ ฝ่าย แผนก ผู้บังคับบัญชา และหมายเหตุ โดยระดับจะอ้างอิงตามบทบาทสายอาชีพ เพราะเป็นคีย์ของตารางระดับที่คาดหวัง",
           )}
         </Note>
       </div>
 
+      {/* ------------------------------------------------- create / edit */}
       <Modal
         open={mode !== "closed"}
         onClose={() => setMode("closed")}
@@ -413,7 +377,7 @@ export function EmployeesTab() {
             <Button variant="outline" onClick={() => setMode("closed")}>
               {t("action.cancel")}
             </Button>
-            <Button onClick={save}>
+            <Button onClick={save} disabled={busy}>
               {mode === "edit" ? t("action.saveChanges") : t("action.add")}
             </Button>
           </>
@@ -434,17 +398,20 @@ export function EmployeesTab() {
               onChange={(e) => set("nickname", e.target.value)}
             />
           </Field>
-          <Field
-            label={t("label.employeeId")}
-            hint={tt("Leave blank to generate", "เว้นว่างเพื่อสร้างอัตโนมัติ")}
-          >
+          <Field label={`${t("label.employeeId")} *`}>
             <Input
-              value={draft.employeeId}
+              value={draft.employeeCode}
               placeholder={tt("Enter Employee ID", "กรอกรหัสพนักงาน")}
-              onChange={(e) => set("employeeId", e.target.value)}
+              onChange={(e) => set("employeeCode", e.target.value)}
             />
           </Field>
-          <Field label={t("label.email")}>
+          <Field
+            label={`${t("label.email")} *`}
+            hint={tt(
+              "A Google sign-in is matched to this address.",
+              "ระบบจะจับคู่บัญชี Google กับอีเมลนี้",
+            )}
+          >
             <Input
               type="email"
               value={draft.email}
@@ -452,35 +419,20 @@ export function EmployeesTab() {
               onChange={(e) => set("email", e.target.value)}
             />
           </Field>
-          <Field label={t("label.level")}>
-            <Select value={draft.level} onChange={(e) => set("level", e.target.value)}>
-              {LEVELS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </Select>
-          </Field>
           <Field
-            label={t("label.role")}
+            label={`${t("label.role")} *`}
             hint={tt(
-              "Drives the expected-level matrix.",
-              "ใช้กำหนดระดับที่คาดหวังในตารางสมรรถนะ",
+              `Level: ${levelOfDraftRole} — drives the expected-level matrix.`,
+              `ระดับ: ${levelOfDraftRole} — ใช้กำหนดระดับที่คาดหวังในตารางสมรรถนะ`,
             )}
           >
-            <Select value={draft.jobRole} onChange={(e) => set("jobRole", e.target.value)}>
-              {JOB_ROLES.map((r) => (
-                <option key={r.id} value={r.name}>
+            <Select
+              value={draft.jobRoleId}
+              onChange={(e) => set("jobRoleId", e.target.value)}
+            >
+              {jobRoles.map((r) => (
+                <option key={r.id} value={r.id}>
                   {r.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t("label.position")}>
-            <Select value={draft.position} onChange={(e) => set("position", e.target.value)}>
-              {POSITIONS.map((p) => (
-                <option key={p.id} value={p.name}>
-                  {p.name}
                 </option>
               ))}
             </Select>
@@ -492,48 +444,70 @@ export function EmployeesTab() {
               onChange={(e) => set("grade", e.target.value)}
             />
           </Field>
-          <Field label={t("label.businessUnit")}>
+          <Field label={t("label.position")}>
             <Select
-              value={draft.businessUnit}
-              onChange={(e) => set("businessUnit", e.target.value)}
+              value={draft.positionId}
+              onChange={(e) => set("positionId", e.target.value)}
             >
-              {BUSINESS_UNITS.map((b) => (
-                <option key={b} value={b}>
-                  {b}
+              <option value="">{tt("None", "ไม่ระบุ")}</option>
+              {positions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </Select>
           </Field>
+          <Field label={t("label.businessUnit")}>
+            <Input
+              value={draft.businessUnit}
+              placeholder={tt("Enter business unit", "กรอกหน่วยธุรกิจ")}
+              onChange={(e) => set("businessUnit", e.target.value)}
+            />
+          </Field>
           <Field label={t("label.department")}>
             <Select
-              value={draft.department}
-              onChange={(e) => set("department", e.target.value)}
+              value={draft.departmentId}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  departmentId: e.target.value,
+                  // a division belongs to a department, so changing one drops the other
+                  divisionId: "",
+                }))
+              }
             >
-              {DEPARTMENTS.map((d) => (
-                <option key={d.id} value={d.name}>
+              <option value="">{tt("None", "ไม่ระบุ")}</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </Select>
           </Field>
           <Field label={t("label.division")}>
-            <Select value={draft.division} onChange={(e) => set("division", e.target.value)}>
-              {DIVISIONS.map((d) => (
-                <option key={d.id} value={d.name}>
+            <Select
+              value={draft.divisionId}
+              onChange={(e) => set("divisionId", e.target.value)}
+            >
+              <option value="">{tt("None", "ไม่ระบุ")}</option>
+              {draftDivisions.map((d) => (
+                <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </Select>
           </Field>
           <Field label={t("label.reportTo")}>
-            <Select value={draft.reportTo} onChange={(e) => set("reportTo", e.target.value)}>
-              <option value="-">{tt("Nobody", "ไม่มี")}</option>
-              <option value="neo">Neo · HROD</option>
+            <Select
+              value={draft.managerId}
+              onChange={(e) => set("managerId", e.target.value)}
+            >
+              <option value="">{tt("Nobody", "ไม่มี")}</option>
               {employees
-                .filter((p) => p.id !== editingId)
+                .filter((p) => p.active && p.id !== editing?.id)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · {p.jobRole}
+                    {p.name} · {p.jobRoleName}
                   </option>
                 ))}
             </Select>
@@ -551,27 +525,39 @@ export function EmployeesTab() {
         </div>
       </Modal>
 
+      {/* --------------------------------------------------- deactivate */}
       <Modal
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
-        title={tt("Delete employee", "ลบพนักงาน")}
+        title={tt("Deactivate employee", "ปิดใช้งานพนักงาน")}
         width="max-w-md"
         footer={
           <>
             <Button variant="outline" onClick={() => setConfirm(null)}>
               {t("action.cancel")}
             </Button>
-            <Button variant="danger" onClick={() => confirm && remove(confirm)}>
-              {t("action.delete")}
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                const target = confirm;
+                setConfirm(null);
+                if (target)
+                  run(() => setEmployeeActive({ employeeId: target.id, active: false }));
+              }}
+            >
+              {tt("Deactivate", "ปิดใช้งาน")}
             </Button>
           </>
         }
       >
-        <p className="text-sm text-muted">
-          {tt("Remove", "ลบ")}{" "}
-          <span className="font-medium text-ink">{confirm?.name}</span>{" "}
-          {tt("from the employee list?", "ออกจากรายชื่อพนักงานหรือไม่?")}{" "}
-          {t("admin.onlyDemoData")}
+        <p className="text-sm leading-relaxed text-muted">
+          {tt("Deactivate", "ปิดใช้งาน")}{" "}
+          <span className="font-medium text-ink">{confirm?.name}</span>?{" "}
+          {tt(
+            "They drop out of the roster, the leaderboard and the cycle counts. Nothing is deleted — their scores, certificates and points ledger all stay, and reactivating brings them straight back.",
+            "พนักงานจะหายจากรายชื่อ ตารางอันดับ และการนับในรอบประเมิน แต่ไม่มีข้อมูลใดถูกลบ คะแนน ใบรับรอง และบัญชีคะแนนยังอยู่ครบ และเปิดใช้งานใหม่ได้ทันที",
+          )}
         </p>
       </Modal>
     </div>

@@ -2,9 +2,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Send, Sparkles } from "lucide-react";
-import type { Chapter, Course } from "@/data/learning";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { pick } from "./model";
+import type { PlayerChapter, PlayerView } from "@/server/learning";
+
+/** The assistant only ever reads the chapter rows it was handed. */
+type Chapter = PlayerChapter;
+type Course = Pick<PlayerView, "titleEn" | "titleTh" | "chapters">;
 
 /* ---------------------------------------------------------------- message */
 
@@ -69,13 +74,11 @@ function bestBullet(question: string, bullets: string[]) {
 type Lang = "en" | "th";
 
 const bulletsOf = (ch: Chapter, lang: Lang) =>
-  lang === "th" && ch.bulletsTh?.length ? ch.bulletsTh : ch.bullets;
-const titleOf = (ch: Chapter, lang: Lang) =>
-  lang === "th" ? ch.titleTh ?? ch.title : ch.title;
+  lang === "th" && ch.bulletsTh.length ? ch.bulletsTh : ch.bulletsEn;
+const titleOf = (ch: Chapter, lang: Lang) => pick(lang, ch.titleEn, ch.titleTh);
 const summaryOf = (ch: Chapter, lang: Lang) =>
-  lang === "th" ? ch.summaryTh ?? ch.summary : ch.summary;
-const courseTitleOf = (c: Course, lang: Lang) =>
-  lang === "th" ? c.titleTh ?? c.title : c.title;
+  pick(lang, ch.summaryEn ?? ch.titleEn, ch.summaryTh);
+const courseTitleOf = (c: Course, lang: Lang) => pick(lang, c.titleEn, c.titleTh);
 
 function buildQuiz(course: Course, chapter: Chapter, lang: Lang): QuizQuestion[] {
   const others = course.chapters

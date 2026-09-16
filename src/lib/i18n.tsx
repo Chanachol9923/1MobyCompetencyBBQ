@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useDemo } from "@/lib/store";
+import { useUi, type Lang } from "@/lib/ui-state";
 
-export type Lang = "en" | "th";
+export type { Lang };
 
 /**
  * Shared vocabulary. Anything that appears in more than one screen lives here so
@@ -178,8 +178,7 @@ export const DICT: Record<string, { en: string; th: string }> = {
 };
 
 export function useT() {
-  const { state, update } = useDemo();
-  const lang: Lang = state.lang ?? "en";
+  const { lang, setLang } = useUi();
 
   const t = useCallback(
     (key: string) => {
@@ -192,11 +191,6 @@ export function useT() {
 
   /** Inline pair for page-specific copy: tt("Assessment", "การประเมิน") */
   const tt = useCallback((en: string, th: string) => (lang === "th" ? th : en), [lang]);
-
-  const setLang = useCallback(
-    (next: Lang) => update((s) => ({ ...s, lang: next })),
-    [update],
-  );
 
   return useMemo(() => ({ t, tt, lang, setLang }), [t, tt, lang, setLang]);
 }
