@@ -67,6 +67,23 @@ async function loadClaims(userId: string): Promise<Claims> {
   };
 }
 
+
+/** A demo persona gets the role their position implies. */
+async function pickRoleForEmployee(employeeId: string): Promise<string> {
+  const reports = await db.employee.count({ where: { managerId: employeeId } });
+  return reports > 0 ? "manager" : "employee";
+}
+
+async function upsertDemoUser(email: string, name: string, roleKey: string) {
+  const role = await db.role.findUnique({ where: { key: roleKey }, select: { id: true } });
+  return db.user.upsert({
+    where: { email },
+    update: { status: "ACTIVE", roleId: role?.id ?? undefined },
+    create: { email, name, status: "ACTIVE", roleId: role?.id ?? null },
+    select: { id: true, email: true, name: true, image: true },
+  });
+}
+
 const demoLoginEnabled =
   process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 
@@ -80,36 +97,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       id: "demo",
       name: "Demo account",
-      credentials: { employeeCode: { label: "Employee code", type: "text" } },
+      credentials: { account: { label: "Account", type: "text" } },
       async authorize(credentials) {
         if (!demoLoginEnabled) return null;
-        const code = String(credentials?.employeeCode ?? "").trim();
-        if (!code) return null;
+        const key = String(credentials?.account ?? "").trim();
+        if (!key) return null;
 
-        const employee = await db.employee.findUnique({
-          where: { employeeCode: code },
-          select: { id: true, name: true, email: true, userId: true },
+        // a demo key is either a staff employee code or the email of a seeded
+        // account that has no staff record, such as the HROD administrator
+        const employee = await db.employee.findFirst({
+          where: { OR: [{ employeeCode: key }, { email: key }] },
+          select: { id: true, name: true, email: true, userId: true, jobRole: { select: { name: true } } },
         });
-        if (!employee) return null;
 
-        // demo personas get a real User row so the rest of the app has one shape
-        const user = await db.user.upsert({
-          where: { email: employee.email },
-          update: {},
-          create: {
-            email: employee.email,
-            name: employee.name,
-            status: "ACTIVE",
-          },
-          select: { id: true, email: true, name: true, image: true },
-        });
-        if (!employee.userId) {
-          await db.employee.update({
-            where: { id: employee.id },
-            data: { userId: user.id },
-          });
+        if (employee) {
+          const roleKey = await pickRoleForEmployee(employee.id);
+          const user = await upsertDemoUser(employee.email, employee.name, roleKey);
+          if (!employee.userId) {
+            await db.employee.update({
+              where: { id: employee.id },
+              data: { userId: user.id },
+            });
+          }
+          return user;
         }
-        return user;
+
+        // no staff record: only an already-seeded ACTIVE user may sign in this way
+        const existing = await db.user.findUnique({
+          where: { email: key },
+          select: { id: true, email: true, name: true, image: true, status: true },
+        });
+        if (!existing || existing.status !== "ACTIVE") return null;
+        return existing;
       },
     }),
   ],

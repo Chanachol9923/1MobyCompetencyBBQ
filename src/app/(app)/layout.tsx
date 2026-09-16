@@ -1,48 +1,60 @@
-"use client";
+import { redirect } from "next/navigation";
+import { db } from "@/lib/db";
+import { requireViewer } from "@/server/session";
+import { ViewerProvider, type ClientViewer } from "@/lib/viewer";
+import { AppShell } from "@/components/layout/AppShell";
 
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Topbar } from "@/components/layout/Topbar";
-import { MobileNavProvider } from "@/components/layout/mobile-nav";
-import { AppSkeleton } from "@/components/layout/AppSkeleton";
-import { canAccess, HOME_FOR_ROLE } from "@/components/layout/nav";
-import { useDemo } from "@/lib/store";
+/**
+ * Server layout: it resolves who is signed in once per request and hands the
+ * result down. Every page below can trust `useViewer()` because the server
+ * already checked it.
+ */
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const viewer = await requireViewer();
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { state, ready } = useDemo();
-  const router = useRouter();
-  const pathname = usePathname();
+  // A Google account that no admin has linked to a staff record yet cannot use
+  // the product, but it is not an error — it is waiting for approval.
+  const usable = viewer.employeeId !== null || viewer.permissions.length > 0;
+  if (viewer.status !== "ACTIVE" || !usable) redirect("/pending");
 
-  const role = state.role;
-  const allowed = role ? canAccess(role, pathname) : false;
+  const [role, employee] = await Promise.all([
+    viewer.roleKey
+      ? db.role.findUnique({
+          where: { key: viewer.roleKey },
+          select: { nameEn: true },
+        })
+      : null,
+    viewer.employeeId
+      ? db.employee.findUnique({
+          where: { id: viewer.employeeId },
+          select: { jobRole: { select: { name: true, level: true } } },
+        })
+      : null,
+  ]);
 
-  useEffect(() => {
-    if (!ready) return;
-    if (!role) {
-      router.replace("/login");
-      return;
-    }
-    // Role-based access control: bounce anyone who lands on a screen their role
-    // does not own, rather than rendering it and hiding the data.
-    if (!allowed) router.replace(HOME_FOR_ROLE[role]);
-  }, [ready, role, allowed, router]);
-
-  // a shell skeleton rather than a bare word - the layout is already known,
-  // only the data is not
-  if (!ready || !role || !allowed) return <AppSkeleton />;
+  const clientViewer: ClientViewer = {
+    userId: viewer.userId,
+    email: viewer.email,
+    name: viewer.name,
+    image: viewer.image,
+    status: viewer.status,
+    roleKey: viewer.roleKey,
+    roleName: role?.nameEn ?? null,
+    permissions: viewer.permissions,
+    employeeId: viewer.employeeId,
+    employeeName: viewer.employeeName,
+    jobRoleName: employee?.jobRole.name ?? null,
+    level: employee?.jobRole.level ?? null,
+    reportCount: viewer.reportIds.length,
+  };
 
   return (
-    <MobileNavProvider>
-      <div className="flex min-h-screen bg-white">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          {/* every wide table and chart carries its own scroller, so nothing
-              should be able to widen the page itself */}
-          <main className="min-w-0 flex-1 overflow-x-clip pb-16">{children}</main>
-        </div>
-      </div>
-    </MobileNavProvider>
+    <ViewerProvider viewer={clientViewer}>
+      <AppShell>{children}</AppShell>
+    </ViewerProvider>
   );
 }

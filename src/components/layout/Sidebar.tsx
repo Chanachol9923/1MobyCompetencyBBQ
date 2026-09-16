@@ -4,22 +4,25 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Smile, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDemo } from "@/lib/store";
+import { signOut } from "next-auth/react";
+import { useViewer } from "@/lib/viewer";
 import { useT } from "@/lib/i18n";
-import { NAV } from "./nav";
+import { navFor } from "./nav";
 import { useMobileNav } from "./mobile-nav";
 import { BottomNav, NAV_ICON } from "./BottomNav";
 import { Logo } from "./Logo";
 
 export function Sidebar() {
-  const { state, person, logout } = useDemo();
+  const viewer = useViewer();
   const { t, tt } = useT();
   const pathname = usePathname();
   const router = useRouter();
   const { open, setOpen } = useMobileNav();
 
-  if (!state.role || !person) return null;
-  const items = NAV[state.role];
+  // the menu is derived from what this person may actually do, so an admin
+  // changing a role changes the menu without a deploy
+  const items = navFor(viewer);
+  if (items.length === 0) return null;
 
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
@@ -51,14 +54,16 @@ export function Sidebar() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold leading-tight">
-            {person.name}
+            {viewer.name}
           </span>
           <span className="block truncate text-[10px] leading-tight text-white/85">
-            {person.title}
+            {viewer.jobRoleName ?? viewer.roleName ?? viewer.email}
           </span>
-          <span className="block truncate text-[10px] leading-tight text-white/85">
-            ({person.level})
-          </span>
+          {viewer.level ? (
+            <span className="block truncate text-[10px] leading-tight text-white/85">
+              ({viewer.level})
+            </span>
+          ) : null}
         </span>
         <span className="flex items-center gap-1.5">
           <Smile size={15} className="text-amber" />
@@ -66,8 +71,7 @@ export function Sidebar() {
             type="button"
             aria-label={t("action.logout")}
             onClick={() => {
-              logout();
-              router.push("/login");
+              void signOut({ redirectTo: "/login" });
             }}
             className={cn(
               "rounded p-0.5 transition-colors hover:bg-white/20 focus-visible:outline-white",

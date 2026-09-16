@@ -567,6 +567,23 @@ async function seedComms() {
   console.log(`  announcements ${ANNOUNCEMENTS.length}, notification rules ${rules.length}`);
 }
 
+async function seedAdminAccount() {
+  // HROD runs the framework and is deliberately not part of the assessed
+  // headcount, so it is a User with a role and no Employee row.
+  const role = await db.role.findUnique({ where: { key: "admin" }, select: { id: true } });
+  await db.user.upsert({
+    where: { email: "neo@1moby.demo" },
+    update: { status: "ACTIVE", roleId: role?.id ?? null },
+    create: {
+      email: "neo@1moby.demo",
+      name: "Neo (HROD)",
+      status: "ACTIVE",
+      roleId: role?.id ?? null,
+    },
+  });
+  console.log("  administrator account neo@1moby.demo");
+}
+
 async function main() {
   console.log("seeding 1Moby…");
   await seedRbac();
@@ -576,6 +593,7 @@ async function main() {
   await seedLearning();
   await seedEngagement();
   await seedComms();
+  await seedAdminAccount();
   console.log("done.");
 }
 

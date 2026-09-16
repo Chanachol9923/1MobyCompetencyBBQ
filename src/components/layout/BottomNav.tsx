@@ -16,7 +16,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDemo } from "@/lib/store";
+import { useViewer } from "@/lib/viewer";
+import { navFor } from "./nav";
 import { useT } from "@/lib/i18n";
 import type { Role } from "@/data/people";
 
@@ -74,12 +75,13 @@ export const NAV_ICON: Record<string, LucideIcon> = {
 };
 
 export function BottomNav() {
-  const { state, person } = useDemo();
+  const viewer = useViewer();
   const { tt } = useT();
   const pathname = usePathname();
 
-  if (!state.role || !person) return null;
-  const tabs = TABS[state.role];
+  // the first five destinations this person can reach
+  const tabs = navFor(viewer).slice(0, 5);
+  if (tabs.length === 0) return null;
 
   /** Short enough to sit under a 20px icon in both languages. */
   const label = (href: string) => {
@@ -121,7 +123,7 @@ export function BottomNav() {
     >
       <ul className="flex items-stretch">
         {tabs.map((tab) => {
-          const Icon = tab.icon;
+          const Icon = NAV_ICON[tab.href] ?? LayoutDashboard;
           const active = isActive(tab.href);
           return (
             <li key={tab.href} className="min-w-0 flex-1">
