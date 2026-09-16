@@ -8,8 +8,8 @@
  *   node scripts/dev-db.mjs
  *   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/postgres
  *
- * This is a developer convenience only — it is single-connection and lives in
- * .pglite/ on disk. Production points at Supabase and nothing else changes.
+ * This is a developer convenience only, and it stores data in .pglite/ on disk.
+ * Production points at Supabase and nothing else changes.
  */
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
@@ -21,7 +21,14 @@ const PORT = Number(process.env.PGLITE_PORT ?? 5433);
 mkdirSync(DATA_DIR, { recursive: true });
 
 const pg = await PGlite.create({ dataDir: DATA_DIR });
-const server = new PGLiteSocketServer({ db: pg, port: PORT, host: "127.0.0.1" });
+const server = new PGLiteSocketServer({
+  db: pg,
+  port: PORT,
+  host: "127.0.0.1",
+  // the default is a single connection, which a connection pool exhausts
+  // immediately; queries are queued internally so this stays safe
+  maxConnections: Number(process.env.PGLITE_MAX_CONNECTIONS ?? 20),
+});
 
 await server.start();
 console.log(`PGlite listening on 127.0.0.1:${PORT}  (data in ${DATA_DIR})`);
