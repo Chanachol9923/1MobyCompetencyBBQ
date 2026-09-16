@@ -10,3 +10,6 @@ next-env.d.ts
 # stray files that are not part of this project
 gpu-log.csv
 gpu-*.ps1
+
+# local PGlite dev database
+.pglite/

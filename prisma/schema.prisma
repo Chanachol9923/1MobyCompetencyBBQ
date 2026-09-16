@@ -1,0 +1,837 @@
+// 1Moby Comprehensive Assessment System — data model.
+//
+// PostgreSQL (Supabase). DATABASE_URL points at the pooled connection (pgBouncer,
+// port 6543) which is what serverless functions should use; DIRECT_URL points at
+// the direct connection (port 5432) which migrations need.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 keeps connection URLs out of the schema: migrations read them from
+// prisma.config.ts, and the client gets a driver adapter (see src/lib/db.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+/* ------------------------------------------------------------------ identity */
+
+// Auth.js (NextAuth) owns these four models. A User is a login; an Employee is a
+// person in the org chart. They are linked one-to-one once an admin approves the
+// account, which is what keeps "anyone with a Google account" from becoming staff.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // access control
+  roleId String?
+  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  status UserStatus @default(PENDING)
+
+  employee Employee?
+
+  accounts     Account[]
+  sessions     Session[]
+  activityLogs ActivityLog[]
+
+  @@index([roleId])
+  @@index([status])
+}
+
+enum UserStatus {
+  /// signed in with Google but not yet linked to an employee by an admin
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/* --------------------------------------------------------------------- rbac */
+
+// Roles and permissions are data, not code, so an admin can genuinely change who
+// can do what without a deploy.
+model Role {
+  id          String  @id @default(cuid())
+  key         String  @unique // employee | manager | admin | ...
+  nameEn      String
+  nameTh      String
+  description String?
+  /// system roles cannot be deleted, only edited
+  isSystem    Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  permissions RolePermission[]
+  users       User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id       String  @id @default(cuid())
+  key      String  @unique // see_own_result | manage_users | ...
+  nameEn   String
+  nameTh   String
+  category String  @default("general")
+  descEn   String?
+  descTh   String?
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+/* ----------------------------------------------------------- org structure */
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  divisions Division[]
+  positions Position[]
+  employees Employee[]
+}
+
+model Division {
+  id           String @id @default(cuid())
+  name         String
+  departmentId String
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  employees  Employee[]
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+}
+
+model Position {
+  id           String  @id @default(cuid())
+  name         String
+  departmentId String?
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employees  Employee[]
+
+  @@unique([name, departmentId])
+  @@index([departmentId])
+}
+
+/// A career role from the 1Moby career path: Executive, Senior, Team Lead, ...
+/// This is the job ladder, distinct from the access-control Role above.
+model JobRole {
+  id        String @id @default(cuid())
+  key       String @unique // executive | senior | team-lead | ...
+  name      String @unique // "Team Lead"
+  level     String // "Level 3: Supervise"
+  levelRank Int // 1..6, for ordering and comparisons
+  gradeFrom String
+  gradeTo   String
+  sortOrder Int    @default(0)
+
+  employees      Employee[]
+  expectedLevels ExpectedLevel[]
+}
+
+model Employee {
+  id           String  @id @default(cuid())
+  /// the HR employee number from the source data
+  employeeCode String  @unique
+  name         String
+  nickname     String?
+  email        String  @unique
+  grade        String?
+  businessUnit String?
+  remark       String?
+  active       Boolean @default(true)
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  jobRoleId    String
+  jobRole      JobRole     @relation(fields: [jobRoleId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  divisionId   String?
+  division     Division?   @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  positionId   String?
+  position     Position?   @relation(fields: [positionId], references: [id], onDelete: SetNull)
+
+  managerId String?
+  manager   Employee?  @relation("Reports", fields: [managerId], references: [id], onDelete: SetNull)
+  reports   Employee[] @relation("Reports")
+
+  assessmentsAbout    Assessment[] @relation("Subject")
+  assessmentsBy       Assessment[] @relation("Reviewer")
+  kpiItems            KpiItem[]
+  idpGoals            IdpGoal[]        @relation("GoalOwner")
+  idpGoalsAssigned    IdpGoal[]        @relation("GoalAuthor")
+  enrollments         Enrollment[]
+  testResults         TestResult[]
+  certificates        Certificate[]
+  badges              EmployeeBadge[]
+  pointEntries        PointLedger[]
+  redemptions         Redemption[]
+  notifications       Notification[]
+  announcementReads   AnnouncementRead[]
+  coachingNotes       CoachingNote[]   @relation("NoteSubject")
+  coachingNotesByMe   CoachingNote[]   @relation("NoteAuthor")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([managerId])
+  @@index([departmentId])
+  @@index([divisionId])
+  @@index([jobRoleId])
+}
+
+/* ---------------------------------------------------- competency framework */
+
+enum CompetencyGroup {
+  CORE
+  FUNCTIONAL
+  MANAGERIAL
+}
+
+model Competency {
+  id            String          @id @default(cuid())
+  key           String          @unique // create-impact | programming | ...
+  group         CompetencyGroup
+  nameEn        String
+  nameTh        String?
+  definitionEn  String?
+  definitionTh  String?
+  subTh         String?
+  indicatorsEn  String[]        @default([])
+  sortOrder     Int             @default(0)
+
+  levels         CompetencyLevel[]
+  expectedLevels ExpectedLevel[]
+  scores         AssessmentScore[]
+  idpGoals       IdpGoal[]
+  courses        Course[]
+
+  @@index([group])
+}
+
+/// What a 1, 2, 3 or 4 actually looks like for this competency.
+model CompetencyLevel {
+  id           String @id @default(cuid())
+  competencyId String
+  score        Int // 1..4
+  labelEn      String
+  labelTh      String
+  descTh       String?
+  descEn       String?
+  behaviorTh   String?
+  behaviorEn   String?
+
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([competencyId, score])
+}
+
+/// The expected level per career role. A null level means the role is NOT
+/// assessed on that competency at all, which the whole app honours.
+model ExpectedLevel {
+  jobRoleId    String
+  competencyId String
+  level        Int?
+
+  jobRole    JobRole    @relation(fields: [jobRoleId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@id([jobRoleId, competencyId])
+  @@index([competencyId])
+}
+
+/* ---------------------------------------------------------------- cycles */
+
+enum CycleStatus {
+  DRAFT
+  OPEN
+  REVIEW
+  CLOSED
+}
+
+model AssessmentCycle {
+  id        String      @id @default(cuid())
+  key       String      @unique // 2026-Q3
+  nameEn    String
+  nameTh    String
+  startsAt  DateTime
+  endsAt    DateTime
+  status    CycleStatus @default(OPEN)
+
+  // weighting, as whole percentages summing to 100
+  weightKpi        Int @default(40)
+  weightCore       Int @default(20)
+  weightFunctional Int @default(25)
+  weightManagerial Int @default(15)
+
+  assessments Assessment[]
+  kpiItems    KpiItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AssessmentMode {
+  SELF
+  SUPERVISOR
+}
+
+model Assessment {
+  id          String         @id @default(cuid())
+  cycleId     String
+  subjectId   String
+  reviewerId  String
+  mode        AssessmentMode
+  submittedAt DateTime?
+
+  cycle    AssessmentCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  subject  Employee        @relation("Subject", fields: [subjectId], references: [id], onDelete: Cascade)
+  reviewer Employee        @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  scores   AssessmentScore[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cycleId, subjectId, reviewerId, mode])
+  @@index([subjectId, mode])
+  @@index([reviewerId])
+  @@index([cycleId, submittedAt])
+}
+
+model AssessmentScore {
+  assessmentId String
+  competencyId String
+  score        Int // 1..4
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@id([assessmentId, competencyId])
+  @@index([competencyId])
+}
+
+/// The "results" half of the score: KPIs carry their own weights.
+model KpiItem {
+  id         String @id @default(cuid())
+  cycleId    String
+  employeeId String
+  name       String
+  target     String
+  weight     Int
+  score      Int?
+
+  cycle    AssessmentCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, employeeId])
+}
+
+/* ------------------------------------------------------------------- idp */
+
+enum DevelopmentActivity {
+  ONLINE_COURSE
+  COACHING
+  ON_THE_JOB
+}
+
+model IdpGoal {
+  id           String              @id @default(cuid())
+  employeeId   String
+  competencyId String
+  courseId     String?
+  fromLevel    Int
+  toLevel      Int
+  activity     DevelopmentActivity @default(ONLINE_COURSE)
+  startDate    DateTime
+  dueDate      DateTime
+  remark       String?
+  /// only used when the goal is not backed by a course
+  manualProgress Int              @default(0)
+  completedAt  DateTime?
+  createdById  String?
+
+  employee   Employee   @relation("GoalOwner", fields: [employeeId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+  course     Course?    @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy  Employee?  @relation("GoalAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  evidence   GoalEvidence[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([competencyId])
+  @@index([courseId])
+}
+
+enum EvidenceKind {
+  CERTIFICATE
+  LINK
+  NOTE
+}
+
+model GoalEvidence {
+  id        String       @id @default(cuid())
+  goalId    String
+  kind      EvidenceKind
+  label     String
+  reference String
+  createdAt DateTime     @default(now())
+
+  goal IdpGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+}
+
+/// Free-text coaching note a manager keeps against a team member.
+model CoachingNote {
+  id         String   @id @default(cuid())
+  subjectId  String
+  authorId   String
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  subject Employee @relation("NoteSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  author  Employee @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, authorId])
+}
+
+/* ------------------------------------------------------------------- lms */
+
+enum CourseCategory {
+  CORE
+  FUNCTIONAL
+  MANAGERIAL
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ChapterKind {
+  VIDEO
+  PDF
+  ARTICLE
+}
+
+model Course {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  titleEn       String
+  titleTh       String?
+  descriptionEn String?
+  descriptionTh String?
+  category      CourseCategory
+  competencyId  String?
+  hours         Int            @default(0)
+  cover         String?
+  status        PublishStatus  @default(PUBLISHED)
+
+  competency  Competency?        @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  chapters    Chapter[]
+  enrollments Enrollment[]
+  testResults TestResult[]
+  certificates Certificate[]
+  idpGoals    IdpGoal[]
+  pathSteps   LearningPathStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([competencyId])
+  @@index([status])
+}
+
+model Chapter {
+  id        String      @id @default(cuid())
+  courseId  String
+  sortOrder Int
+  kind      ChapterKind @default(VIDEO)
+  titleEn   String
+  titleTh   String?
+  summaryEn String?
+  summaryTh String?
+  bulletsEn String[]    @default([])
+  bulletsTh String[]    @default([])
+  bodyEn    String?
+  bodyTh    String?
+  minutes   Int         @default(0)
+  pages     Int?
+
+  course   Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress ChapterProgress[]
+
+  @@unique([courseId, sortOrder])
+  @@index([courseId])
+}
+
+model Enrollment {
+  id          String    @id @default(cuid())
+  employeeId  String
+  courseId    String
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  employee Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  course   Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapters ChapterProgress[]
+
+  @@unique([employeeId, courseId])
+  @@index([courseId])
+}
+
+model ChapterProgress {
+  enrollmentId String
+  chapterId    String
+  completedAt  DateTime @default(now())
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  chapter    Chapter    @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@id([enrollmentId, chapterId])
+  @@index([chapterId])
+}
+
+enum TestKind {
+  PRE
+  POST
+}
+
+model TestResult {
+  id         String   @id @default(cuid())
+  employeeId String
+  courseId   String
+  kind       TestKind
+  score      Int
+  takenAt    DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, courseId, kind])
+  @@index([courseId])
+}
+
+model LearningPath {
+  id            String        @id @default(cuid())
+  slug          String        @unique
+  titleEn       String
+  titleTh       String?
+  descriptionEn String?
+  descriptionTh String?
+  targetLevel   String?
+  audience      String?
+  cover         String?
+  status        PublishStatus @default(PUBLISHED)
+
+  projectTitleEn       String?
+  projectTitleTh       String?
+  projectBriefEn       String?
+  projectBriefTh       String?
+  projectDeliverableEn String?
+  projectDeliverableTh String?
+  projectPoints        Int     @default(150)
+
+  steps        LearningPathStep[]
+  certificates Certificate[]
+  completions  PathCompletion[]
+}
+
+model LearningPathStep {
+  id        String @id @default(cuid())
+  pathId    String
+  courseId  String
+  sortOrder Int
+
+  path   LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([pathId, sortOrder])
+  @@index([courseId])
+}
+
+model PathCompletion {
+  id          String   @id @default(cuid())
+  pathId      String
+  employeeId  String
+  deliverable String?
+  completedAt DateTime @default(now())
+
+  path LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+
+  @@unique([pathId, employeeId])
+  @@index([employeeId])
+}
+
+model Certificate {
+  id         String   @id @default(cuid())
+  employeeId String
+  courseId   String?
+  pathId     String?
+  titleEn    String
+  titleTh    String?
+  score      Int?
+  issuedAt   DateTime @default(now())
+  /// short public code printed on the certificate, for verification
+  code       String   @unique
+
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  course   Course?       @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  path     LearningPath? @relation(fields: [pathId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([courseId])
+}
+
+/* ---------------------------------------------------------- engagement */
+
+model Badge {
+  id            String  @id @default(cuid())
+  key           String  @unique
+  nameEn        String
+  nameTh        String?
+  requirementEn String?
+  requirementTh String?
+  points        Int     @default(0)
+  tone          String?
+  /// courses | certificates | assessments | paths | manual
+  source        String  @default("manual")
+  target        Int?
+  active        Boolean @default(true)
+
+  holders EmployeeBadge[]
+}
+
+model EmployeeBadge {
+  employeeId String
+  badgeId    String
+  earnedAt   DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, badgeId])
+  @@index([badgeId])
+}
+
+/// Points are an append-only ledger rather than a running total, so the balance
+/// is always explainable and concurrent awards cannot clobber each other.
+model PointLedger {
+  id         String   @id @default(cuid())
+  employeeId String
+  delta      Int
+  reason     String
+  refType    String?
+  refId      String?
+  createdAt  DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, createdAt])
+}
+
+model Reward {
+  id      String  @id @default(cuid())
+  key     String  @unique
+  nameEn  String
+  nameTh  String?
+  points  Int
+  stock   Int     @default(0)
+  image   String?
+  tone    String?
+  active  Boolean @default(true)
+
+  redemptions Redemption[]
+}
+
+enum RedemptionStatus {
+  PREPARING
+  DELIVERED
+  CANCELLED
+}
+
+model Redemption {
+  id         String           @id @default(cuid())
+  employeeId String
+  rewardId   String
+  points     Int
+  status     RedemptionStatus @default(PREPARING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reward   Reward   @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, createdAt])
+  @@index([rewardId])
+}
+
+/* ------------------------------------------------------- comms and audit */
+
+enum AnnouncementAudience {
+  ALL
+  DEPARTMENT
+  DIVISION
+  JOB_ROLE
+  PERSON
+}
+
+model Announcement {
+  id          String               @id @default(cuid())
+  titleEn     String
+  titleTh     String?
+  bodyEn      String
+  bodyTh      String?
+  audience    AnnouncementAudience @default(ALL)
+  /// department / division / job role / employee id, depending on audience
+  audienceRef String?
+  channel     NotificationChannel  @default(IN_APP)
+  status      PublishStatus        @default(DRAFT)
+  pinned      Boolean              @default(false)
+  publishAt   DateTime?
+  publishedAt DateTime?
+  createdById String?
+
+  reads AnnouncementRead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+model AnnouncementRead {
+  announcementId String
+  employeeId     String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, employeeId])
+  @@index([employeeId])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  BOTH
+}
+
+enum NotificationKind {
+  ASSESSMENT
+  IDP
+  LMS
+  REWARD
+  ANNOUNCEMENT
+  SYSTEM
+}
+
+model Notification {
+  id         String              @id @default(cuid())
+  employeeId String
+  kind       NotificationKind    @default(SYSTEM)
+  channel    NotificationChannel @default(IN_APP)
+  titleEn    String
+  titleTh    String?
+  bodyEn     String?
+  bodyTh     String?
+  href       String?
+  readAt     DateTime?
+  createdAt  DateTime            @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, readAt])
+  @@index([createdAt])
+}
+
+model NotificationRule {
+  id      String              @id @default(cuid())
+  key     String              @unique // idp_activity | cycle_open | deadline | course_assigned
+  nameEn  String
+  nameTh  String
+  channel NotificationChannel @default(IN_APP)
+  enabled Boolean             @default(true)
+}
+
+/// Append-only audit trail. Never updated, only inserted and read.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorLabel String
+  action     String
+  targetType String?
+  targetId   String?
+  targetLabel String?
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+}
