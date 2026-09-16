@@ -1,7 +1,7 @@
 "use client";
 
 import { Pill } from "@/components/ui";
-import { GAP_VERDICT_LABEL, type GapVerdict } from "@/data/competencies";
+import { VERDICT_LABEL, type GapVerdict } from "./gap";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +31,7 @@ export const VERDICT_HEX: Record<GapVerdict, string> = {
 /** Verdict wording in the active language, for CSV and generated sentences. */
 export function useVerdictLabel() {
   const { lang } = useT();
-  return (verdict: GapVerdict) => GAP_VERDICT_LABEL[verdict][lang];
+  return (verdict: GapVerdict) => VERDICT_LABEL[verdict][lang];
 }
 
 export function VerdictPill({

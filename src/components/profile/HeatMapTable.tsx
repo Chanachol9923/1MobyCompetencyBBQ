@@ -1,10 +1,24 @@
 "use client";
 
 import { heatColor } from "@/components/charts";
-import type { Competency } from "@/data/competencies";
-import type { Person } from "@/data/people";
 import { useT } from "@/lib/i18n";
 import { cn, initials } from "@/lib/utils";
+import { definitionOf, nameOf } from "./gap";
+
+export type HeatMember = {
+  id: string;
+  name: string;
+  nickname: string | null;
+  position: string | null;
+};
+
+export type HeatCompetency = {
+  id: string;
+  nameEn: string;
+  nameTh: string | null;
+  definitionEn: string | null;
+  definitionTh: string | null;
+};
 
 /**
  * Team competency heat map: members down the side, competencies across the top.
@@ -27,12 +41,12 @@ export function HeatMapTable({
   maxHeight,
   className,
 }: {
-  members: Person[];
-  competencies: Competency[];
-  scoreOf: (personId: string, competencyId: string) => number | null;
-  expectedOf?: (personId: string, competencyId: string) => number | null;
+  members: HeatMember[];
+  competencies: HeatCompetency[];
+  scoreOf: (employeeId: string, competencyId: string) => number | null;
+  expectedOf?: (employeeId: string, competencyId: string) => number | null;
   selectedId?: string | null;
-  onSelect?: (personId: string) => void;
+  onSelect?: (employeeId: string) => void;
   /** optional cap; omit so the grid simply fits its container */
   maxHeight?: number;
   className?: string;
@@ -74,10 +88,10 @@ export function HeatMapTable({
             <span
               key={c.id}
               role="columnheader"
-              title={`${c.name} — ${lang === "th" ? c.definitionTh : c.definition}`}
+              title={`${nameOf(c, lang)} — ${definitionOf(c, lang) ?? ""}`}
               className="flex items-end justify-center px-0.5 pb-1 text-center text-[10px] font-medium leading-[1.2] text-muted"
             >
-              <span className="line-clamp-2">{c.name}</span>
+              <span className="line-clamp-2">{nameOf(c, lang)}</span>
             </span>
           ))}
         </div>
@@ -97,21 +111,22 @@ export function HeatMapTable({
                       {m.nickname || m.name}
                     </span>
                     <span className="block truncate text-[10px] leading-tight text-muted">
-                      {m.position}
+                      {m.position ?? ""}
                     </span>
                   </span>
                 </span>
 
                 {competencies.map((c) => {
                   const score = scoreOf(m.id, c.id);
+                  const name = nameOf(c, lang);
                   if (score == null) {
                     return (
                       <span
                         key={c.id}
                         role="cell"
                         title={tt(
-                          `${m.name} is not assessed on ${c.name}`,
-                          `${m.name} ไม่ได้ถูกประเมินใน ${c.name}`,
+                          `${m.name} is not assessed on ${name}`,
+                          `${m.name} ไม่ได้ถูกประเมินใน ${name}`,
                         )}
                         className="grid h-9 place-items-center rounded-md bg-surface text-[10px] text-muted"
                       >
@@ -128,8 +143,8 @@ export function HeatMapTable({
                       style={{ background: heatColor(score) }}
                       title={
                         expected != null
-                          ? `${m.name} · ${c.name} — ${score} / ${t("label.expected")} ${expected}`
-                          : `${m.name} · ${c.name} — ${score}`
+                          ? `${m.name} · ${name} — ${score} / ${t("label.expected")} ${expected}`
+                          : `${m.name} · ${name} — ${score}`
                       }
                     >
                       {score}

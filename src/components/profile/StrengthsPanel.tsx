@@ -4,69 +4,89 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, GraduationCap } from "lucide-react";
 import { Button, Card, CardHeader } from "@/components/ui";
 import { VerdictPill, useVerdictLabel } from "./VerdictPill";
-import { formatGap, type GapRow } from "./gap";
-import { coursesForCompetency } from "@/data/learning";
+import { formatGap, nameOf, pick, type GapRow } from "./gap";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import type { IdpGoal } from "@/lib/store";
+
+/** A development goal that already covers a competency. */
+export type GoalHint = {
+  competencyId: string;
+  titleEn: string;
+  titleTh: string | null;
+};
+
+/** A published course written for a competency. */
+export type CourseHint = {
+  competencyId: string;
+  slug: string;
+  titleEn: string;
+  titleTh: string | null;
+};
 
 /**
  * "แนะนำจุดแข็ง และจุดที่ควรพัฒนาอัตโนมัติ" for one person.
  *
  * /reports generates the same read for a whole team, but an employee has no
  * route-level access to it — so the individual profile carries its own copy of
- * the panel. Everything is derived from `gapRows`: the score, the expected
- * level, the gap and the verdict. Nothing here is written by hand, and a
- * competency the role is not assessed on never reaches this component because
- * `gapRows` already filtered it out.
+ * the panel. Everything is derived from the gap rows the server handed down:
+ * the score, the expected level, the gap and the verdict. Nothing here is
+ * written by hand, a competency the role is not assessed on never reaches this
+ * component, and a competency nobody has scored yet is left out of the read
+ * rather than counted as meeting expectation.
  */
 export function StrengthsPanel({
   rows,
   goals,
+  courses,
   className,
 }: {
   rows: GapRow[];
-  goals: IdpGoal[];
+  goals: GoalHint[];
+  courses: CourseHint[];
   className?: string;
 }) {
-  const { t, tt } = useT();
+  const { t, tt, lang } = useT();
   const verdictLabel = useVerdictLabel();
   const router = useRouter();
 
-  if (!rows.length) return null;
+  const scored = rows.filter((r) => r.score !== null);
+  if (!scored.length) return null;
 
-  const byGapDesc = [...rows].sort(
-    (a, b) => b.gap - a.gap || b.manager - a.manager,
+  const byGapDesc = [...scored].sort(
+    (a, b) => b.gap - a.gap || (b.score ?? 0) - (a.score ?? 0),
   );
   const atOrAbove = byGapDesc.filter((r) => r.gap >= 0);
   /** Strengths are the ones clear of expectation; if none, the best three. */
   const strengths = (atOrAbove.length ? atOrAbove : byGapDesc).slice(0, 3);
-  const shortfalls = rows
+  const shortfalls = scored
     .filter((r) => r.gap < 0)
     .sort((a, b) => a.gap - b.gap);
 
   const best = strengths[0]!;
   const worst = shortfalls[0];
+  const bestName = nameOf(best, lang);
 
   /** Same generated-sentence shape /reports uses, for one person. */
   const openingEn =
-    `You are strongest at ${best.competency.name} ` +
-    `(${best.manager} vs ${best.expected} expected, ${formatGap(best.gap)} — ${verdictLabel(best.verdict)}).`;
+    `You are strongest at ${bestName} ` +
+    `(${best.score} vs ${best.expected} expected, ${formatGap(best.gap)} — ${verdictLabel(best.verdict)}).`;
   const openingTh =
-    `คุณทำได้ดีที่สุดในสมรรถนะ ${best.competency.name} ` +
-    `(${best.manager} เทียบกับเกณฑ์ ${best.expected} · ${formatGap(best.gap)} — ${verdictLabel(best.verdict)})`;
+    `คุณทำได้ดีที่สุดในสมรรถนะ ${bestName} ` +
+    `(${best.score} เทียบกับเกณฑ์ ${best.expected} · ${formatGap(best.gap)} — ${verdictLabel(best.verdict)})`;
 
   const closingEn = worst
-    ? ` ${shortfalls.length} of ${rows.length} assessed competencies sit below expectation, starting with ` +
-      `${worst.competency.name} (${worst.manager} vs ${worst.expected}, ${formatGap(worst.gap)}).`
-    : ` You are at or above the expected level on all ${rows.length} competencies you are assessed on — keep the level and stretch the strongest ones.`;
+    ? ` ${shortfalls.length} of ${scored.length} scored competencies sit below expectation, starting with ` +
+      `${nameOf(worst, lang)} (${worst.score} vs ${worst.expected}, ${formatGap(worst.gap)}).`
+    : ` You are at or above the expected level on all ${scored.length} competencies scored so far — keep the level and stretch the strongest ones.`;
   const closingTh = worst
-    ? ` มี ${shortfalls.length} จาก ${rows.length} สมรรถนะที่ต่ำกว่าเกณฑ์ เริ่มจาก ` +
-      `${worst.competency.name} (${worst.manager} เทียบกับเกณฑ์ ${worst.expected} · ${formatGap(worst.gap)})`
-    : ` คุณอยู่ในระดับที่คาดหวังหรือสูงกว่าครบทั้ง ${rows.length} สมรรถนะที่ถูกประเมิน รักษาระดับนี้ไว้และต่อยอดจุดแข็ง`;
+    ? ` มี ${shortfalls.length} จาก ${scored.length} สมรรถนะที่ต่ำกว่าเกณฑ์ เริ่มจาก ` +
+      `${nameOf(worst, lang)} (${worst.score} เทียบกับเกณฑ์ ${worst.expected} · ${formatGap(worst.gap)})`
+    : ` คุณอยู่ในระดับที่คาดหวังหรือสูงกว่าครบทั้ง ${scored.length} สมรรถนะที่มีคะแนนแล้ว รักษาระดับนี้ไว้และต่อยอดจุดแข็ง`;
 
   const goalFor = (competencyId: string) =>
     goals.find((g) => g.competencyId === competencyId);
+  const courseFor = (competencyId: string) =>
+    courses.find((c) => c.competencyId === competencyId);
 
   return (
     <Card className={cn("min-w-0", className)}>
@@ -93,14 +113,14 @@ export function StrengthsPanel({
             </p>
             <ul className="space-y-3">
               {strengths.map((r) => (
-                <li key={r.competency.id} className="flex items-start gap-2">
+                <li key={r.competencyId} className="flex items-start gap-2">
                   <span className="mt-1.5 size-2 shrink-0 rounded-full bg-success" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-medium text-ink">
-                      {r.competency.name}
+                      {nameOf(r, lang)}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                      {tt("score", "คะแนน")} {r.manager} ·{" "}
+                      {tt("score", "คะแนน")} {r.score} ·{" "}
                       {t("label.expected")} {r.expected}
                       <VerdictPill verdict={r.verdict} compact />
                     </span>
@@ -133,17 +153,17 @@ export function StrengthsPanel({
             ) : (
               <ul className="space-y-3">
                 {shortfalls.map((r) => {
-                  const goal = goalFor(r.competency.id);
-                  const course = coursesForCompetency(r.competency.id)[0];
+                  const goal = goalFor(r.competencyId);
+                  const course = courseFor(r.competencyId);
                   return (
-                    <li key={r.competency.id} className="flex items-start gap-2">
+                    <li key={r.competencyId} className="flex items-start gap-2">
                       <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px] font-medium text-ink">
-                          {r.competency.name}
+                          {nameOf(r, lang)}
                         </span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                          {tt("score", "คะแนน")} {r.manager} ·{" "}
+                          {tt("score", "คะแนน")} {r.score} ·{" "}
                           {t("label.expected")} {r.expected} · {t("label.gap")}{" "}
                           <b className="text-accent">{formatGap(r.gap)}</b>
                           <VerdictPill verdict={r.verdict} compact />
@@ -157,8 +177,8 @@ export function StrengthsPanel({
                           >
                             <ArrowUpRight size={13} />
                             {tt(
-                              `In your plan: ${goal.courseTitle}`,
-                              `อยู่ในแผนแล้ว: ${goal.courseTitle}`,
+                              `In your plan: ${pick(lang, goal.titleEn, goal.titleTh)}`,
+                              `อยู่ในแผนแล้ว: ${pick(lang, goal.titleEn, goal.titleTh)}`,
                             )}
                           </Button>
                         ) : course ? (
@@ -166,12 +186,12 @@ export function StrengthsPanel({
                             variant="ghost"
                             size="sm"
                             className="mt-1 lg:-ml-3"
-                            onClick={() => router.push(`/lms/${course.id}`)}
+                            onClick={() => router.push(`/lms/${course.slug}`)}
                           >
                             <GraduationCap size={13} />
                             {tt(
-                              `Start ${course.title}`,
-                              `เริ่มเรียน ${course.title}`,
+                              `Start ${pick(lang, course.titleEn, course.titleTh)}`,
+                              `เริ่มเรียน ${pick(lang, course.titleEn, course.titleTh)}`,
                             )}
                           </Button>
                         ) : (

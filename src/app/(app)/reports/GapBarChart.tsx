@@ -16,8 +16,12 @@ import {
   VerdictDot,
   useVerdictLabel,
 } from "@/components/profile/VerdictPill";
-import type { AggRow } from "@/components/profile/gap";
-import type { GapVerdict } from "@/data/competencies";
+import {
+  VERDICT_ORDER,
+  nameOf,
+  type AggRow,
+  type Lang,
+} from "@/components/profile/gap";
 
 export type BarDatum = {
   name: string;
@@ -26,10 +30,10 @@ export type BarDatum = {
   fill: string;
 };
 
-export function toBarData(rows: AggRow[]): BarDatum[] {
+export function toBarData(rows: AggRow[], lang: Lang): BarDatum[] {
   return rows.map((r) => ({
-    name: r.competency.name,
-    actual: r.avgManager,
+    name: nameOf(r, lang),
+    actual: r.avgScore,
     expected: r.avgExpected,
     fill: VERDICT_HEX[r.verdict],
   }));
@@ -92,13 +96,6 @@ function CompetencyTick({
     </text>
   );
 }
-
-const VERDICT_ORDER: GapVerdict[] = [
-  "strength",
-  "standard",
-  "development",
-  "critical",
-];
 
 /**
  * Average score vs expected level, one horizontal pair per competency.

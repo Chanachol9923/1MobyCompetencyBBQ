@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   Award,
   Bell,
@@ -9,74 +9,92 @@ import {
   ClipboardCheck,
   Gift,
   Languages,
+  Megaphone,
   Menu,
   Settings2,
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDemo, type AppNotification } from "@/lib/store";
 import { useT } from "@/lib/i18n";
+import { useViewer } from "@/lib/viewer";
+import {
+  listMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/server/announcements";
+import type { NotificationRow } from "@/components/announcements/types";
+import { pick, timeAgo } from "@/components/announcements/format";
 import { useMobileNav } from "./mobile-nav";
 
 const KIND_ICON = {
-  assessment: ClipboardCheck,
-  idp: Target,
-  lms: BookOpen,
-  reward: Gift,
-  system: Settings2,
+  ASSESSMENT: ClipboardCheck,
+  IDP: Target,
+  LMS: BookOpen,
+  REWARD: Gift,
+  ANNOUNCEMENT: Megaphone,
+  SYSTEM: Settings2,
 } as const;
 
-function timeAgo(iso: string, lang: "en" | "th") {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(diff / 60000);
-  if (mins < 60) return lang === "th" ? `${Math.max(mins, 1)} นาทีที่แล้ว` : `${Math.max(mins, 1)}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return lang === "th" ? `${hours} ชม.ที่แล้ว` : `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return lang === "th" ? `${days} วันที่แล้ว` : `${days}d ago`;
-}
-
 export function Topbar() {
-  const { state, person, update } = useDemo();
-  const { t, tt, lang, setLang } = useT();
+  const viewer = useViewer();
+  const { tt, lang, setLang } = useT();
   const { setOpen: setNavOpen } = useMobileNav();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<NotificationRow[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
+
+  /**
+   * The bell reads the `Notification` table for this viewer. It loads once when
+   * the shell mounts and again when the panel is opened — no interval timer, so
+   * an idle tab costs nothing.
+   */
+  const load = useCallback(async () => {
+    if (!viewer.employeeId) {
+      setLoaded(true);
+      return;
+    }
+    const feed = await listMyNotifications();
+    setItems(feed.items);
+    setUnread(feed.unreadCount);
+    setLoaded(true);
+  }, [viewer.employeeId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   useEffect(() => {
     if (!open) return;
+    void load();
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
+  }, [open, load]);
 
-  if (!person) return null;
+  const markAllRead = () => {
+    setItems((list) => list.map((n) => ({ ...n, read: true })));
+    setUnread(0);
+    startTransition(async () => {
+      await markAllNotificationsRead();
+      await load();
+    });
+  };
 
-  const mine: AppNotification[] = state.notifications.filter(
-    (n) => n.audience === "*" || n.audience === person.id,
-  );
-  const unread = mine.filter((n) => !n.read).length;
-
-  const markAllRead = () =>
-    update((s) => ({
-      ...s,
-      notifications: s.notifications.map((n) =>
-        n.audience === "*" || n.audience === person.id ? { ...n, read: true } : n,
-      ),
-    }));
-
-  const openNotification = (n: AppNotification) => {
-    update((s) => ({
-      ...s,
-      notifications: s.notifications.map((x) =>
-        x.id === n.id ? { ...x, read: true } : x,
-      ),
-    }));
+  const openNotification = (n: NotificationRow) => {
+    setItems((list) => list.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+    if (!n.read) setUnread((u) => Math.max(0, u - 1));
     setOpen(false);
     if (n.href) router.push(n.href);
+    startTransition(async () => {
+      await markNotificationRead(n.id);
+      await load();
+    });
   };
 
   return (
@@ -138,18 +156,21 @@ export function Topbar() {
               <button
                 type="button"
                 onClick={markAllRead}
-                className="rounded px-1 text-xs font-medium text-brand transition-colors hover:underline max-lg:min-h-11"
+                disabled={unread === 0}
+                className="rounded px-1 text-xs font-medium text-brand transition-colors hover:underline disabled:opacity-45 disabled:hover:no-underline max-lg:min-h-11"
               >
                 {tt("Mark all read", "อ่านทั้งหมดแล้ว")}
               </button>
             </div>
             <ul className="max-h-[360px] overflow-y-auto scroll-thin max-lg:max-h-[min(360px,60dvh)]">
-              {mine.length === 0 ? (
+              {items.length === 0 ? (
                 <li className="px-4 py-8 text-center text-xs text-muted">
-                  {tt("Nothing new", "ไม่มีการแจ้งเตือนใหม่")}
+                  {loaded
+                    ? tt("Nothing new", "ไม่มีการแจ้งเตือนใหม่")
+                    : tt("Loading...", "กำลังโหลด...")}
                 </li>
               ) : (
-                mine.map((n) => {
+                items.map((n) => {
                   const Icon = KIND_ICON[n.kind] ?? Award;
                   return (
                     <li key={n.id}>
@@ -167,16 +188,16 @@ export function Topbar() {
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline justify-between gap-2">
                             <span className="truncate text-sm font-semibold text-ink">
-                              {n.title}
+                              {pick(lang, n.titleEn, n.titleTh)}
                             </span>
                             <span className="shrink-0 text-[10px] text-muted">
                               {timeAgo(n.createdAt, lang)}
                             </span>
                           </span>
                           <span className="mt-0.5 block line-clamp-2 text-xs text-muted">
-                            {n.body}
+                            {pick(lang, n.bodyEn, n.bodyTh)}
                           </span>
-                          {n.channel !== "In-app" ? (
+                          {n.channel !== "IN_APP" ? (
                             <span className="mt-1 inline-block rounded bg-surface px-1.5 py-0.5 text-[10px] text-muted">
                               {tt("also emailed", "ส่งอีเมลด้วย")}
                             </span>
@@ -196,10 +217,10 @@ export function Topbar() {
       <div className="hidden items-center gap-2 rounded-lg border border-line px-3 py-1.5 sm:flex">
         <span className="text-xs">
           <span className="block font-semibold leading-tight text-ink">
-            {person.name}
+            {viewer.name}
           </span>
           <span className="block leading-tight text-muted">
-            {state.role ? t(`role.${state.role}`) : ""} · {person.grade}
+            {[viewer.roleName, viewer.jobRoleName].filter(Boolean).join(" · ")}
           </span>
         </span>
       </div>

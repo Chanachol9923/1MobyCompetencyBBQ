@@ -22,7 +22,10 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "nav.reports": { en: "Reports", th: "รายงาน" },
   "nav.employee": { en: "Employee", th: "พนักงาน" },
   "nav.announcement": { en: "Announcement", th: "ประกาศ" },
+  "nav.announcements": { en: "Announcements", th: "ประกาศ" },
   "nav.auditLog": { en: "Activity Log", th: "บันทึกกิจกรรม" },
+  "nav.accounts": { en: "Accounts", th: "บัญชีผู้ใช้" },
+  "nav.roles": { en: "Roles & permissions", th: "บทบาทและสิทธิ์" },
 
   // roles & levels
   "role.l1": { en: "Employee", th: "พนักงาน" },

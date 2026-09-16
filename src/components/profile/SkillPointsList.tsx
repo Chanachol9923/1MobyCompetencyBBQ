@@ -3,14 +3,23 @@
 import { Progress } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { formatGap, type GapRow } from "./gap";
+import {
+  VERDICT_ORDER,
+  definitionOf,
+  formatGap,
+  nameOf,
+  type GapRow,
+} from "./gap";
 import { VerdictDot, useVerdictLabel } from "./VerdictPill";
-import type { GapVerdict } from "@/data/competencies";
 
 /**
  * "Skills / Self / Manager / Expectation" list used on the dashboard and Team
  * Profile. The Figma shows a single value — the 180° model needs both halves,
  * so self and manager sit side by side with the gap verdict next to them.
+ *
+ * A dash means the database has no score from that side yet; it is never a
+ * zero, and a competency the role is not assessed on never reaches this list
+ * because the gap engine dropped it.
  */
 export function SkillPointsList({
   rows,
@@ -30,6 +39,7 @@ export function SkillPointsList({
   const verdictLabel = useVerdictLabel();
   const text = compact ? "text-[11px]" : "text-xs";
   const head = compact ? "text-[10px]" : "text-xs";
+  const dash = "—";
 
   return (
     <div className={cn("flex min-w-0 flex-col", fill && "h-full", className)}>
@@ -60,28 +70,24 @@ export function SkillPointsList({
         )}
       >
         {rows.map((r) => (
-          <li key={r.competency.id}>
+          <li key={r.competencyId}>
             <div className="flex items-center gap-2">
               <span className="size-2 shrink-0 rounded-full bg-muted" />
               <span
                 className={cn("min-w-0 flex-1 truncate text-ink", text)}
-                title={
-                  lang === "th"
-                    ? r.competency.definitionTh
-                    : r.competency.definition
-                }
+                title={definitionOf(r, lang)}
               >
-                {r.competency.name}
+                {nameOf(r, lang)}
               </span>
               {showSelf ? (
                 <span className={cn("w-10 shrink-0 text-center text-muted", text)}>
-                  {r.self}
+                  {r.self ?? dash}
                 </span>
               ) : null}
               <span
                 className={cn("w-12 shrink-0 text-center font-bold text-ink", text)}
               >
-                {r.manager}
+                {r.manager ?? dash}
               </span>
               <span className="flex w-14 shrink-0 justify-center">
                 <span
@@ -96,7 +102,7 @@ export function SkillPointsList({
               <Progress
                 className="min-w-0 flex-1"
                 tone="amber"
-                value={(r.manager / 4) * 100}
+                value={((r.score ?? 0) / 4) * 100}
               />
               <span
                 className={cn(
@@ -106,10 +112,10 @@ export function SkillPointsList({
                 )}
                 title={t("label.gap")}
               >
-                {formatGap(r.gap)}
+                {r.score === null ? dash : formatGap(r.gap)}
               </span>
               <span className="flex w-3 shrink-0 justify-center">
-                <VerdictDot verdict={r.verdict} />
+                {r.score === null ? null : <VerdictDot verdict={r.verdict} />}
               </span>
             </div>
           </li>
@@ -133,9 +139,7 @@ export function SkillPointsList({
             compact ? "text-[9px]" : "text-[10px]",
           )}
         >
-          {(
-            ["strength", "standard", "development", "critical"] as GapVerdict[]
-          ).map((v) => (
+          {VERDICT_ORDER.map((v) => (
             <li key={v} className="flex items-center gap-1.5">
               <VerdictDot verdict={v} className="size-2" />
               {verdictLabel(v)}

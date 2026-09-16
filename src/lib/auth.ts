@@ -78,7 +78,9 @@ async function upsertDemoUser(email: string, name: string, roleKey: string) {
   const role = await db.role.findUnique({ where: { key: roleKey }, select: { id: true } });
   return db.user.upsert({
     where: { email },
-    update: { status: "ACTIVE", roleId: role?.id ?? undefined },
+    // note: no status here — a suspended account stays suspended, and the
+    // caller has already refused it
+    update: { roleId: role?.id ?? undefined },
     create: { email, name, status: "ACTIVE", roleId: role?.id ?? null },
     select: { id: true, email: true, name: true, image: true },
   });
@@ -111,6 +113,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (employee) {
+          const suspended = await db.user.findUnique({
+            where: { email: employee.email },
+            select: { status: true },
+          });
+          if (suspended?.status === "SUSPENDED") return null;
+
           const roleKey = await pickRoleForEmployee(employee.id);
           const user = await upsertDemoUser(employee.email, employee.name, roleKey);
           if (!employee.userId) {
@@ -134,6 +142,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
+      // A suspended account must not get a session at all. Checking here means
+      // the provider callback refuses it, rather than handing out a token that
+      // the next request has to bounce.
+      if (user.email) {
+        const existing = await db.user.findUnique({
+          where: { email: user.email.toLowerCase() },
+          select: { status: true },
+        });
+        if (existing?.status === "SUSPENDED") return "/login?error=suspended";
+      }
+
       if (account?.provider !== "google" || !user.email) return true;
 
       const email = user.email.toLowerCase();

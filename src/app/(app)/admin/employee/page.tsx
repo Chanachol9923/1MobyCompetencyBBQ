@@ -5,8 +5,10 @@ import { Card, PageHeading, Tabs } from "@/components/ui";
 import { AdminOnly } from "@/components/admin/shared";
 import { EmployeesTab } from "@/components/admin/EmployeesTab";
 import { CareerPathCard } from "@/components/admin/CareerPathCard";
-import { RolesTab } from "@/components/admin/RolesTab";
 import { OrgTab, type OrgField, type OrgRow } from "@/components/admin/OrgTab";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui";
 import {
   DEPARTMENTS,
   DIVISIONS,
@@ -220,7 +222,30 @@ function ManageEmployee() {
           />
         ) : null}
 
-        {tab === "permissions" ? <RolesTab /> : null}
+        {/* The matrix moved to its own screen when it stopped being a mock-up:
+            it now writes RolePermission rows, so it belongs next to the role
+            list rather than buried in a tab about employees. */}
+        {tab === "permissions" ? (
+          <div className="p-5">
+            <div className="rounded-xl border border-line/70 bg-surface/60 p-5">
+              <h3 className="text-base font-bold text-ink">
+                {tt("Roles & permissions moved", "ย้ายหน้าบทบาทและสิทธิ์แล้ว")}
+              </h3>
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted">
+                {tt(
+                  "The permission matrix is a real, persisted screen now — every switch writes to the database and takes effect for signed-in users within five minutes.",
+                  "ตารางสิทธิ์เป็นหน้าจริงที่บันทึกลงฐานข้อมูลแล้ว การสลับสวิตช์แต่ละครั้งจะถูกบันทึกและมีผลกับผู้ใช้ที่เข้าสู่ระบบอยู่ภายใน 5 นาที",
+                )}
+              </p>
+              <Link href="/admin/roles" className="mt-4 inline-block">
+                <Button>
+                  {tt("Open Roles & permissions", "ไปที่บทบาทและสิทธิ์")}
+                  <ArrowRight size={15} />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       {tab === "role" || tab === "employees" ? (

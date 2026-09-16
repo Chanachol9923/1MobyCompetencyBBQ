@@ -105,8 +105,24 @@ export function BottomNav() {
       case "/reward":
       case "/admin/reward":
         return tt("Reward", "รางวัล");
+      case "/announcements":
+      case "/admin/announcement":
+        return tt("News", "ประกาศ");
+      case "/achievements":
+      case "/admin/achievements":
+        return tt("Awards", "ความสำเร็จ");
+      case "/reports":
+        return tt("Reports", "รายงาน");
+      case "/admin/users":
+        return tt("Accounts", "บัญชี");
+      case "/admin/roles":
+        return tt("Roles", "บทบาท");
+      case "/admin/audit":
+        return tt("Log", "บันทึก");
       default:
-        return href;
+        // a destination without a short label is a bug, but printing a raw
+        // path on a phone tab is worse than printing nothing readable
+        return href.split("/").filter(Boolean).pop() ?? href;
     }
   };
 
