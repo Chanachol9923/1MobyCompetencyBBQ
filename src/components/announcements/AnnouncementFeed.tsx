@@ -22,10 +22,13 @@ export function AnnouncementFeed({
   feed,
   filter,
   query,
+  keepView = false,
 }: {
   feed: Feed;
   filter: "all" | "unread";
   query: string;
+  /** on the tabbed page: keep ?view=feed when the filters change the URL */
+  keepView?: boolean;
 }) {
   const { t, tt, lang } = useT();
   const router = useRouter();
@@ -39,6 +42,7 @@ export function AnnouncementFeed({
 
   const go = (next: { filter?: "all" | "unread"; q?: string }) => {
     const params = new URLSearchParams();
+    if (keepView) params.set("view", "feed");
     const f = next.filter ?? filter;
     const q = next.q ?? draftQuery;
     if (f !== "all") params.set("filter", f);

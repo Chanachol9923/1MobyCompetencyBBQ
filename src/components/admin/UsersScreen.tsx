@@ -83,7 +83,14 @@ type StatusFilter = "all" | "PENDING" | "ACTIVE" | "SUSPENDED";
  * then hands the person a one-time link to set their own password. Every
  * button below is a guarded server action; the screen only decides what to offer.
  */
-export function UsersScreen({ data }: { data: UsersScreenData }) {
+export function UsersScreen({
+  data,
+  embedded = false,
+}: {
+  data: UsersScreenData;
+  /** inside Manage Employee, which supplies the page heading and tabs */
+  embedded?: boolean;
+}) {
   const { t, tt } = useT();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [issued, setIssued] = useState<IssuedLink | null>(null);
@@ -138,6 +145,17 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
     });
   }
 
+  const intro = tt(
+    `One company account per person, name.sur@${loginDomain}, for every module. You assign the ID and the role; the person sets their own password.`,
+    `หนึ่งคนหนึ่งบัญชี name.sur@${loginDomain} ใช้ได้ทุกโมดูล ผู้ดูแลกำหนดไอดีและบทบาท ส่วนรหัสผ่านเจ้าของบัญชีตั้งเอง`,
+  );
+  const createButton = (
+    <Button onClick={() => setCreating(true)}>
+      <UserPlus size={16} />
+      {tt("Create account", "สร้างบัญชี")}
+    </Button>
+  );
+
   const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
     { value: "all", label: `${t("label.all")} (${counts.total})` },
     { value: "PENDING", label: `${tt("Awaiting activation", "รอเปิดใช้งาน")} (${counts.pending})` },
@@ -146,20 +164,15 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
   ];
 
   return (
-    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
-      <PageHeading
-        title={tt("Accounts", "บัญชีผู้ใช้")}
-        subtitle={tt(
-          `One company account per person, name.sur@${loginDomain}, for every module. You assign the ID and the role; the person sets their own password.`,
-          `หนึ่งคนหนึ่งบัญชี name.sur@${loginDomain} ใช้ได้ทุกโมดูล ผู้ดูแลกำหนดไอดีและบทบาท ส่วนรหัสผ่านเจ้าของบัญชีตั้งเอง`,
-        )}
-        right={
-          <Button onClick={() => setCreating(true)}>
-            <UserPlus size={16} />
-            {tt("Create account", "สร้างบัญชี")}
-          </Button>
-        }
-      />
+    <div className={embedded ? undefined : "mx-auto max-w-[1200px] p-6 lg:p-10"}>
+      {embedded ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-2xl text-sm text-muted">{intro}</p>
+          {createButton}
+        </div>
+      ) : (
+        <PageHeading title={tt("Accounts", "บัญชีผู้ใช้")} subtitle={intro} right={createButton} />
+      )}
 
       <ResultBanner result={result} onDismiss={() => setResult(null)} />
 
@@ -591,8 +604,8 @@ function EmployeePicker({
           <EmptyState
             title={tt("Everyone matching already has an account", "ทุกคนที่ตรงกับคำค้นหามีบัญชีแล้ว")}
             hint={tt(
-              "Add the person under Employees first, or widen the search.",
-              "เพิ่มพนักงานที่หน้าข้อมูลพนักงานก่อน หรือลองค้นหาให้กว้างขึ้น",
+              "Add the person on the Employees tab first, or widen the search.",
+              "เพิ่มพนักงานที่แท็บพนักงานก่อน หรือลองค้นหาให้กว้างขึ้น",
             )}
           />
         ) : (

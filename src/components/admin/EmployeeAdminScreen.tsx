@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { UsersScreen } from "@/components/admin/UsersScreen";
+import type { UsersScreenData } from "@/components/admin/admin-types";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button, Card, PageHeading, Tabs } from "@/components/ui";
@@ -16,13 +18,15 @@ import type {
 } from "@/components/admin/content-types";
 import { useT } from "@/lib/i18n";
 
-type TabKey =
+export type EmployeeTabKey =
   | "employees"
+  | "accounts"
   | "position"
   | "role"
   | "department"
   | "division"
   | "permissions";
+type TabKey = EmployeeTabKey;
 
 /**
  * Manage Employee — the staff data set plus the organisation chart it is filed
@@ -32,15 +36,39 @@ type TabKey =
  * screen of its own once it started writing `RolePermission` rows, and it
  * belongs next to the role list rather than buried in a tab about employees.
  */
-export function EmployeeAdminScreen({ data }: { data: EmployeeAdminData }) {
+export function EmployeeAdminScreen({
+  data,
+  accounts,
+  initialTab = "employees",
+}: {
+  data: EmployeeAdminData;
+  accounts: UsersScreenData;
+  initialTab?: TabKey;
+}) {
   const { t, tt } = useT();
-  const [tab, setTab] = useState<TabKey>("employees");
+  const [tab, setTabState] = useState<TabKey>(initialTab);
+  // the tab lives in the URL too, so a reload or a shared link opens the same one
+  const setTab = (next: TabKey) => {
+    setTabState(next);
+    const url = next === "employees" ? window.location.pathname : `?tab=${next}`;
+    window.history.replaceState(null, "", url);
+  };
   const [result, setResult] = useState<ActionResult | null>(null);
 
   const { departments, divisions, positions, jobRoles, counts } = data;
 
   const TAB_OPTIONS: { value: TabKey; label: string }[] = [
     { value: "employees", label: tt("Employees", "พนักงาน") },
+    {
+      value: "accounts",
+      label:
+        accounts.counts.withoutAccount > 0
+          ? tt(
+              `Accounts (${accounts.counts.withoutAccount} without)`,
+              `บัญชีผู้ใช้ (ยังไม่มี ${accounts.counts.withoutAccount})`,
+            )
+          : tt("Accounts", "บัญชีผู้ใช้"),
+    },
     { value: "position", label: t("label.position") },
     { value: "role", label: t("label.role") },
     { value: "department", label: t("label.department") },
@@ -60,6 +88,7 @@ export function EmployeeAdminScreen({ data }: { data: EmployeeAdminData }) {
 
       <ResultBanner result={result} onDismiss={() => setResult(null)} />
 
+      {tab !== "accounts" ? (
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <CountTile value={counts.active} label={tt("Active staff", "พนักงานที่ทำงานอยู่")} />
         <CountTile
@@ -73,6 +102,7 @@ export function EmployeeAdminScreen({ data }: { data: EmployeeAdminData }) {
           tone="ink"
         />
       </div>
+      ) : null}
 
       <Card>
         <div className="scroll-thin overflow-x-auto px-5 pt-5">
@@ -84,6 +114,12 @@ export function EmployeeAdminScreen({ data }: { data: EmployeeAdminData }) {
             className="min-w-max"
           />
         </div>
+
+        {tab === "accounts" ? (
+          <div className="p-5">
+            <UsersScreen data={accounts} embedded />
+          </div>
+        ) : null}
 
         {tab === "employees" ? (
           <EmployeesTab data={data} onResult={setResult} />

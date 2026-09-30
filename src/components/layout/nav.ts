@@ -84,12 +84,12 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: "/admin", label: "Dashboard", labelKey: "nav.dashboard", requires: PERMISSIONS.MANAGE_USERS },
   { href: "/admin/lms", label: "LMS", labelKey: "nav.lms", requires: PERMISSIONS.MANAGE_LMS },
   { href: "/admin/employee", label: "Employee", labelKey: "nav.employee", requires: PERMISSIONS.MANAGE_USERS },
-  { href: "/admin/users", label: "Accounts", labelKey: "nav.accounts", requires: PERMISSIONS.MANAGE_USERS },
   { href: "/admin/roles", label: "Roles", labelKey: "nav.roles", requires: PERMISSIONS.MANAGE_ROLES },
   { href: "/admin/assessment", label: "Assessment", labelKey: "nav.assessment", requires: PERMISSIONS.MANAGE_CYCLE },
   { href: "/admin/achievements", label: "Achievements", labelKey: "nav.achievements", requires: PERMISSIONS.MANAGE_REWARDS },
   { href: "/admin/reward", label: "Reward", labelKey: "nav.reward", requires: PERMISSIONS.MANAGE_REWARDS },
-  { href: "/admin/announcement", label: "Announcement", labelKey: "nav.announcement", requires: PERMISSIONS.SEND_ANNOUNCEMENTS },
+  // reading and managing are one page; senders see it among their admin tools
+  { href: "/announcements", label: "Announcements", labelKey: "nav.announcements", requires: PERMISSIONS.SEND_ANNOUNCEMENTS },
   { href: "/admin/audit", label: "Activity Log", labelKey: "nav.auditLog", requires: PERMISSIONS.VIEW_AUDIT_LOG },
 ];
 
@@ -102,8 +102,11 @@ export function navFor(viewer: {
     if (item.requires && !can(viewer.permissions, item.requires)) return false;
     return true;
   };
-  const staff = ALL_ITEMS.filter(keep);
   const admin = ADMIN_ITEMS.filter(keep);
+  // one Announcements entry, never two
+  const staff = ALL_ITEMS.filter(
+    (i) => keep(i) && !admin.some((a) => a.href === i.href),
+  );
   // someone with no staff record is here to administer: their tools come first,
   // and the first item is where they land after signing in
   return viewer.employeeId ? [...staff, ...admin] : [...admin, ...staff];

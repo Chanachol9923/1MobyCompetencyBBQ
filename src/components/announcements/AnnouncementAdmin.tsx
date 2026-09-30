@@ -105,10 +105,13 @@ export function AnnouncementAdmin({
   rows,
   options,
   rules,
+  embedded = false,
 }: {
   rows: AdminAnnouncementRow[];
   options: AudienceOptions;
   rules: NotificationRuleRow[];
+  /** inside the Announcements page, which supplies the heading and tabs */
+  embedded?: boolean;
 }) {
   const { t, tt, lang } = useT();
   const router = useRouter();
@@ -287,21 +290,27 @@ export function AnnouncementAdmin({
           tt("not chosen", "ยังไม่ได้เลือก")
         }`;
 
+  const createButton = (
+    <Button onClick={openCreate}>
+      <Plus size={15} />
+      {tt("Create Announcement", "สร้างประกาศ")}
+    </Button>
+  );
+
   return (
-    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
-      <PageHeading
-        title={tt("Announcement Management", "จัดการประกาศ")}
-        subtitle={tt(
-          "Published announcements appear in every recipient's feed and raise a notification.",
-          "ประกาศที่เผยแพร่จะแสดงในฟีดของผู้รับทุกคนพร้อมส่งการแจ้งเตือน",
-        )}
-        right={
-          <Button onClick={openCreate}>
-            <Plus size={15} />
-            {tt("Create Announcement", "สร้างประกาศ")}
-          </Button>
-        }
-      />
+    <div className={embedded ? undefined : "mx-auto max-w-[1200px] p-6 lg:p-10"}>
+      {embedded ? (
+        <div className="mb-4 flex justify-end max-sm:[&>*]:w-full">{createButton}</div>
+      ) : (
+        <PageHeading
+          title={tt("Announcement Management", "จัดการประกาศ")}
+          subtitle={tt(
+            "Published announcements appear in every recipient's feed and raise a notification.",
+            "ประกาศที่เผยแพร่จะแสดงในฟีดของผู้รับทุกคนพร้อมส่งการแจ้งเตือน",
+          )}
+          right={createButton}
+        />
+      )}
 
       {feedback && !open ? (
         <div

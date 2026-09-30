@@ -45,7 +45,6 @@ export const NAV_ICON: Record<string, LucideIcon> = {
   "/admin/assessment": ClipboardCheck,
   "/admin/achievements": Award,
   "/admin/reward": Gift,
-  "/admin/announcement": Megaphone,
   "/admin/audit": ScrollText,
   "/admin/users": UserCog,
   "/admin/roles": ShieldCheck,
@@ -84,7 +83,6 @@ export function BottomNav() {
       case "/admin/reward":
         return tt("Reward", "รางวัล");
       case "/announcements":
-      case "/admin/announcement":
         return tt("News", "ประกาศ");
       case "/achievements":
       case "/admin/achievements":

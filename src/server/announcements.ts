@@ -494,7 +494,6 @@ async function fanOut(a: Publishable): Promise<number> {
 }
 
 function revalidateAnnouncements() {
-  revalidatePath("/admin/announcement");
   revalidatePath("/announcements");
   // the bell lives in the shell
   revalidatePath("/", "layout");
