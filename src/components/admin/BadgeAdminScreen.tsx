@@ -144,9 +144,10 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
     : null;
 
   const grantable = useMemo(() => {
-    if (!holdersRow) return employees;
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+    if (!holdersRow) return [...employees].sort(byName);
     const taken = new Set(holdersRow.holders.map((h) => h.employeeId));
-    return employees.filter((e) => !taken.has(e.id));
+    return employees.filter((e) => !taken.has(e.id)).sort(byName);
   }, [employees, holdersRow]);
 
   function run(fn: () => Promise<ActionResult>) {

@@ -290,7 +290,10 @@ export function AnnouncementAdmin({
     return [];
   };
 
-  const targets = audienceTargets(draft.audience);
+  // alphabetical, so a long list of people or divisions can be scanned
+  const targets = audienceTargets(draft.audience).sort((a, b) =>
+    a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+  );
   const previewAudience =
     draft.audience === "ALL"
       ? audienceKindLabel("ALL", lang)

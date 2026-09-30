@@ -1985,7 +1985,7 @@ export async function saveOrgUnit(
 
     if (entity === "department") {
       const clash = await db.department.findFirst({
-        where: { name, ...(id ? { id: { not: id } } : {}) },
+        where: { name: { equals: name, mode: "insensitive" }, ...(id ? { id: { not: id } } : {}) },
         select: { id: true },
       });
       if (clash) {
@@ -2006,7 +2006,11 @@ export async function saveOrgUnit(
       });
     } else if (entity === "division") {
       const clash = await db.division.findFirst({
-        where: { name, departmentId: parentId, ...(id ? { id: { not: id } } : {}) },
+        where: {
+          name: { equals: name, mode: "insensitive" },
+          departmentId: parentId,
+          ...(id ? { id: { not: id } } : {}),
+        },
         select: { id: true },
       });
       if (clash) {
@@ -2031,7 +2035,7 @@ export async function saveOrgUnit(
     } else {
       const clash = await db.position.findFirst({
         where: {
-          name,
+          name: { equals: name, mode: "insensitive" },
           departmentId: parentId || null,
           ...(id ? { id: { not: id } } : {}),
         },

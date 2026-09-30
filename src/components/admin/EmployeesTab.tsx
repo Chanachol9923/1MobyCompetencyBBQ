@@ -119,8 +119,34 @@ export function EmployeesTab({
   }, [employees, query, filter, showInactive]);
 
   /** Only the divisions of the department currently picked in the form. */
+  const byName = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  const sortedDepartments = useMemo(() => [...departments].sort(byName), [departments]);
+  const positionsById = useMemo(() => new Map(positions.map((p) => [p.id, p])), [positions]);
+
+  /** Positions belong to a department; only that department's are offered. */
+  const draftPositions = useMemo(
+    () => positions.filter((p) => p.parentId === draft.departmentId).sort(byName),
+    [positions, draft.departmentId],
+  );
+
+  /** Reports-to, grouped by department so two people with one title stay distinct. */
+  const managerGroups = useMemo(() => {
+    const groups = new Map<string, typeof employees>();
+    for (const p of employees) {
+      if (!p.active || p.id === editing?.id) continue;
+      const key = p.departmentName ?? tt("No department", "ไม่มีฝ่าย");
+      groups.set(key, [...(groups.get(key) ?? []), p]);
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dept, people]) => [dept, people.sort(byName)] as const);
+    // tt only changes with the language
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, editing]);
+
   const draftDivisions = useMemo(
-    () => divisions.filter((d) => !draft.departmentId || d.parentId === draft.departmentId),
+    () => divisions.filter((d) => d.parentId === draft.departmentId).sort(byName),
     [divisions, draft.departmentId],
   );
 
@@ -416,7 +442,7 @@ export function EmployeesTab({
             {formError}
           </p>
         ) : null}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <FormSection title={tt("Personal details", "ข้อมูลส่วนตัว")}>
           <Field label={`${t("label.name")} *`}>
             <Input
               value={draft.name}
@@ -433,13 +459,13 @@ export function EmployeesTab({
           </Field>
           <Field
             label={`${t("label.employeeId")} *`}
-            hint={tt("3–4 letters or digits, e.g. 1ASD", "ตัวอักษรหรือตัวเลข 3–4 ตัว เช่น 1ASD")}
+            hint={tt("3–4 letters or digits", "ตัวอักษรหรือตัวเลข 3–4 ตัว")}
           >
             <Input
               maxLength={4}
               value={draft.employeeCode}
               placeholder={tt("e.g. 1ASD", "เช่น 1ASD")}
-              onChange={(e) => set("employeeCode", e.target.value)}
+              onChange={(e) => set("employeeCode", e.target.value.toUpperCase())}
             />
           </Field>
           <Field
@@ -447,12 +473,12 @@ export function EmployeesTab({
             hint={
               editing?.hasLogin
                 ? tt(
-                    "This is their login ID — change it from Accounts.",
+                    "This is their login ID — change it under Accounts.",
                     "อีเมลนี้คือไอดีเข้าสู่ระบบ เปลี่ยนได้ที่หน้าบัญชีผู้ใช้",
                   )
                 : tt(
-                    "Company address, name.sur@1moby.com — it becomes the login ID when an account is created.",
-                    "อีเมลบริษัท name.sur@1moby.com จะใช้เป็นไอดีเข้าสู่ระบบเมื่อสร้างบัญชี",
+                    "Becomes their login ID when an account is created.",
+                    "จะใช้เป็นไอดีเข้าสู่ระบบเมื่อสร้างบัญชี",
                   )
             }
           >
@@ -460,78 +486,44 @@ export function EmployeesTab({
               type="email"
               disabled={Boolean(editing?.hasLogin)}
               value={draft.email}
-              placeholder={tt("name.sur@1moby.com", "name.sur@1moby.com")}
+              placeholder="name.sur@1moby.com"
               onChange={(e) => set("email", e.target.value)}
             />
           </Field>
-          <Field
-            label={`${t("label.role")} *`}
-            hint={tt(
-              `Level: ${levelOfDraftRole} — drives the expected-level matrix.`,
-              `ระดับ: ${levelOfDraftRole} — ใช้กำหนดระดับที่คาดหวังในตารางสมรรถนะ`,
-            )}
-          >
-            <Select
-              value={draft.jobRoleId}
-              onChange={(e) => set("jobRoleId", e.target.value)}
-            >
-              {jobRoles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t("label.grade")}>
-            <Input
-              value={draft.grade}
-              placeholder="EX1"
-              onChange={(e) => set("grade", e.target.value)}
-            />
-          </Field>
-          <Field label={t("label.position")}>
-            <Select
-              value={draft.positionId}
-              onChange={(e) => set("positionId", e.target.value)}
-            >
-              <option value="">{tt("None", "ไม่ระบุ")}</option>
-              {positions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t("label.businessUnit")}>
-            <Input
-              value={draft.businessUnit}
-              placeholder={tt("e.g. Software Production", "เช่น Software Production")}
-              onChange={(e) => set("businessUnit", e.target.value)}
-            />
-          </Field>
+        </FormSection>
+
+        <FormSection title={tt("Job", "งาน")} className="mt-6">
           <Field label={t("label.department")}>
             <Select
               value={draft.departmentId}
-              onChange={(e) =>
+              onChange={(e) => {
+                const departmentId = e.target.value;
                 setDraft((d) => ({
                   ...d,
-                  departmentId: e.target.value,
-                  // a division belongs to a department, so changing one drops the other
+                  departmentId,
+                  // a division belongs to one department, and so does a position
                   divisionId: "",
-                }))
-              }
+                  positionId: positionsById.get(d.positionId)?.parentId === departmentId
+                    ? d.positionId
+                    : "",
+                }));
+              }}
             >
-              <option value="">{tt("None", "ไม่ระบุ")}</option>
-              {departments.map((d) => (
+              <option value="">{tt("Select a department", "เลือกฝ่าย")}</option>
+              {sortedDepartments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label={t("label.division")}>
+          <Field
+            label={t("label.division")}
+            hint={draft.departmentId ? undefined : tt("Pick a department first", "เลือกฝ่ายก่อน")}
+          >
             <Select
               value={draft.divisionId}
+              disabled={!draft.departmentId}
               onChange={(e) => set("divisionId", e.target.value)}
             >
               <option value="">{tt("None", "ไม่ระบุ")}</option>
@@ -542,19 +534,64 @@ export function EmployeesTab({
               ))}
             </Select>
           </Field>
-          <Field label={t("label.reportTo")}>
+          <Field
+            label={t("label.position")}
+            hint={draft.departmentId ? undefined : tt("Pick a department first", "เลือกฝ่ายก่อน")}
+          >
             <Select
-              value={draft.managerId}
-              onChange={(e) => set("managerId", e.target.value)}
+              value={draft.positionId}
+              disabled={!draft.departmentId}
+              onChange={(e) => set("positionId", e.target.value)}
             >
+              <option value="">{tt("None", "ไม่ระบุ")}</option>
+              {draftPositions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label={`${tt("Career role", "บทบาทสายอาชีพ")} *`}
+            hint={tt(
+              `${levelOfDraftRole} — decides which competencies are assessed and at what level.`,
+              `${levelOfDraftRole} — เป็นตัวกำหนดสมรรถนะที่ประเมินและระดับที่คาดหวัง`,
+            )}
+          >
+            <Select value={draft.jobRoleId} onChange={(e) => set("jobRoleId", e.target.value)}>
+              {jobRoles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("label.grade")}>
+            <Input
+              value={draft.grade}
+              placeholder={tt("e.g. EX1", "เช่น EX1")}
+              onChange={(e) => set("grade", e.target.value)}
+            />
+          </Field>
+          <Field label={t("label.businessUnit")}>
+            <Input
+              value={draft.businessUnit}
+              placeholder={tt("e.g. Software Production", "เช่น Software Production")}
+              onChange={(e) => set("businessUnit", e.target.value)}
+            />
+          </Field>
+          <Field label={t("label.reportTo")} className="sm:col-span-2">
+            <Select value={draft.managerId} onChange={(e) => set("managerId", e.target.value)}>
               <option value="">{tt("Nobody", "ไม่มี")}</option>
-              {employees
-                .filter((p) => p.active && p.id !== editing?.id)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.jobRoleName}
-                  </option>
-                ))}
+              {managerGroups.map(([dept, people]) => (
+                <optgroup key={dept} label={dept}>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {p.positionName ?? p.jobRoleName}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </Select>
           </Field>
           <Field label={t("label.remark")} className="sm:col-span-2">
@@ -567,7 +604,7 @@ export function EmployeesTab({
               onChange={(e) => set("remark", e.target.value)}
             />
           </Field>
-        </div>
+        </FormSection>
       </Modal>
 
       {/* --------------------------------------------------- deactivate */}
@@ -606,5 +643,23 @@ export function EmployeesTab({
         </p>
       </Modal>
     </div>
+  );
+}
+
+/** A titled group of fields in a form, two columns from the small breakpoint. */
+function FormSection({
+  title,
+  className,
+  children,
+}: {
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={className}>
+      <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">{title}</h4>
+      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    </section>
   );
 }

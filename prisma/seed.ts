@@ -215,6 +215,20 @@ async function seedOrg() {
     (await db.department.findMany({ select: { id: true, name: true } })).map((d) => [d.name, d.id]),
   );
 
+  // the source data spells some titles two ways ("Software engineer" and
+  // "Software Engineer"); use one spelling per department, the commoner one
+  const spellingCount = new Map<string, Map<string, number>>();
+  for (const p of RAW_PEOPLE) {
+    const key = `${p.department}:${p.position.toLowerCase()}`;
+    const counts = spellingCount.get(key) ?? new Map<string, number>();
+    counts.set(p.position, (counts.get(p.position) ?? 0) + 1);
+    spellingCount.set(key, counts);
+  }
+  const positionName = (department: string, position: string) => {
+    const counts = spellingCount.get(`${department}:${position.toLowerCase()}`)!;
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]![0];
+  };
+
   for (const p of RAW_PEOPLE) {
     const departmentId = deptByName.get(p.department)!;
     await db.division.upsert({
@@ -222,10 +236,11 @@ async function seedOrg() {
       update: {},
       create: { departmentId, name: p.division },
     });
+    const position = positionName(p.department, p.position);
     await db.position.upsert({
-      where: { name_departmentId: { name: p.position, departmentId } },
+      where: { name_departmentId: { name: position, departmentId } },
       update: {},
-      create: { name: p.position, departmentId },
+      create: { name: position, departmentId },
     });
   }
 
@@ -263,7 +278,7 @@ async function seedOrg() {
       jobRoleId: roleByName.get(p.jobRole)!,
       departmentId,
       divisionId: divByKey.get(`${departmentId}:${p.division}`) ?? null,
-      positionId: posByKey.get(`${departmentId}:${p.position}`) ?? null,
+      positionId: posByKey.get(`${departmentId}:${positionName(p.department, p.position)}`) ?? null,
     } satisfies Prisma.EmployeeUncheckedCreateInput | Prisma.EmployeeUncheckedUpdateInput;
 
     await db.employee.upsert({
