@@ -131,8 +131,8 @@ export type TeamMatrix = {
 };
 
 /**
- * The whole heat map in three queries regardless of team size — expected levels
- * per career role, then every score in the cycle for those people at once.
+ * The whole heat map in two round trips regardless of team size — expected
+ * levels per career role, then every score in the cycle for those people at once.
  * Competencies nobody in the team is assessed on never get a column, and a
  * member who is not assessed on a column has no cell (the table renders "N/A").
  */
@@ -142,34 +142,41 @@ export async function getTeamMatrix(
   const empty: TeamMatrix = { competencies: [], cells: new Map() };
   if (employeeIds.length === 0) return empty;
 
-  const cycle = await getActiveCycle();
-  if (!cycle) return empty;
-
-  const [employees, dict] = await Promise.all([
+  // two round trips whatever the team size: people with their role's
+  // expectations (and the cycle and dictionary) together, then the scores
+  const [cycle, people, dict] = await Promise.all([
+    getActiveCycle(),
     db.employee.findMany({
       where: { id: { in: employeeIds } },
-      select: { id: true, jobRoleId: true },
+      select: {
+        id: true,
+        jobRoleId: true,
+        jobRole: {
+          select: {
+            expectedLevels: {
+              where: { level: { not: null } },
+              select: { competencyId: true, level: true },
+            },
+          },
+        },
+      },
     }),
     getCompetencyDictionary(),
   ]);
-  if (employees.length === 0) return empty;
+  if (!cycle || people.length === 0) return empty;
+  const employees = people.map((e) => ({ id: e.id, jobRoleId: e.jobRoleId }));
+  const expected = people.flatMap((e) =>
+    e.jobRole.expectedLevels.map((x) => ({ jobRoleId: e.jobRoleId, ...x })),
+  );
 
-  const jobRoleIds = [...new Set(employees.map((e) => e.jobRoleId))];
-
-  const [expected, assessments] = await Promise.all([
-    db.expectedLevel.findMany({
-      where: { jobRoleId: { in: jobRoleIds }, level: { not: null } },
-      select: { jobRoleId: true, competencyId: true, level: true },
-    }),
-    db.assessment.findMany({
-      where: { cycleId: cycle.id, subjectId: { in: employeeIds } },
-      select: {
-        subjectId: true,
-        mode: true,
-        scores: { select: { competencyId: true, score: true } },
-      },
-    }),
-  ]);
+  const assessments = await db.assessment.findMany({
+    where: { cycleId: cycle.id, subjectId: { in: employeeIds } },
+    select: {
+      subjectId: true,
+      mode: true,
+      scores: { select: { competencyId: true, score: true } },
+    },
+  });
 
   // jobRoleId → competencyId → expected level
   const expectedBy = new Map<string, Map<string, number>>();

@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
 import { requireViewer } from "@/server/session";
 import { ViewerProvider, type ClientViewer } from "@/lib/viewer";
 import { AppShell } from "@/components/layout/AppShell";
@@ -21,21 +20,6 @@ export default async function AppLayout({
   const usable = viewer.employeeId !== null || viewer.permissions.length > 0;
   if (viewer.status !== "ACTIVE" || !usable) redirect("/pending");
 
-  const [role, employee] = await Promise.all([
-    viewer.roleKey
-      ? db.role.findUnique({
-          where: { key: viewer.roleKey },
-          select: { nameEn: true },
-        })
-      : null,
-    viewer.employeeId
-      ? db.employee.findUnique({
-          where: { id: viewer.employeeId },
-          select: { jobRole: { select: { name: true, level: true } } },
-        })
-      : null,
-  ]);
-
   const clientViewer: ClientViewer = {
     userId: viewer.userId,
     email: viewer.email,
@@ -43,12 +27,12 @@ export default async function AppLayout({
     image: viewer.image,
     status: viewer.status,
     roleKey: viewer.roleKey,
-    roleName: role?.nameEn ?? null,
+    roleName: viewer.roleName,
     permissions: viewer.permissions,
     employeeId: viewer.employeeId,
     employeeName: viewer.employeeName,
-    jobRoleName: employee?.jobRole.name ?? null,
-    level: employee?.jobRole.level ?? null,
+    jobRoleName: viewer.jobRoleName,
+    level: viewer.level,
     reportCount: viewer.reportIds.length,
   };
 

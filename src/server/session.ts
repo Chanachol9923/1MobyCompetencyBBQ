@@ -18,11 +18,14 @@ export type Viewer = {
   image: string | null;
   status: "PENDING" | "ACTIVE" | "SUSPENDED";
   roleKey: string | null;
+  roleName: string | null;
   permissions: string[];
   /** null for an account with no staff record, such as the HROD administrator */
   employeeId: string | null;
   employeeName: string | null;
   jobRoleName: string | null;
+  /** career level of the job role, e.g. "Level 3: Supervise" */
+  level: string | null;
   /** ids this viewer directly manages */
   reportIds: string[];
 };
@@ -44,6 +47,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
       role: {
         select: {
           key: true,
+          nameEn: true,
           permissions: { select: { permission: { select: { key: true } } } },
         },
       },
@@ -51,7 +55,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
         select: {
           id: true,
           name: true,
-          jobRole: { select: { name: true } },
+          jobRole: { select: { name: true, level: true } },
           reports: { select: { id: true } },
         },
       },
@@ -76,10 +80,12 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     image: user.image,
     status: user.status,
     roleKey: user.role?.key ?? null,
+    roleName: user.role?.nameEn ?? null,
     permissions: user.role?.permissions.map((p) => p.permission.key) ?? [],
     employeeId: user.employee?.id ?? null,
     employeeName: user.employee?.name ?? null,
     jobRoleName: user.employee?.jobRole.name ?? null,
+    level: user.employee?.jobRole.level ?? null,
     reportIds: user.employee?.reports.map((r) => r.id) ?? [],
   };
 });

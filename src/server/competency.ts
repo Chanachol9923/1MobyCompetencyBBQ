@@ -64,42 +64,44 @@ export const getGapRows = cache(async (employeeId: string): Promise<GapRow[]> =>
   const cycle = await getActiveCycle();
   if (!cycle) return [];
 
-  const employee = await db.employee.findUnique({
-    where: { id: employeeId },
-    select: {
-      jobRoleId: true,
-      jobRole: {
-        select: {
-          expectedLevels: {
-            select: {
-              level: true,
-              competency: {
-                select: {
-                  id: true,
-                  key: true,
-                  group: true,
-                  nameEn: true,
-                  definitionEn: true,
-                  definitionTh: true,
-                  sortOrder: true,
+  // the role's expectations and the person's scores are independent reads
+  const [employee, assessments] = await Promise.all([
+    db.employee.findUnique({
+      where: { id: employeeId },
+      select: {
+        jobRoleId: true,
+        jobRole: {
+          select: {
+            expectedLevels: {
+              select: {
+                level: true,
+                competency: {
+                  select: {
+                    id: true,
+                    key: true,
+                    group: true,
+                    nameEn: true,
+                    definitionEn: true,
+                    definitionTh: true,
+                    sortOrder: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    db.assessment.findMany({
+      where: { cycleId: cycle.id, subjectId: employeeId },
+      select: {
+        mode: true,
+        submittedAt: true,
+        scores: { select: { competencyId: true, score: true } },
+      },
+    }),
+  ]);
   if (!employee) return [];
-
-  const assessments = await db.assessment.findMany({
-    where: { cycleId: cycle.id, subjectId: employeeId },
-    select: {
-      mode: true,
-      submittedAt: true,
-      scores: { select: { competencyId: true, score: true } },
-    },
-  });
 
   const selfScores = new Map<string, number>();
   const managerScores = new Map<string, number>();
@@ -158,24 +160,26 @@ export type PersonSummary = {
 };
 
 export async function getPersonSummary(employeeId: string): Promise<PersonSummary | null> {
-  const employee = await db.employee.findUnique({
-    where: { id: employeeId },
-    select: {
-      id: true,
-      name: true,
-      nickname: true,
-      email: true,
-      employeeCode: true,
-      managerId: true,
-      jobRole: { select: { name: true, level: true } },
-      department: { select: { name: true } },
-      division: { select: { name: true } },
-      position: { select: { name: true } },
-    },
-  });
+  const [employee, rows] = await Promise.all([
+    db.employee.findUnique({
+      where: { id: employeeId },
+      select: {
+        id: true,
+        name: true,
+        nickname: true,
+        email: true,
+        employeeCode: true,
+        managerId: true,
+        jobRole: { select: { name: true, level: true } },
+        department: { select: { name: true } },
+        division: { select: { name: true } },
+        position: { select: { name: true } },
+      },
+    }),
+    getGapRows(employeeId),
+  ]);
   if (!employee) return null;
 
-  const rows = await getGapRows(employeeId);
   const scored = rows.filter((r) => r.score !== null);
   const counts: Record<GapVerdict, number> = {
     strength: 0,
@@ -216,12 +220,9 @@ export async function getTeamSummaries(managerId: string): Promise<PersonSummary
     select: { id: true },
     orderBy: { name: "asc" },
   });
-  const out: PersonSummary[] = [];
-  for (const r of reports) {
-    const s = await getPersonSummary(r.id);
-    if (s) out.push(s);
-  }
-  return out;
+  // every report at once, not one after another
+  const summaries = await Promise.all(reports.map((r) => getPersonSummary(r.id)));
+  return summaries.filter((s): s is PersonSummary => s !== null);
 }
 
 /** Current points balance, summed from the append-only ledger. */

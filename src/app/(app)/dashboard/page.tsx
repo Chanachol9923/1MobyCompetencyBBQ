@@ -25,24 +25,21 @@ import { DashboardView, type TeamHeatRow } from "./DashboardView";
 export default async function DashboardPage() {
   const viewer = await requireEmployee();
 
-  const [rows, summary, goals, engagement, courseByCompetency] =
+  const showTeam =
+    can(viewer.permissions, PERMISSIONS.SEE_TEAM_RESULT) &&
+    viewer.reportIds.length > 0;
+
+  // one parallel batch: the viewer's own numbers and, for a manager, the team
+  const [rows, summary, goals, engagement, courseByCompetency, members, matrix] =
     await Promise.all([
       getNamedGapRows(viewer.employeeId),
       getPersonSummary(viewer.employeeId),
       getGoalRows(viewer.employeeId),
       getEngagement(viewer.employeeId),
       getCourseByCompetency(),
+      showTeam ? getDirectReports(viewer.employeeId) : Promise.resolve([]),
+      showTeam ? getTeamMatrix(viewer.reportIds) : Promise.resolve(null),
     ]);
-
-  /* ------------------------------------------------- the team heat map */
-  const showTeam =
-    can(viewer.permissions, PERMISSIONS.SEE_TEAM_RESULT) &&
-    viewer.reportIds.length > 0;
-
-  const members = showTeam ? await getDirectReports(viewer.employeeId) : [];
-  const matrix = members.length
-    ? await getTeamMatrix(members.map((m) => m.id))
-    : null;
 
   const team: TeamHeatRow[] = members.map((m) => ({
     id: m.id,
