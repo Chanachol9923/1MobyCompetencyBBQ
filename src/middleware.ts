@@ -9,7 +9,7 @@ import { authConfig } from "@/lib/auth.config";
  */
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC = ["/login", "/api/auth", "/_next", "/favicon.ico"];
+const PUBLIC = ["/login", "/activate/", "/api/auth", "/_next", "/favicon.ico"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

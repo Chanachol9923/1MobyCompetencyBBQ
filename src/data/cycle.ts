@@ -70,8 +70,11 @@ export type Cycle = {
 export function currentCycle(today = new Date()): Cycle {
   const year = today.getFullYear();
   const quarter = Math.floor(today.getMonth() / 3) + 1;
-  const start = new Date(year, (quarter - 1) * 3, 1);
-  const end = new Date(year, quarter * 3, 0); // day 0 of next month = last day
+  // calendar days are stored as UTC midnight — the convention the admin screens
+  // read back with toISOString().slice(0, 10). Local midnight would print as
+  // the day before anywhere east of Greenwich (30-06 → 29-09 in Bangkok).
+  const start = new Date(Date.UTC(year, (quarter - 1) * 3, 1));
+  const end = new Date(Date.UTC(year, quarter * 3, 0)); // day 0 of next month = last day
   const dayMs = 86_400_000;
   const daysRemaining = Math.max(
     0,

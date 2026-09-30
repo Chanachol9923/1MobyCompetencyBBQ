@@ -16,8 +16,8 @@ export default async function AppLayout({
 }) {
   const viewer = await requireViewer();
 
-  // A Google account that no admin has linked to a staff record yet cannot use
-  // the product, but it is not an error — it is waiting for approval.
+  // An account with no staff record and no permissions has nothing to open —
+  // not an error, HROD has a step left (see /pending).
   const usable = viewer.employeeId !== null || viewer.permissions.length > 0;
   if (viewer.status !== "ACTIVE" || !usable) redirect("/pending");
 

@@ -59,7 +59,7 @@ export function StatusPill({ status }: { status: UserStatusValue }) {
   if (status === "SUSPENDED") {
     return <Pill tone="danger">{tt("Suspended", "ถูกระงับ")}</Pill>;
   }
-  return <Pill tone="warn">{tt("Pending approval", "รออนุมัติ")}</Pill>;
+  return <Pill tone="warn">{tt("Awaiting activation", "รอเปิดใช้งาน")}</Pill>;
 }
 
 /**

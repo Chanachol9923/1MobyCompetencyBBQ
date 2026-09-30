@@ -1617,7 +1617,8 @@ export async function getEmployeeAdminData(): Promise<EmployeeAdminData> {
 }
 
 const employeeFields = z.object({
-  employeeCode: z.string().trim().min(1).max(40),
+  // Employee_ID in the HR data set: 3 to 4 letters or digits (also a CHECK in the database)
+  employeeCode: z.string().trim().regex(/^[A-Za-z0-9]{3,4}$/, "bad-code"),
   name: shortText,
   nickname: z.string().trim().max(60).optional().default(""),
   email: z.string().trim().email().max(160),
@@ -1638,6 +1639,14 @@ const BAD_EMPLOYEE = fail(
   "An employee needs a name, an employee ID, a valid email and a career role.",
   "ต้องระบุชื่อ รหัสพนักงาน อีเมลที่ถูกต้อง และบทบาทสายอาชีพ",
 );
+const BAD_CODE = fail(
+  "The employee ID must be 3 to 4 letters or digits, as in the HR data set.",
+  "รหัสพนักงานต้องเป็นตัวอักษรหรือตัวเลข 3–4 ตัว ตามชุดข้อมูลของฝ่ายบุคคล",
+);
+
+function badEmployee(error: z.ZodError) {
+  return error.issues.some((i) => i.message === "bad-code") ? BAD_CODE : BAD_EMPLOYEE;
+}
 
 /**
  * The org-chart checks a create or an edit both have to pass: the career role
@@ -1697,9 +1706,13 @@ async function validateEmployeeShape(
 }
 
 function employeeData(d: z.infer<typeof employeeFields>) {
+  // the split the login-id rule works from: first word, then the rest
+  const [firstName, ...rest] = d.name.split(/\s+/);
   return {
     employeeCode: d.employeeCode,
     name: d.name,
+    firstName: firstName || null,
+    lastName: rest.join(" ") || null,
     nickname: d.nickname || null,
     email: d.email.toLowerCase(),
     grade: d.grade || null,
@@ -1718,7 +1731,7 @@ export async function createEmployee(
 ): Promise<ActionResult> {
   return guarded(PERMISSIONS.MANAGE_USERS, async (viewer) => {
     const parsed = createEmployeeSchema.safeParse(input);
-    if (!parsed.success) return BAD_EMPLOYEE;
+    if (!parsed.success) return badEmployee(parsed.error);
     const d = parsed.data;
 
     const shape = await validateEmployeeShape(d, null);
@@ -1768,7 +1781,7 @@ export async function updateEmployee(
 ): Promise<ActionResult> {
   return guarded(PERMISSIONS.MANAGE_USERS, async (viewer) => {
     const parsed = updateEmployeeSchema.safeParse(input);
-    if (!parsed.success) return BAD_EMPLOYEE;
+    if (!parsed.success) return badEmployee(parsed.error);
     const { employeeId, ...d } = parsed.data;
 
     const existing = await db.employee.findUnique({
@@ -1776,12 +1789,21 @@ export async function updateEmployee(
       select: {
         id: true,
         name: true,
+        email: true,
+        userId: true,
         jobRoleId: true,
         jobRole: { select: { name: true } },
       },
     });
     if (!existing) {
       return fail("That employee no longer exists.", "ไม่พบพนักงานคนนี้แล้ว");
+    }
+    // with an account, the email is the login id — it changes in one place only
+    if (existing.userId && d.email.toLowerCase() !== existing.email) {
+      return fail(
+        `${existing.name} signs in with ${existing.email}. Change it from Accounts → Change login ID, so the account and the record stay the same.`,
+        `${existing.name} ใช้ ${existing.email} เข้าสู่ระบบ กรุณาเปลี่ยนที่หน้าบัญชีผู้ใช้ → เปลี่ยนไอดีเข้าสู่ระบบ เพื่อให้บัญชีและข้อมูลพนักงานตรงกัน`,
+      );
     }
 
     const shape = await validateEmployeeShape(d, existing.id);
@@ -1858,11 +1880,18 @@ export async function setEmployeeActive(
         id: true,
         name: true,
         active: true,
+        user: { select: { id: true, status: true } },
         _count: { select: { reports: true } },
       },
     });
     if (!employee) {
       return fail("That employee no longer exists.", "ไม่พบพนักงานคนนี้แล้ว");
+    }
+    if (!active && employee.user?.id === viewer.userId) {
+      return fail(
+        "You cannot deactivate your own staff record.",
+        "คุณไม่สามารถปิดใช้งานข้อมูลพนักงานของตนเองได้",
+      );
     }
     if (!active && employee._count.reports > 0) {
       return fail(
@@ -1871,23 +1900,36 @@ export async function setEmployeeActive(
       );
     }
 
-    await db.employee.update({ where: { id: employee.id }, data: { active } });
+    // someone who has left must not keep a working login: deactivating the
+    // record suspends the account. Reactivating leaves the account to HROD.
+    const suspendLogin = !active && employee.user?.status === "ACTIVE";
+    await db.$transaction(async (tx) => {
+      await tx.employee.update({ where: { id: employee.id }, data: { active } });
+      if (suspendLogin && employee.user) {
+        await tx.user.update({ where: { id: employee.user.id }, data: { status: "SUSPENDED" } });
+        await tx.accessToken.updateMany({
+          where: { userId: employee.user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+      }
+    });
     await recordActivity({
       viewer,
       action: active ? "Reactivated employee" : "Deactivated employee",
       targetType: "employee",
       targetId: employee.id,
       targetLabel: employee.name,
+      detail: suspendLogin ? "Login suspended with the record" : undefined,
     });
     revalidateContent();
     return active
       ? done(
-          `${employee.name} is back in the active roster.`,
-          `นำ ${employee.name} กลับเข้ารายชื่อพนักงานที่ทำงานอยู่แล้ว`,
+          `${employee.name} is back in the active roster.${employee.user?.status === "SUSPENDED" ? " Their login is still suspended — reactivate it on Accounts." : ""}`,
+          `นำ ${employee.name} กลับเข้ารายชื่อพนักงานที่ทำงานอยู่แล้ว${employee.user?.status === "SUSPENDED" ? " บัญชีเข้าสู่ระบบยังถูกระงับ เปิดได้ที่หน้าบัญชีผู้ใช้" : ""}`,
         )
       : done(
-          `${employee.name} is deactivated. Their history, scores and certificates are all kept.`,
-          `ปิดใช้งาน ${employee.name} แล้ว ประวัติ คะแนน และใบรับรองยังคงอยู่ครบ`,
+          `${employee.name} is deactivated${suspendLogin ? " and their login suspended" : ""}. Their history, scores and certificates are all kept.`,
+          `ปิดใช้งาน ${employee.name} แล้ว${suspendLogin ? " และระงับบัญชีเข้าสู่ระบบ" : ""} ประวัติ คะแนน และใบรับรองยังคงอยู่ครบ`,
         );
   });
 }

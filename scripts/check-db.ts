@@ -1,10 +1,12 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { sslFor } from "../src/lib/db-ssl";
 
 const db = new PrismaClient({
   adapter: new PrismaPg({
     connectionString: process.env.DATABASE_URL!,
+    ssl: sslFor(process.env.DATABASE_URL!),
     max: Number(process.env.DB_POOL_MAX ?? 5),
   }),
 });

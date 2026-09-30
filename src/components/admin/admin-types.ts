@@ -37,8 +37,15 @@ export type AdminUserRow = {
   employeeName: string | null;
   employeeCode: string | null;
   jobRoleName: string | null;
-  /** first sign-in, ISO */
+  /** when the administrator created the account, ISO */
   createdAt: string;
+  lastLoginAt: string | null;
+  /** set while a lock from repeated wrong passwords is still running */
+  lockedUntil: string | null;
+  /** false until the person has used their activation link */
+  hasPassword: boolean;
+  /** the newest link that has not been used yet, if any */
+  openLink: { purpose: "ACTIVATE" | "RESET"; expiresAt: string; expired: boolean } | null;
   /** true for the row that is the signed-in admin themselves */
   isSelf: boolean;
 };
@@ -67,8 +74,40 @@ export type EmployeeOption = {
 export type UsersScreenData = {
   rows: AdminUserRow[];
   roles: RoleSummary[];
-  counts: { pending: number; active: number; suspended: number; total: number };
+  /** the company domain every login id ends in */
+  loginDomain: string;
+  counts: {
+    pending: number;
+    active: number;
+    suspended: number;
+    total: number;
+    /** active staff records that nobody has made an account for yet */
+    withoutAccount: number;
+  };
 };
+
+/** What the create dialog pre-fills — the administrator may change both. */
+export type AccountProposal = { loginId: string; roleId: string | null };
+
+/**
+ * A one-time link to hand to the person. Shown to the administrator once; the
+ * database only keeps its hash, so it cannot be looked up again later.
+ */
+export type IssuedLink = {
+  url: string;
+  expiresAt: string;
+  purpose: "ACTIVATE" | "RESET";
+  loginId: string;
+  name: string;
+};
+
+export type BulkLinkResult =
+  | { ok: true; message: Bilingual; links: IssuedLink[] }
+  | { ok: false; error: Bilingual };
+
+export type LinkResult =
+  | { ok: true; message: Bilingual; link: IssuedLink }
+  | { ok: false; error: Bilingual };
 
 export type EmployeePickerData = {
   options: EmployeeOption[];

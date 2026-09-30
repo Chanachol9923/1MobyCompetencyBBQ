@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Smile, User, X } from "lucide-react";
+import { KeyRound, LogOut, Smile, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 import { useViewer } from "@/lib/viewer";
@@ -11,6 +12,7 @@ import { navFor } from "./nav";
 import { useMobileNav } from "./mobile-nav";
 import { BottomNav, NAV_ICON } from "./BottomNav";
 import { Logo } from "./Logo";
+import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 
 export function Sidebar() {
   const viewer = useViewer();
@@ -18,6 +20,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { open, setOpen } = useMobileNav();
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // the menu is derived from what this person may actually do, so an admin
   // changing a role changes the menu without a deploy
@@ -108,8 +111,24 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="px-4 py-4 text-[10px] text-white/60">
-        {t("demo.notice")}
+      <div className="border-t border-white/15 px-4 py-3">
+        <p className="truncate text-[11px] text-white/70" title={viewer.email}>
+          {viewer.email}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setChangingPassword(true);
+          }}
+          className={cn(
+            "mt-1 inline-flex items-center gap-1.5 rounded text-xs font-medium text-white/90 transition-colors hover:text-white focus-visible:outline-white",
+            drawer && "min-h-11",
+          )}
+        >
+          <KeyRound size={13} />
+          {tt("Change password", "เปลี่ยนรหัสผ่าน")}
+        </button>
       </div>
     </div>
   );
@@ -137,6 +156,13 @@ export function Sidebar() {
 
       {/* phone tab bar — the primary way around the app below lg */}
       <BottomNav />
+
+      {changingPassword ? (
+        <ChangePasswordModal
+          loginId={viewer.email}
+          onClose={() => setChangingPassword(false)}
+        />
+      ) : null}
     </>
   );
 }

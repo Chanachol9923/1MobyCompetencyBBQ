@@ -16,77 +16,77 @@ datasource db {
 
 /* ------------------------------------------------------------------ identity */
 
-// Auth.js (NextAuth) owns these four models. A User is a login; an Employee is a
-// person in the org chart. They are linked one-to-one once an admin approves the
-// account, which is what keeps "anyone with a Google account" from becoming staff.
+// A User is a login account. Accounts are never self-created: an administrator
+// provisions each one with a company login id (name.sur@1moby.com), links it to
+// the staff record and gives it a role. The person then activates it through a
+// one-time link and sets their own password — no administrator ever sees it.
+//
+// Signing in is single sign-on across every module of the system, and the same
+// account can later be federated to 1Moby's identity provider (OIDC) without a
+// schema change: the provider asserts the email, the account must already exist.
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id    String @id @default(cuid())
+  /// the company login id, always stored lower-case: name.sur@1moby.com
+  email String @unique
+  name  String?
+  image String?
 
   // access control
   roleId String?
-  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  role   Role?      @relation(fields: [roleId], references: [id], onDelete: SetNull)
   status UserStatus @default(PENDING)
 
-  employee Employee?
+  // credentials — scrypt, never the password itself
+  passwordHash       String?
+  passwordSetAt      DateTime?
+  mustChangePassword Boolean   @default(false)
 
-  accounts     Account[]
-  sessions     Session[]
+  // brute-force protection
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+
+  employee     Employee?
+  accessTokens AccessToken[]
   activityLogs ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([roleId])
   @@index([status])
 }
 
 enum UserStatus {
-  /// signed in with Google but not yet linked to an employee by an admin
+  /// provisioned by an administrator, activation link not used yet
   PENDING
   ACTIVE
   SUSPENDED
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
+enum AccessTokenPurpose {
+  /// first sign-in: the person sets their own password
+  ACTIVATE
+  /// an administrator issued a new link because the person lost access
+  RESET
+}
+
+/// One-time link for activation or password reset. Only a SHA-256 of the token
+/// is stored, so a leaked database row cannot be replayed as a link.
+model AccessToken {
+  id          String             @id @default(cuid())
+  userId      String
+  purpose     AccessTokenPurpose
+  tokenHash   String             @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime           @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
-
-  @@unique([identifier, token])
+  @@index([userId, purpose])
+  @@index([expiresAt])
 }
 
 /* --------------------------------------------------------------------- rbac */
@@ -187,10 +187,18 @@ model JobRole {
 
 model Employee {
   id           String  @id @default(cuid())
-  /// the HR employee number from the source data
+  /// Employee_ID from the HR data set — 3 to 4 characters (checked in the database)
   employeeCode String  @unique
+  /// display name, kept as "firstName lastName" by every write path
   name         String
+  /// คำนำหน้า — นาย / นาง / นางสาว / Mr / Ms
+  prefix       String?
+  firstName    String?
+  lastName     String?
+  /// Thai full name when HR supplies one
+  nameTh       String?
   nickname     String?
+  /// work email; for a provisioned account it matches the login id
   email        String  @unique
   grade        String?
   businessUnit String?

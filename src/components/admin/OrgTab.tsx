@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button, Field, Input, Modal, Select } from "@/components/ui";
 import {
@@ -71,6 +71,25 @@ export function OrgTab({
     startTransition(async () => onResult(await fn()));
   }
 
+  // a form stays open until its save succeeds, so a refusal never costs the
+  // administrator what they typed
+  const [formError, setFormError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) setFormError(null);
+  }, [open]);
+  function runForm(fn: () => Promise<ActionResult>) {
+    setFormError(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (res.ok) {
+        setOpen(false);
+        onResult(res);
+      } else {
+        setFormError(tt(res.error.en, res.error.th));
+      }
+    });
+  }
+
   function openAdd() {
     setEditing(null);
     setName("");
@@ -92,8 +111,7 @@ export function OrgTab({
       name,
       parentId: hasParent ? parentId : "",
     };
-    setOpen(false);
-    run(() => saveOrgUnit(payload));
+    runForm(() => saveOrgUnit(payload));
   }
 
   function exportList() {
@@ -220,6 +238,14 @@ export function OrgTab({
           </>
         }
       >
+        {formError ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink"
+          >
+            {formError}
+          </p>
+        ) : null}
         <div className="grid gap-4">
           <Field label={`${noun.label} *`}>
             <Input

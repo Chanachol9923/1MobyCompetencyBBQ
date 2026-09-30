@@ -95,6 +95,7 @@ export function EmployeesTab({
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(jobRoles[0]?.id ?? ""));
   const [confirm, setConfirm] = useState<AdminEmployeeRow | null>(null);
   const [busy, startTransition] = useTransition();
+  const [formError, setFormError] = useState<string | null>(null);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -132,26 +133,36 @@ export function EmployeesTab({
   }
 
   function openAdd() {
+    setFormError(null);
     setDraft(emptyDraft(jobRoles[0]?.id ?? ""));
     setEditing(null);
     setMode("add");
   }
 
   function openEdit(p: AdminEmployeeRow) {
+    setFormError(null);
     setDraft(fromRow(p));
     setEditing(p);
     setMode("edit");
   }
 
+  // the dialog stays open until the save succeeds, so a refusal never costs
+  // the administrator what they typed
   function save() {
     const payload = { ...draft };
     const target = editing;
-    setMode("closed");
-    run(() =>
-      target
-        ? updateEmployee({ ...payload, employeeId: target.id })
-        : createEmployee(payload),
-    );
+    setFormError(null);
+    startTransition(async () => {
+      const res = target
+        ? await updateEmployee({ ...payload, employeeId: target.id })
+        : await createEmployee(payload);
+      if (res.ok) {
+        setMode("closed");
+        onResult(res);
+      } else {
+        setFormError(tt(res.error.en, res.error.th));
+      }
+    });
   }
 
   function exportList() {
@@ -383,6 +394,14 @@ export function EmployeesTab({
           </>
         }
       >
+        {formError ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink"
+          >
+            {formError}
+          </p>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={`${t("label.name")} *`}>
             <Input
@@ -398,8 +417,12 @@ export function EmployeesTab({
               onChange={(e) => set("nickname", e.target.value)}
             />
           </Field>
-          <Field label={`${t("label.employeeId")} *`}>
+          <Field
+            label={`${t("label.employeeId")} *`}
+            hint={tt("3–4 letters or digits, e.g. 1ASD", "ตัวอักษรหรือตัวเลข 3–4 ตัว เช่น 1ASD")}
+          >
             <Input
+              maxLength={4}
               value={draft.employeeCode}
               placeholder={tt("Enter Employee ID", "กรอกรหัสพนักงาน")}
               onChange={(e) => set("employeeCode", e.target.value)}
@@ -407,13 +430,21 @@ export function EmployeesTab({
           </Field>
           <Field
             label={`${t("label.email")} *`}
-            hint={tt(
-              "A Google sign-in is matched to this address.",
-              "ระบบจะจับคู่บัญชี Google กับอีเมลนี้",
-            )}
+            hint={
+              editing?.hasLogin
+                ? tt(
+                    "This is their login ID — change it from Accounts.",
+                    "อีเมลนี้คือไอดีเข้าสู่ระบบ เปลี่ยนได้ที่หน้าบัญชีผู้ใช้",
+                  )
+                : tt(
+                    "Company address, name.sur@1moby.com — it becomes the login ID when an account is created.",
+                    "อีเมลบริษัท name.sur@1moby.com จะใช้เป็นไอดีเข้าสู่ระบบเมื่อสร้างบัญชี",
+                  )
+            }
           >
             <Input
               type="email"
+              disabled={Boolean(editing?.hasLogin)}
               value={draft.email}
               placeholder={tt("Enter Employee Email", "กรอกอีเมลพนักงาน")}
               onChange={(e) => set("email", e.target.value)}

@@ -1,38 +1,25 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 
 /**
  * The half of the auth config that must run on the Edge (middleware).
  *
- * It deliberately contains no database adapter and no Prisma import: middleware
- * only decides "is there a session at all", and every real permission check
- * happens server-side next to the data it protects.
+ * It deliberately contains no providers and no Prisma import: middleware only
+ * decides "is there a session at all", by reading the signed JWT cookie. Every
+ * real permission check happens server-side next to the data it protects, and
+ * the providers that check passwords live in `auth.ts`.
  */
 export const authConfig = {
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      allowDangerousEmailAccountLinking: true,
-      profile(profile) {
-        return {
-          id: profile.sub,
-          name: profile.name,
-          email: profile.email,
-          image: profile.picture,
-        };
-      },
-    }),
-  ],
+  providers: [],
   pages: {
     signIn: "/login",
     error: "/login",
   },
   session: {
-    // credentials-based demo sign-in requires JWT sessions, and JWT also keeps
-    // the hot path off the database
+    // JWT keeps the hot path off the database; the claims inside it are
+    // refreshed from the database every few minutes (see auth.ts)
     strategy: "jwt",
-    maxAge: 60 * 60 * 24 * 7,
+    // a working day plus margin — sign in once in the morning, stay in
+    maxAge: 60 * 60 * 12,
   },
   trustHost: true,
 } satisfies NextAuthConfig;

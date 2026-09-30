@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button, Field, Input, Modal, Pill } from "@/components/ui";
 import {
@@ -64,6 +64,25 @@ export function JobRolesTab({
     startTransition(async () => onResult(await fn()));
   }
 
+  // a form stays open until its save succeeds, so a refusal never costs the
+  // administrator what they typed
+  const [formError, setFormError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) setFormError(null);
+  }, [open]);
+  function runForm(fn: () => Promise<ActionResult>) {
+    setFormError(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (res.ok) {
+        setOpen(false);
+        onResult(res);
+      } else {
+        setFormError(tt(res.error.en, res.error.th));
+      }
+    });
+  }
+
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -89,8 +108,7 @@ export function JobRolesTab({
   function save() {
     const payload = { ...draft };
     const target = editing;
-    setOpen(false);
-    run(() =>
+    runForm(() =>
       target ? updateJobRole({ ...payload, jobRoleId: target.id }) : createJobRole(payload),
     );
   }
@@ -231,6 +249,14 @@ export function JobRolesTab({
           </>
         }
       >
+        {formError ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink"
+          >
+            {formError}
+          </p>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={`${t("label.role")} *`} className="sm:col-span-2">
             <Input

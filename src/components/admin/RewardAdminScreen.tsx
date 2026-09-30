@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Check,
   Coffee,
@@ -160,6 +160,25 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
     startTransition(async () => setResult(await fn()));
   }
 
+  // a form stays open until its save succeeds, so a refusal never costs the
+  // administrator what they typed
+  const [formError, setFormError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) setFormError(null);
+  }, [open]);
+  function runForm(fn: () => Promise<ActionResult>) {
+    setFormError(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (res.ok) {
+        setOpen(false);
+        setResult(res);
+      } else {
+        setFormError(tt(res.error.en, res.error.th));
+      }
+    });
+  }
+
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -193,8 +212,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
       image: preset.key,
     };
     const target = editing;
-    setOpen(false);
-    run(() =>
+    runForm(() =>
       target
         ? updateReward({ ...payload, rewardId: target.id })
         : createReward(payload),
@@ -216,7 +234,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
 
       <ResultBanner result={result} onDismiss={() => setResult(null)} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <CountTile
           value={counts.total}
           label={tt("Total Rewards", "ของรางวัลทั้งหมด")}
@@ -563,6 +581,14 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
           </>
         }
       >
+        {formError ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink"
+          >
+            {formError}
+          </p>
+        ) : null}
         <div className="grid gap-4">
           <Field label={`${tt("Reward title (English)", "ชื่อของรางวัล (อังกฤษ)")} *`}>
             <Input

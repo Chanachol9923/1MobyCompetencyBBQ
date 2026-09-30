@@ -136,13 +136,28 @@ export function GoalFormModal({
     toLevel ??
     Math.min(4, Math.max(currentLevel + 1, row?.expected ?? currentLevel + 1));
 
+  // a goal raises the level, so only levels above today's are offered
   const levelChoices = [1, 2, 3, 4].filter(
-    (n) => n >= Math.max(1, currentLevel) || n === targetLevel,
+    (n) => n > currentLevel || n === goal?.toLevel,
   );
 
   const submit = () => {
     if (!competencyId) {
       setLocalError(tt("Pick a competency first", "เลือกสมรรถนะก่อน"));
+      return;
+    }
+    if (targetLevel <= currentLevel) {
+      setLocalError(
+        currentLevel >= 4
+          ? tt(
+              "Already at the highest level — pick another competency.",
+              "อยู่ในระดับสูงสุดแล้ว กรุณาเลือกสมรรถนะอื่น",
+            )
+          : tt(
+              "The target level must be above the current level.",
+              "ระดับเป้าหมายต้องสูงกว่าระดับปัจจุบัน",
+            ),
+      );
       return;
     }
     if (Date.parse(dueDate) <= Date.parse(startDate)) {
@@ -159,7 +174,7 @@ export function GoalFormModal({
       competencyId,
       courseId: courseId === NO_COURSE ? null : courseId,
       fromLevel: currentLevel,
-      toLevel: Math.max(targetLevel, currentLevel),
+      toLevel: targetLevel,
       activity,
       startDate,
       dueDate,

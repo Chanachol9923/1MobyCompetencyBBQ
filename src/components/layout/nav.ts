@@ -104,7 +104,9 @@ export function navFor(viewer: {
   };
   const staff = ALL_ITEMS.filter(keep);
   const admin = ADMIN_ITEMS.filter(keep);
-  return [...staff, ...admin];
+  // someone with no staff record is here to administer: their tools come first,
+  // and the first item is where they land after signing in
+  return viewer.employeeId ? [...staff, ...admin] : [...admin, ...staff];
 }
 
 /** Where to send someone after signing in. */

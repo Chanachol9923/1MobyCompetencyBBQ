@@ -12,4 +12,4 @@ gpu-log.csv
 gpu-*.ps1
 
 # local PGlite dev database
-.pglite/
+.pglite*/

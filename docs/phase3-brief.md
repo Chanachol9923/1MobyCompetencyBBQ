@@ -2,6 +2,10 @@
 
 The product is the same; the plumbing underneath it changed completely.
 
+> **Superseded on sign-in.** Google sign-in described below was replaced by admin-provisioned
+> company accounts (`name.sur@1moby.com`) with one-time activation links, and the database moved
+> to Supabase with versioned migrations. The README's "Sign-in" section is the current account.
+
 ## What exists now
 
 **PostgreSQL through Prisma 7.** `prisma/schema.prisma` models the whole domain.

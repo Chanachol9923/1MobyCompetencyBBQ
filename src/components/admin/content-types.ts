@@ -341,7 +341,7 @@ export type AdminEmployeeRow = {
   positionName: string | null;
   managerId: string | null;
   managerName: string | null;
-  /** true when a Google account is linked to this person */
+  /** true when a login account is linked to this person */
   hasLogin: boolean;
   reportCount: number;
 };

@@ -7,8 +7,9 @@ import { SignOutButton } from "@/components/layout/SignOutButton";
 export const dynamic = "force-dynamic";
 
 /**
- * A Google account that signed in successfully but has not been linked to a
- * staff record. This is the normal first step for a new joiner, not an error.
+ * Signed in, but nothing to open yet: the account is not linked to a staff
+ * record and its role grants no permissions, or an administrator moved it back
+ * to awaiting activation mid-session. Not an error — HROD has a step left.
  */
 export default async function PendingPage() {
   const viewer = await getViewer();
@@ -24,17 +25,17 @@ export default async function PendingPage() {
           <Clock size={22} />
         </span>
         <h1 className="mt-4 text-xl font-medium text-ink">
-          Waiting for approval
-          <span className="mt-1 block text-base text-muted">รอการอนุมัติ</span>
+          Your account is not set up yet
+          <span className="mt-1 block text-base text-muted">บัญชีของคุณยังตั้งค่าไม่ครบ</span>
         </h1>
         <p className="mt-3 text-sm text-muted">
           You are signed in as <strong className="text-ink">{viewer.email}</strong>,
-          but this account has not been linked to an employee record yet. An
-          administrator needs to approve it.
+          but the account is not linked to your staff record and its role does not
+          open any module yet. HROD can finish this on the Accounts screen.
         </p>
         <p className="mt-2 text-sm text-muted">
-          คุณเข้าสู่ระบบแล้ว แต่บัญชีนี้ยังไม่ได้เชื่อมกับข้อมูลพนักงาน
-          กรุณารอผู้ดูแลระบบอนุมัติ
+          คุณเข้าสู่ระบบแล้ว แต่บัญชียังไม่ได้เชื่อมกับข้อมูลพนักงาน
+          และบทบาทยังไม่มีสิทธิ์เข้าโมดูลใด กรุณาติดต่อฝ่าย HROD
         </p>
         <div className="mt-6">
           <SignOutButton />

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { signInOptions } from "@/lib/auth";
+import { LOGIN_DOMAIN } from "@/lib/login-id";
 import { getViewer } from "@/server/session";
 import { homeFor } from "@/components/layout/nav";
 import { LoginForm, type DemoAccount } from "./LoginForm";
@@ -8,34 +10,32 @@ export const dynamic = "force-dynamic";
 
 /**
  * Demo personas are read from the database rather than hard-coded, so the login
- * screen always offers accounts that actually exist: one individual contributor,
- * one manager with reports, and the administrator.
+ * screen only ever offers accounts that actually exist: one individual
+ * contributor, one manager with reports, and the administrator.
  */
 async function loadDemoAccounts(): Promise<DemoAccount[]> {
-  if (process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN !== "true") return [];
+  if (!signInOptions.demo) return [];
 
+  const active = { status: "ACTIVE" as const };
   const [ic, manager, admin] = await Promise.all([
     db.employee.findFirst({
-      where: { reports: { none: {} }, jobRole: { name: "Executive" } },
+      where: { reports: { none: {} }, jobRole: { name: "Executive" }, user: active },
       orderBy: { name: "asc" },
-      select: {
-        employeeCode: true,
-        name: true,
-        jobRole: { select: { name: true, level: true } },
-      },
+      select: { name: true, email: true, jobRole: { select: { name: true, level: true } } },
     }),
     db.employee.findFirst({
-      where: { reports: { some: {} } },
+      where: { reports: { some: {} }, user: active },
       orderBy: { name: "asc" },
       select: {
-        employeeCode: true,
         name: true,
-        jobRole: { select: { name: true, level: true } },
+        email: true,
+        jobRole: { select: { name: true } },
         _count: { select: { reports: true } },
       },
     }),
     db.user.findFirst({
-      where: { role: { key: "admin" }, employee: null, status: "ACTIVE" },
+      where: { role: { key: "admin" }, employee: null, ...active },
+      orderBy: { createdAt: "asc" },
       select: { email: true, name: true },
     }),
   ]);
@@ -43,26 +43,26 @@ async function loadDemoAccounts(): Promise<DemoAccount[]> {
   const out: DemoAccount[] = [];
   if (ic) {
     out.push({
-      key: ic.employeeCode,
+      loginId: ic.email,
       name: ic.name,
-      roleLabel: ic.jobRole.name,
-      detail: ic.jobRole.level,
+      roleLabel: "Employee",
+      detail: `${ic.jobRole.name} · ${ic.jobRole.level}`,
     });
   }
   if (manager) {
     out.push({
-      key: manager.employeeCode,
+      loginId: manager.email,
       name: manager.name,
-      roleLabel: manager.jobRole.name,
-      detail: `${manager._count.reports} direct reports`,
+      roleLabel: "Manager",
+      detail: `${manager.jobRole.name} · ${manager._count.reports} direct reports`,
     });
   }
   if (admin) {
     out.push({
-      key: admin.email,
+      loginId: admin.email,
       name: admin.name ?? admin.email,
       roleLabel: "Administrator",
-      detail: "runs the framework",
+      detail: "HROD — runs the framework",
     });
   }
   return out;
@@ -71,7 +71,7 @@ async function loadDemoAccounts(): Promise<DemoAccount[]> {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; code?: string; next?: string; notice?: string }>;
 }) {
   const viewer = await getViewer();
   if (viewer && viewer.status === "ACTIVE") {
@@ -80,13 +80,20 @@ export default async function LoginPage({
 
   const params = await searchParams;
   const demoAccounts = await loadDemoAccounts();
+  const notice =
+    params.notice === "activated" || params.notice === "password_changed"
+      ? params.notice
+      : undefined;
 
   return (
     <LoginForm
+      loginDomain={LOGIN_DOMAIN}
       demoAccounts={demoAccounts}
-      googleEnabled={Boolean(process.env.AUTH_GOOGLE_ID)}
-      error={params.error}
+      ssoName={signInOptions.sso}
+      error={viewer?.status === "SUSPENDED" ? "suspended" : params.error}
+      code={params.code}
       next={params.next}
+      notice={notice}
     />
   );
 }

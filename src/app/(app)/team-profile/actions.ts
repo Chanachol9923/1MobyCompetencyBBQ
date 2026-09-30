@@ -25,6 +25,7 @@ export type ActionError =
   | "unknown_competency"
   | "unknown_course"
   | "bad_dates"
+  | "bad_levels"
   | "not_found";
 
 export type ActionResult =
@@ -67,6 +68,10 @@ export async function saveGoalAction(input: GoalInput): Promise<ActionResult> {
 
   if (Date.parse(data.dueDate) <= Date.parse(data.startDate)) {
     return { ok: false, error: "bad_dates" };
+  }
+  // a goal raises a level; the database refuses anything else too
+  if (data.toLevel <= data.fromLevel) {
+    return { ok: false, error: "bad_levels" };
   }
 
   let viewer;

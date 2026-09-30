@@ -11,7 +11,9 @@ import {
   LayoutDashboard,
   Megaphone,
   ScrollText,
+  ShieldCheck,
   Target,
+  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -19,7 +21,6 @@ import { cn } from "@/lib/utils";
 import { useViewer } from "@/lib/viewer";
 import { navFor } from "./nav";
 import { useT } from "@/lib/i18n";
-import type { Role } from "@/data/people";
 
 /**
  * Phone navigation. A drawer alone is not how a phone app navigates, so the
@@ -28,33 +29,7 @@ import type { Role } from "@/data/people";
  * bar. Hidden from `lg` up — the desktop sidebar is untouched.
  */
 
-type Tab = { href: string; icon: LucideIcon };
-
-const TABS: Record<Role, Tab[]> = {
-  l1: [
-    { href: "/dashboard", icon: LayoutDashboard },
-    { href: "/assessment", icon: ClipboardCheck },
-    { href: "/idp", icon: Target },
-    { href: "/lms", icon: BookOpen },
-    { href: "/reward", icon: Gift },
-  ],
-  l2: [
-    { href: "/dashboard", icon: LayoutDashboard },
-    { href: "/team-profile", icon: Users },
-    { href: "/assessment", icon: ClipboardCheck },
-    { href: "/idp", icon: Target },
-    { href: "/lms", icon: BookOpen },
-  ],
-  admin: [
-    { href: "/admin", icon: LayoutDashboard },
-    { href: "/admin/employee", icon: Users },
-    { href: "/admin/assessment", icon: ClipboardCheck },
-    { href: "/admin/lms", icon: BookOpen },
-    { href: "/admin/reward", icon: Gift },
-  ],
-};
-
-/** Icons kept for the drawer-only destinations, so the vocabulary matches. */
+/** One icon per destination, shared by the tab bar and the drawer. */
 export const NAV_ICON: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/team-profile": Users,
@@ -72,6 +47,9 @@ export const NAV_ICON: Record<string, LucideIcon> = {
   "/admin/reward": Gift,
   "/admin/announcement": Megaphone,
   "/admin/audit": ScrollText,
+  "/admin/users": UserCog,
+  "/admin/roles": ShieldCheck,
+  "/announcements": Megaphone,
 };
 
 export function BottomNav() {

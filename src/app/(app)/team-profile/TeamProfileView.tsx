@@ -156,6 +156,10 @@ export function TeamProfileView({
         "Due date must be after the start date.",
         "วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น",
       ),
+      bad_levels: tt(
+        "The target level must be above the current level.",
+        "ระดับเป้าหมายต้องสูงกว่าระดับปัจจุบัน",
+      ),
       not_found: tt("That record no longer exists.", "ไม่พบรายการนี้แล้ว"),
     })[code];
 

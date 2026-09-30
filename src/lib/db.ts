@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { sslFor } from "./db-ssl";
 
 /**
  * One Prisma client per process.
@@ -7,7 +8,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
  * Next.js in development re-evaluates modules on every hot reload, which would
  * otherwise open a new pool each time until Postgres refuses connections. In
  * production on a serverless host each instance keeps exactly one pool, and the
- * pool talks to Supabase's pgBouncer, so a burst of function invocations does
+ * pool talks to Supabase's Supavisor pooler, so a burst of function invocations does
  * not translate into a burst of real Postgres connections.
  */
 
@@ -22,7 +23,8 @@ function createClient() {
   }
   const adapter = new PrismaPg({
     connectionString,
-    // serverless: keep the pool small, let pgBouncer do the multiplexing
+    ssl: sslFor(connectionString),
+    // serverless: keep the pool small, let the Supabase pooler do the multiplexing
     max: Number(process.env.DB_POOL_MAX ?? 5),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,

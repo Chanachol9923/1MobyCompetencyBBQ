@@ -176,11 +176,12 @@ export function CountTile({
   tone?: "brand" | "amber" | "success" | "ink";
 }) {
   return (
-    <Card className="flex items-center gap-4 p-5">
+    <Card className="flex items-center gap-4 p-5 max-sm:p-4">
       {icon ? (
         <div
           className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-xl",
+            // two tiles share a phone row: the number and label need the width
+            "grid size-11 shrink-0 place-items-center rounded-xl max-sm:hidden",
             tone === "brand" && "bg-brand-tint text-brand",
             tone === "amber" && "bg-amber/15 text-amber",
             tone === "success" && "bg-success/10 text-success",
@@ -202,7 +203,7 @@ export function CountTile({
         >
           {typeof value === "number" ? <AnimatedNumber value={value} /> : value}
         </p>
-        <p className="mt-1.5 truncate text-sm text-muted">{label}</p>
+        <p className="mt-1.5 text-sm leading-snug text-muted">{label}</p>
       </div>
     </Card>
   );

@@ -1,31 +1,42 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { AlertCircle, Languages, LogIn } from "lucide-react";
+import { KeyRound, LogIn, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
-import { Logo } from "@/components/layout/Logo";
+import { AuthFrame, AuthInput, AuthNotice, PasswordInput } from "@/components/auth/AuthFrame";
 
 export type DemoAccount = {
-  key: string;
+  loginId: string;
   name: string;
   roleLabel: string;
   detail: string;
 };
 
-const ERRORS: Record<string, { en: string; th: string }> = {
+type Bi = { en: string; th: string };
+
+const ERRORS: Record<string, Bi> = {
+  invalid: {
+    en: "The login ID or password is not correct.",
+    th: "ไอดีเข้าสู่ระบบหรือรหัสผ่านไม่ถูกต้อง",
+  },
+  locked: {
+    en: "Too many wrong passwords. The account is locked for 15 minutes — try again later, or ask HROD to unlock it.",
+    th: "ใส่รหัสผ่านผิดหลายครั้งเกินไป บัญชีถูกล็อก 15 นาที กรุณาลองใหม่ภายหลัง หรือติดต่อฝ่าย HROD เพื่อปลดล็อก",
+  },
   suspended: {
     en: "This account has been suspended. Contact HROD.",
-    th: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อฝ่ายบุคคล",
+    th: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อฝ่าย HROD",
   },
-  OAuthAccountNotLinked: {
-    en: "That email is already signed up with a different method.",
-    th: "อีเมลนี้เคยลงทะเบียนด้วยวิธีอื่นไว้แล้ว",
+  not_activated: {
+    en: "This account has not been activated yet. Open the activation link HROD sent you to set your password.",
+    th: "บัญชีนี้ยังไม่ได้เปิดใช้งาน กรุณาเปิดลิงก์เปิดใช้งานที่ฝ่าย HROD ส่งให้เพื่อตั้งรหัสผ่าน",
   },
-  AccessDenied: {
-    en: "Sign-in was refused. Ask an administrator to add your account.",
-    th: "การเข้าสู่ระบบถูกปฏิเสธ กรุณาแจ้งผู้ดูแลระบบให้เพิ่มบัญชีของคุณ",
+  not_provisioned: {
+    en: "Your company sign-in worked, but no account has been set up for you in this system. Ask HROD to create one.",
+    th: "ยืนยันตัวตนกับระบบบริษัทสำเร็จ แต่ยังไม่มีบัญชีของคุณในระบบนี้ กรุณาติดต่อฝ่าย HROD เพื่อสร้างบัญชี",
   },
   default: {
     en: "Could not sign you in. Please try again.",
@@ -33,211 +44,222 @@ const ERRORS: Record<string, { en: string; th: string }> = {
   },
 };
 
+/** Auth.js reports refusals as ?error=CredentialsSignin&code=<ours> */
+function errorFor(error?: string, code?: string): Bi | null {
+  if (code && ERRORS[code]) return ERRORS[code]!;
+  if (!error) return null;
+  return ERRORS[error] ?? ERRORS.default!;
+}
+
 export function LoginForm({
+  loginDomain,
   demoAccounts,
-  googleEnabled,
+  ssoName,
   error,
+  code,
   next,
+  notice,
 }: {
+  loginDomain: string;
   demoAccounts: DemoAccount[];
-  googleEnabled: boolean;
+  ssoName: string | null;
   error?: string;
+  code?: string;
   next?: string;
+  notice?: "activated" | "password_changed" | "signed_out";
 }) {
-  const { tt, lang, setLang } = useT();
-  const [pending, startTransition] = useTransition();
+  const { tt } = useT();
+  const router = useRouter();
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<Bi | null>(() => errorFor(error, code));
 
-  const message = error ? (ERRORS[error] ?? ERRORS.default!) : null;
-  const callbackUrl = next && next.startsWith("/") ? next : "/dashboard";
+  const callbackUrl = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
 
-  const google = () => {
-    setBusy("google");
-    void signIn("google", { callbackUrl });
+  // people type just their name — finish the address for them
+  const completeId = (value: string) => {
+    const v = value.trim().toLowerCase();
+    return v && !v.includes("@") ? `${v}@${loginDomain}` : v;
   };
 
-  const demo = (key: string) => {
-    setBusy(key);
-    startTransition(() => {
-      void signIn("demo", { account: key, callbackUrl });
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    const id = completeId(loginId);
+    if (!id || !password) {
+      setMessage({
+        en: "Enter your login ID and password.",
+        th: "กรุณากรอกไอดีเข้าสู่ระบบและรหัสผ่าน",
+      });
+      return;
+    }
+    setLoginId(id);
+    setBusy("company");
+    setMessage(null);
+    const res = await signIn("company", {
+      loginId: id,
+      password,
+      redirect: false,
     });
+    if (res?.ok && !res.error) {
+      router.replace(callbackUrl);
+      router.refresh();
+      return;
+    }
+    setBusy(null);
+    setPassword("");
+    setMessage(errorFor(res?.error ?? "default", res?.code));
+  }
+
+  const demo = (id: string) => {
+    setBusy(id);
+    void signIn("demo", { account: id, callbackUrl });
   };
 
   return (
-    <main className="grid min-h-screen place-items-center bg-surface/60 p-4">
-      <div className="relative grid w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-[0_10px_60px_rgba(16,24,40,.14)] md:grid-cols-2">
-        <div
-          role="group"
-          aria-label={tt("Language", "ภาษา")}
-          className="absolute right-4 top-4 z-10 flex items-center overflow-hidden rounded-lg border border-line bg-white/90 backdrop-blur"
+    <AuthFrame>
+      <h1 className="text-center text-3xl font-medium text-ink">
+        {tt("Sign in", "เข้าสู่ระบบ")}
+      </h1>
+      <p className="mt-2 text-center text-sm text-muted">
+        {tt(
+          "One company account for every module of the system.",
+          "บัญชีบริษัทเดียว ใช้ได้กับทุกโมดูลของระบบ",
+        )}
+      </p>
+
+      {notice === "activated" ? (
+        <AuthNotice tone="success">
+          {tt(
+            "Your account is ready. Sign in with your new password.",
+            "บัญชีของคุณพร้อมใช้งานแล้ว เข้าสู่ระบบด้วยรหัสผ่านใหม่ได้เลย",
+          )}
+        </AuthNotice>
+      ) : notice === "password_changed" ? (
+        <AuthNotice tone="success">
+          {tt(
+            "Password changed. Sign in again with the new one.",
+            "เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบอีกครั้งด้วยรหัสผ่านใหม่",
+          )}
+        </AuthNotice>
+      ) : null}
+
+      {message ? <AuthNotice>{tt(message.en, message.th)}</AuthNotice> : null}
+
+      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+        <AuthInput
+          label={tt("Login ID", "ไอดีเข้าสู่ระบบ")}
+          name="username"
+          type="text"
+          inputMode="email"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={`name.sur@${loginDomain}`}
+          value={loginId}
+          onChange={(e) => setLoginId(e.target.value)}
+          onBlur={() => setLoginId((v) => completeId(v))}
+          disabled={busy !== null}
+          autoFocus
+        />
+        <PasswordInput
+          label={tt("Password", "รหัสผ่าน")}
+          name="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={busy !== null}
+        />
+        <button
+          type="submit"
+          disabled={busy !== null}
+          className={cn(
+            "flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white shadow-sm",
+            "transition-all hover:bg-brand-dark active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-60",
+          )}
         >
-          <Languages size={14} className="ml-2 text-muted" />
-          {(["en", "th"] as const).map((l) => (
-            <button
-              key={l}
-              type="button"
-              onClick={() => setLang(l)}
-              aria-pressed={lang === l}
-              className={cn(
-                "px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                lang === l ? "bg-brand text-white" : "text-muted hover:bg-surface",
-              )}
-            >
-              {l === "en" ? "EN" : "ไทย"}
-            </button>
-          ))}
-        </div>
+          <LogIn size={16} />
+          {busy === "company" ? tt("Signing in…", "กำลังเข้าสู่ระบบ…") : tt("Sign in", "เข้าสู่ระบบ")}
+        </button>
+      </form>
 
-        {/* brand panel */}
-        <div className="relative hidden min-h-[520px] overflow-hidden bg-[#0b1b3f] md:block">
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 100% at 85% 20%, #f05123 0%, #faa21b 18%, rgba(240,81,35,0) 55%), radial-gradient(120% 120% at 10% 0%, #006bff 0%, #0b1b3f 60%), linear-gradient(160deg,#0b1b3f 0%,#123a7a 45%,#0b1b3f 100%)",
-            }}
-          />
-          <div
-            className="absolute -left-24 bottom-[-30%] size-[520px] rounded-full opacity-70"
-            style={{
-              background:
-                "radial-gradient(circle at 40% 40%, rgba(0,107,255,.85), rgba(11,27,63,0) 65%)",
-            }}
-          />
-          <div className="relative flex h-full flex-col justify-center px-12 py-10">
-            <Logo className="text-5xl" />
-            <div className="mt-4 h-px w-24 bg-white/40" />
-            <p className="mt-4 text-2xl font-bold leading-snug text-white">
-              {lang === "th" ? (
-                <>
-                  ระบบประเมินสมรรถนะ
-                  <br />
-                  แบบครบวงจร
-                </>
-              ) : (
-                <>
-                  Comprehensive
-                  <br />
-                  Assessment System
-                </>
-              )}
-            </p>
-          </div>
-        </div>
+      <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted">
+        <KeyRound size={14} className="mt-0.5 shrink-0" />
+        <span>
+          {tt(
+            "Forgot your password or never received an activation link? HROD can send you a new link.",
+            "ลืมรหัสผ่านหรือยังไม่ได้รับลิงก์เปิดใช้งาน? ติดต่อฝ่าย HROD เพื่อขอลิงก์ใหม่",
+          )}
+        </span>
+      </p>
 
-        {/* sign-in panel */}
-        <div className="flex flex-col justify-center px-8 py-12 sm:px-14">
-          <h1 className="text-center text-3xl font-medium text-ink">
-            {tt("Sign in", "เข้าสู่ระบบ")}
-          </h1>
-          <p className="mt-2 text-center text-sm text-muted">
-            {tt(
-              "Use your work Google account.",
-              "เข้าสู่ระบบด้วยบัญชี Google ของที่ทำงาน",
-            )}
-          </p>
-
-          {message ? (
-            <p className="mt-5 flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
-              {tt(message.en, message.th)}
-            </p>
-          ) : null}
-
+      {ssoName ? (
+        <>
+          <Divider label={tt("or", "หรือ")} />
           <button
             type="button"
-            onClick={google}
-            disabled={!googleEnabled || busy !== null}
-            className={cn(
-              "mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-line bg-white",
-              "text-sm font-medium text-ink transition-all",
-              "hover:bg-surface active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50",
-            )}
+            onClick={() => {
+              setBusy("sso");
+              void signIn("sso", { callbackUrl });
+            }}
+            disabled={busy !== null}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-line bg-white text-sm font-medium text-ink transition-all hover:bg-surface active:scale-[.99] disabled:opacity-50"
           >
-            <GoogleMark />
-            {busy === "google"
-              ? tt("Opening Google…", "กำลังเปิด Google…")
-              : tt("Continue with Google", "ดำเนินการต่อด้วย Google")}
+            <ShieldCheck size={16} className="text-brand" />
+            {tt(`Continue with ${ssoName}`, `เข้าสู่ระบบด้วย ${ssoName}`)}
           </button>
+        </>
+      ) : null}
 
-          {!googleEnabled ? (
-            <p className="mt-2 text-center text-[11px] text-muted">
-              {tt(
-                "Google sign-in is not configured on this deployment yet.",
-                "ยังไม่ได้ตั้งค่าการเข้าสู่ระบบด้วย Google สำหรับระบบนี้",
-              )}
-            </p>
-          ) : null}
-
-          {demoAccounts.length > 0 ? (
-            <>
-              <div className="my-7 flex items-center gap-3">
-                <span className="h-px flex-1 bg-line" />
-                <span className="text-[11px] uppercase tracking-wide text-muted">
-                  {tt("or walk through a demo account", "หรือทดลองด้วยบัญชีสาธิต")}
-                </span>
-                <span className="h-px flex-1 bg-line" />
-              </div>
-
-              <div className="space-y-2">
-                {demoAccounts.map((a) => (
-                  <button
-                    key={a.key}
-                    type="button"
-                    onClick={() => demo(a.key)}
-                    disabled={busy !== null || pending}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-lg border border-line px-4 py-3 text-left",
-                      "transition-all hover:border-brand/40 hover:bg-brand-tint/40",
-                      "active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50",
-                    )}
-                  >
-                    <LogIn size={16} className="shrink-0 text-brand" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-ink">
-                        {a.name}
-                      </span>
-                      <span className="block truncate text-xs text-muted">
-                        {a.roleLabel} · {a.detail}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <p className="mt-6 text-center text-xs text-muted">
-                {tt(
-                  "Demo accounts are read from the database and can be switched off with one environment variable.",
-                  "บัญชีสาธิตอ่านจากฐานข้อมูลจริง และปิดได้ด้วยการตั้งค่าตัวแปรสภาพแวดล้อมเพียงตัวเดียว",
+      {demoAccounts.length > 0 ? (
+        <>
+          <Divider label={tt("demo accounts", "บัญชีสาธิต")} />
+          <div className="space-y-2">
+            {demoAccounts.map((a) => (
+              <button
+                key={a.loginId}
+                type="button"
+                onClick={() => demo(a.loginId)}
+                disabled={busy !== null}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg border border-line px-4 py-2.5 text-left",
+                  "transition-all hover:border-brand/40 hover:bg-brand-tint/40",
+                  "active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50",
                 )}
-              </p>
-            </>
-          ) : null}
-        </div>
-      </div>
-    </main>
+              >
+                <LogIn size={15} className="shrink-0 text-brand" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-ink">
+                    {a.name}
+                    <span className="ml-2 font-normal text-muted">{a.roleLabel}</span>
+                  </span>
+                  <span className="block truncate text-xs text-muted">
+                    {a.loginId} · {a.detail}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-center text-[11px] text-muted">
+            {tt(
+              "Demo sign-in skips the password. Switch it off with NEXT_PUBLIC_ENABLE_DEMO_LOGIN before real use.",
+              "บัญชีสาธิตเข้าได้โดยไม่ต้องใช้รหัสผ่าน ปิดได้ด้วย NEXT_PUBLIC_ENABLE_DEMO_LOGIN ก่อนใช้งานจริง",
+            )}
+          </p>
+        </>
+      ) : null}
+    </AuthFrame>
   );
 }
 
-function GoogleMark() {
+function Divider({ label }: { label: string }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
-      <path
-        fill="#EA4335"
-        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-      />
-      <path
-        fill="#4285F4"
-        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M10.53 28.59A14.5 14.5 0 0 1 9.77 24c0-1.6.27-3.15.76-4.59l-7.98-6.19A23.94 23.94 0 0 0 0 24c0 3.88.93 7.54 2.56 10.78l7.97-6.19z"
-      />
-      <path
-        fill="#34A853"
-        d="M24 48c6.48 0 11.93-2.13 15.9-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-      />
-    </svg>
+    <div className="my-6 flex items-center gap-3">
+      <span className="h-px flex-1 bg-line" />
+      <span className="text-[11px] uppercase tracking-wide text-muted">{label}</span>
+      <span className="h-px flex-1 bg-line" />
+    </div>
   );
 }

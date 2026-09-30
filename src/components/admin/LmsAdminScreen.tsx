@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Archive,
   ArrowDown,
@@ -190,6 +190,25 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
     startTransition(async () => setResult(await fn()));
   }
 
+  // a form stays open until its save succeeds, so a refusal never costs the
+  // administrator what they typed
+  const [formError, setFormError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) setFormError(null);
+  }, [open]);
+  function runForm(fn: () => Promise<ActionResult>) {
+    setFormError(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (res.ok) {
+        setOpen(false);
+        setResult(res);
+      } else {
+        setFormError(tt(res.error.en, res.error.th));
+      }
+    });
+  }
+
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -249,8 +268,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           pages: ch.pages || undefined,
         })),
     };
-    setOpen(false);
-    run(() => saveCourse(payload));
+    runForm(() => saveCourse(payload));
   }
 
   const statusPill = (status: AdminCourseRow["status"]) =>
@@ -274,7 +292,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
 
       <ResultBanner result={result} onDismiss={() => setResult(null)} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <CountTile
           value={counts.total}
           label={tt("Total Courses", "หลักสูตรทั้งหมด")}
@@ -480,6 +498,14 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           )
         }
       >
+        {formError ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink"
+          >
+            {formError}
+          </p>
+        ) : null}
         {step === 1 ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={`${tt("Course name (English)", "ชื่อหลักสูตร (อังกฤษ)")} *`}>

@@ -19,7 +19,7 @@ export type Viewer = {
   status: "PENDING" | "ACTIVE" | "SUSPENDED";
   roleKey: string | null;
   permissions: string[];
-  /** null when the Google account has not been linked to a staff record yet */
+  /** null for an account with no staff record, such as the HROD administrator */
   employeeId: string | null;
   employeeName: string | null;
   jobRoleName: string | null;
@@ -40,6 +40,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
       name: true,
       image: true,
       status: true,
+      passwordSetAt: true,
       role: {
         select: {
           key: true,
@@ -57,6 +58,16 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     },
   });
   if (!user) return null;
+
+  // A password set after this session opened — the person reset it, or an
+  // administrator's reset link was used — retires every older session.
+  if (
+    user.passwordSetAt &&
+    session.user.authAt &&
+    user.passwordSetAt.getTime() > session.user.authAt + 1000
+  ) {
+    return null;
+  }
 
   return {
     userId: user.id,

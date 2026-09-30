@@ -26,12 +26,17 @@ import {
 } from "../src/data/learning";
 import { DEFAULT_ROLES, PERMISSION_CATALOGUE } from "../src/lib/permissions";
 import { currentCycle } from "../src/data/cycle";
+import { hashPassword } from "../src/lib/password";
+import { suggestLoginId } from "../src/lib/login-id";
+import { sslFor } from "../src/lib/db-ssl";
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("Set DATABASE_URL (and DIRECT_URL) before seeding.");
 }
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const db = new PrismaClient({
+  adapter: new PrismaPg({ connectionString, ssl: sslFor(connectionString) }),
+});
 
 const GROUP: Record<string, "CORE" | "FUNCTIONAL" | "MANAGERIAL"> = {
   core: "CORE",
@@ -239,12 +244,20 @@ async function seedOrg() {
   );
 
   // pass 1: everyone, without managers (the graph has forward references)
+  const taken = new Set<string>();
   for (const p of RAW_PEOPLE) {
     const departmentId = deptByName.get(p.department)!;
+    const [firstName, ...rest] = p.name.split(" ");
+    const lastName = rest.join(" ");
+    // company login id, name.sur@1moby.com
+    const email = suggestLoginId(firstName!, lastName, taken)!;
+    taken.add(email);
     const data = {
       name: p.name,
+      firstName: firstName!,
+      lastName: lastName || null,
       nickname: p.nickname,
-      email: `${p.id}@1moby.demo`,
+      email,
       grade: p.grade,
       businessUnit: p.businessUnit,
       jobRoleId: roleByName.get(p.jobRole)!,
@@ -283,16 +296,29 @@ async function seedOrg() {
 }
 
 async function seedAssessments() {
-  const cycle = currentCycle();
+  // Seeding in the last weeks of a quarter would open a cycle that closes
+  // almost at once; roll over to the next quarter and open it today instead.
+  const DAY = 86_400_000;
+  let cycle = currentCycle();
+  let startsAt = cycle.start;
+  if (cycle.daysRemaining < 30) {
+    cycle = currentCycle(new Date(cycle.end.getTime() + DAY));
+    const now = new Date();
+    startsAt = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  }
+  const endsAt = cycle.end;
+  // the seeded reviews were handed in early in the window, never in the future
+  const submittedAt = new Date(Math.min(Date.now(), startsAt.getTime() + 3 * DAY));
+
   const dbCycle = await db.assessmentCycle.upsert({
     where: { key: cycle.id },
-    update: { nameEn: cycle.nameEn, nameTh: cycle.nameTh, startsAt: cycle.start, endsAt: cycle.end },
+    update: { nameEn: cycle.nameEn, nameTh: cycle.nameTh, startsAt, endsAt },
     create: {
       key: cycle.id,
       nameEn: cycle.nameEn,
       nameTh: cycle.nameTh,
-      startsAt: cycle.start,
-      endsAt: cycle.end,
+      startsAt,
+      endsAt,
       status: "OPEN",
     },
   });
@@ -309,10 +335,16 @@ async function seedAssessments() {
     const subject = byCode.get(p.employeeId);
     if (!subject) continue;
 
+    // A supervisor review needs a supervisor in the system. The one person whose
+    // manager sits outside it (the Director, reporting to the CEO) keeps their
+    // self assessment and shows as not yet reviewed, rather than reviewing
+    // themselves — which the database now refuses anyway.
     const blocks: [("SELF" | "SUPERVISOR"), Record<string, number>, string][] = [
       ["SELF", p.selfScores as Record<string, number>, subject.id],
-      ["SUPERVISOR", p.managerScores as Record<string, number>, subject.managerId ?? subject.id],
     ];
+    if (subject.managerId) {
+      blocks.push(["SUPERVISOR", p.managerScores as Record<string, number>, subject.managerId]);
+    }
 
     for (const [mode, scores, reviewerId] of blocks) {
       const assessment = await db.assessment.upsert({
@@ -324,13 +356,13 @@ async function seedAssessments() {
             mode,
           },
         },
-        update: { submittedAt: cycle.start },
+        update: { submittedAt },
         create: {
           cycleId: dbCycle.id,
           subjectId: subject.id,
           reviewerId,
           mode,
-          submittedAt: cycle.start,
+          submittedAt,
         },
       });
       const rows = Object.entries(scores)
@@ -567,21 +599,58 @@ async function seedComms() {
   console.log(`  announcements ${ANNOUNCEMENTS.length}, notification rules ${rules.length}`);
 }
 
-async function seedAdminAccount() {
-  // HROD runs the framework and is deliberately not part of the assessed
-  // headcount, so it is a User with a role and no Employee row.
-  const role = await db.role.findUnique({ where: { key: "admin" }, select: { id: true } });
+async function seedAccounts() {
+  // Seeded staff are treated as already onboarded: an ACTIVE account with a
+  // password, so the system can be used straight away. Accounts an
+  // administrator creates later start PENDING and are activated by the person.
+  const password = process.env.SEED_DEMO_PASSWORD;
+  if (!password || password.length < 10) {
+    throw new Error(
+      "Set SEED_DEMO_PASSWORD (10+ characters) in .env — it becomes the password of every seeded account.",
+    );
+  }
+  const passwordHash = await hashPassword(password);
+  const roles = new Map(
+    (await db.role.findMany({ select: { id: true, key: true } })).map((r) => [r.key, r.id]),
+  );
+
+  const staff = await db.employee.findMany({
+    select: { id: true, email: true, name: true, _count: { select: { reports: true } } },
+  });
+  for (const e of staff) {
+    const roleId = roles.get(e._count.reports > 0 ? "manager" : "employee") ?? null;
+    const user = await db.user.upsert({
+      where: { email: e.email },
+      update: { name: e.name },
+      create: {
+        email: e.email,
+        name: e.name,
+        status: "ACTIVE",
+        roleId,
+        passwordHash,
+        passwordSetAt: new Date(),
+      },
+      select: { id: true },
+    });
+    await db.employee.update({ where: { id: e.id }, data: { userId: user.id } });
+  }
+
+  // HROD runs the framework and is deliberately outside the assessed headcount,
+  // so the administrator is an account with a role and no staff record.
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? "neo.hro@1moby.com").toLowerCase();
   await db.user.upsert({
-    where: { email: "neo@1moby.demo" },
-    update: { status: "ACTIVE", roleId: role?.id ?? null },
+    where: { email: adminEmail },
+    update: { roleId: roles.get("admin") ?? null },
     create: {
-      email: "neo@1moby.demo",
+      email: adminEmail,
       name: "Neo (HROD)",
       status: "ACTIVE",
-      roleId: role?.id ?? null,
+      roleId: roles.get("admin") ?? null,
+      passwordHash,
+      passwordSetAt: new Date(),
     },
   });
-  console.log("  administrator account neo@1moby.demo");
+  console.log(`  accounts ${staff.length} staff + administrator ${adminEmail}`);
 }
 
 async function main() {
@@ -593,7 +662,7 @@ async function main() {
   await seedLearning();
   await seedEngagement();
   await seedComms();
-  await seedAdminAccount();
+  await seedAccounts();
   console.log("done.");
 }
 

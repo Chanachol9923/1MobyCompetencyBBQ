@@ -95,11 +95,6 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "status.onTrack": { en: "On Track", th: "ตามแผน" },
   "status.needsFollowUp": { en: "Needs Follow-Up", th: "ต้องติดตาม" },
 
-  // demo notice
-  "demo.notice": {
-    en: "Demo build — data is mocked and stored in your browser only.",
-    th: "เวอร์ชันสาธิต — ข้อมูลเป็นข้อมูลจำลอง เก็บไว้ในเบราว์เซอร์ของคุณเท่านั้น",
-  },
 
   /* ------------------------------------------------ admin shared vocabulary */
 

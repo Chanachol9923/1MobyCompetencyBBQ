@@ -1,11 +1,31 @@
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import type { Provider } from "next-auth/providers";
 import { db } from "./db";
 import { authConfig } from "./auth.config";
+import { isValidLoginId, normaliseLoginId } from "./login-id";
+import { hashPassword, verifyPassword } from "./password";
+
+/**
+ * Single sign-on for the whole system.
+ *
+ * One company account — name.sur@1moby.com — opens every module: assessment,
+ * IDP, learning, rewards and administration. Accounts are never self-created.
+ * An administrator provisions each one, links it to the staff record and gives
+ * it a role; the person activates it with a one-time link and sets their own
+ * password. Nothing here can create a User.
+ *
+ * When 1Moby's own identity provider is ready, setting AUTH_SSO_* federates the
+ * same accounts through OIDC: the provider vouches for the email, and the
+ * account must still have been provisioned here first.
+ */
 
 /** How long a cached role/permission set may live in the JWT before we re-read it. */
 const CLAIMS_TTL_MS = 5 * 60 * 1000;
+
+/** Five wrong passwords in a row locks the account for fifteen minutes. */
+const MAX_FAILED_LOGINS = 5;
+const LOCK_MS = 15 * 60 * 1000;
 
 declare module "next-auth" {
   interface Session {
@@ -17,7 +37,8 @@ declare module "next-auth" {
       employeeId: string | null;
       employeeName: string | null;
       jobRole: string | null;
-      isDemo: boolean;
+      /** when this session was opened (ms) — older than a password change means stale */
+      authAt: number;
     } & DefaultSession["user"];
   }
 }
@@ -67,144 +88,205 @@ async function loadClaims(userId: string): Promise<Claims> {
   };
 }
 
+/* ----------------------------------------------------------- sign-in errors */
 
-/** A demo persona gets the role their position implies. */
-async function pickRoleForEmployee(employeeId: string): Promise<string> {
-  const reports = await db.employee.count({ where: { managerId: employeeId } });
-  return reports > 0 ? "manager" : "employee";
+/**
+ * The codes the login screen can explain. Wrong id and wrong password share one
+ * code on purpose, so the form cannot be used to find out who has an account.
+ */
+export type SignInCode = "invalid" | "locked" | "suspended" | "not_activated";
+
+class SignInRefused extends CredentialsSignin {
+  constructor(code: SignInCode) {
+    super();
+    this.code = code;
+  }
 }
 
-async function upsertDemoUser(email: string, name: string, roleKey: string) {
-  const role = await db.role.findUnique({ where: { key: roleKey }, select: { id: true } });
-  return db.user.upsert({
-    where: { email },
-    // note: no status here — a suspended account stays suspended, and the
-    // caller has already refused it
-    update: { roleId: role?.id ?? undefined },
-    create: { email, name, status: "ACTIVE", roleId: role?.id ?? null },
-    select: { id: true, email: true, name: true, image: true },
+/**
+ * Checked against when the login id does not exist, so an unknown id costs the
+ * same scrypt time as a known one and response timing gives nothing away.
+ */
+let decoyHash: Promise<string> | null = null;
+function decoy() {
+  decoyHash ??= hashPassword("decoy-password-never-matches-0");
+  return decoyHash;
+}
+
+async function signInWithPassword(loginIdRaw: unknown, passwordRaw: unknown) {
+  const loginId = normaliseLoginId(String(loginIdRaw ?? ""));
+  const password = String(passwordRaw ?? "");
+  if (!loginId || !password || password.length > 128) throw new SignInRefused("invalid");
+
+  const user = isValidLoginId(loginId)
+    ? await db.user.findUnique({
+        where: { email: loginId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          image: true,
+          status: true,
+          passwordHash: true,
+          failedLoginCount: true,
+          lockedUntil: true,
+        },
+      })
+    : null;
+
+  if (!user) {
+    await verifyPassword(password, await decoy());
+    throw new SignInRefused("invalid");
+  }
+
+  // a lock is checked before the password, so guessing during it is useless
+  if (user.lockedUntil && user.lockedUntil > new Date()) {
+    throw new SignInRefused("locked");
+  }
+
+  if (!user.passwordHash) {
+    // provisioned but never activated — say so, it is the likeliest confusion
+    await verifyPassword(password, await decoy());
+    throw new SignInRefused(user.status === "SUSPENDED" ? "invalid" : "not_activated");
+  }
+
+  const ok = await verifyPassword(password, user.passwordHash);
+  if (!ok) {
+    const failures = user.failedLoginCount + 1;
+    const lock = failures >= MAX_FAILED_LOGINS;
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginCount: lock ? 0 : failures,
+        lockedUntil: lock ? new Date(Date.now() + LOCK_MS) : null,
+      },
+    });
+    throw new SignInRefused(lock ? "locked" : "invalid");
+  }
+
+  // only someone who knows the password learns that the account is suspended
+  if (user.status === "SUSPENDED") throw new SignInRefused("suspended");
+  if (user.status !== "ACTIVE") throw new SignInRefused("not_activated");
+
+  await db.user.update({
+    where: { id: user.id },
+    data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
+  return { id: user.id, email: user.email, name: user.name, image: user.image };
 }
 
-const demoLoginEnabled =
-  process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
+/* --------------------------------------------------------------- providers */
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  ...authConfig,
-  adapter: PrismaAdapter(db),
-  providers: [
-    ...authConfig.providers,
-    // Walk-through accounts for demos. Guarded by an env flag so a real
-    // deployment simply does not have this door.
+const demoLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
+
+const providers: Provider[] = [
+  Credentials({
+    id: "company",
+    name: "1Moby account",
+    credentials: {
+      loginId: { label: "Login ID", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    authorize: (credentials) =>
+      signInWithPassword(credentials?.loginId, credentials?.password),
+  }),
+];
+
+// Walk-through switch for demos: signs in as an existing ACTIVE seeded account
+// without its password. Off unless the env flag is set, and even then it can
+// only reach accounts an administrator already provisioned.
+if (demoLoginEnabled) {
+  providers.push(
     Credentials({
       id: "demo",
       name: "Demo account",
       credentials: { account: { label: "Account", type: "text" } },
       async authorize(credentials) {
-        if (!demoLoginEnabled) return null;
-        const key = String(credentials?.account ?? "").trim();
-        if (!key) return null;
-
-        // a demo key is either a staff employee code or the email of a seeded
-        // account that has no staff record, such as the HROD administrator
-        const employee = await db.employee.findFirst({
-          where: { OR: [{ employeeCode: key }, { email: key }] },
-          select: { id: true, name: true, email: true, userId: true, jobRole: { select: { name: true } } },
-        });
-
-        if (employee) {
-          const suspended = await db.user.findUnique({
-            where: { email: employee.email },
-            select: { status: true },
-          });
-          if (suspended?.status === "SUSPENDED") return null;
-
-          const roleKey = await pickRoleForEmployee(employee.id);
-          const user = await upsertDemoUser(employee.email, employee.name, roleKey);
-          if (!employee.userId) {
-            await db.employee.update({
-              where: { id: employee.id },
-              data: { userId: user.id },
-            });
-          }
-          return user;
-        }
-
-        // no staff record: only an already-seeded ACTIVE user may sign in this way
-        const existing = await db.user.findUnique({
-          where: { email: key },
+        const loginId = normaliseLoginId(String(credentials?.account ?? ""));
+        if (!isValidLoginId(loginId)) return null;
+        const user = await db.user.findUnique({
+          where: { email: loginId },
           select: { id: true, email: true, name: true, image: true, status: true },
         });
-        if (!existing || existing.status !== "ACTIVE") return null;
-        return existing;
+        if (!user || user.status !== "ACTIVE") return null;
+        await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+        return { id: user.id, email: user.email, name: user.name, image: user.image };
       },
     }),
-  ],
+  );
+}
+
+// Federation to the company identity provider, when one is configured.
+const ssoEnabled = Boolean(
+  process.env.AUTH_SSO_ISSUER &&
+    process.env.AUTH_SSO_CLIENT_ID &&
+    process.env.AUTH_SSO_CLIENT_SECRET,
+);
+if (ssoEnabled) {
+  providers.push({
+    id: "sso",
+    name: process.env.AUTH_SSO_NAME ?? "1Moby SSO",
+    type: "oidc",
+    issuer: process.env.AUTH_SSO_ISSUER,
+    clientId: process.env.AUTH_SSO_CLIENT_ID,
+    clientSecret: process.env.AUTH_SSO_CLIENT_SECRET,
+  });
+}
+
+/** Resolve an identity-provider login to the provisioned account, or refuse it. */
+async function accountForSso(email: string | null | undefined) {
+  const loginId = normaliseLoginId(email ?? "");
+  if (!isValidLoginId(loginId)) return null;
+  const user = await db.user.findUnique({
+    where: { email: loginId },
+    select: { id: true, status: true },
+  });
+  if (!user || user.status === "SUSPENDED") return null;
+  return user;
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  providers,
+  logger: {
+    error(error) {
+      // a wrong password is an expected outcome, not a server fault
+      if ((error as { type?: string }).type === "CredentialsSignin") return;
+      console.error(error);
+    },
+  },
   callbacks: {
     async signIn({ user, account }) {
-      // A suspended account must not get a session at all. Checking here means
-      // the provider callback refuses it, rather than handing out a token that
-      // the next request has to bounce.
-      if (user.email) {
-        const existing = await db.user.findUnique({
-          where: { email: user.email.toLowerCase() },
-          select: { status: true },
-        });
-        if (existing?.status === "SUSPENDED") return "/login?error=suspended";
-      }
-
-      if (account?.provider !== "google" || !user.email) return true;
-
-      const email = user.email.toLowerCase();
-      const bootstrap = (process.env.BOOTSTRAP_ADMIN_EMAILS ?? "")
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-
-      // Link a Google login to the staff record with the same address, and give
-      // it the role its position implies. Anyone without a matching employee
-      // record stays PENDING until an admin approves them.
-      const employee = await db.employee.findUnique({
-        where: { email },
-        select: { id: true, userId: true, _count: { select: { reports: true } } },
-      });
-
-      const roleKey = bootstrap.includes(email)
-        ? "admin"
-        : employee
-          ? employee._count.reports > 0
-            ? "manager"
-            : "employee"
-          : null;
-
-      if (!roleKey) return true; // PENDING, nothing to link yet
-
-      const role = await db.role.findUnique({
-        where: { key: roleKey },
-        select: { id: true },
-      });
-
-      const dbUser = await db.user.findUnique({
-        where: { email },
-        select: { id: true },
-      });
-      if (!dbUser) return true; // adapter creates it, next sign-in links
-
+      if (account?.provider !== "sso") return true;
+      // the identity provider proves who this is; this system decides whether
+      // they may come in — only an account an administrator provisioned
+      const existing = await accountForSso(user.email);
+      if (!existing) return "/login?error=not_provisioned";
       await db.user.update({
-        where: { id: dbUser.id },
-        data: { status: "ACTIVE", roleId: role?.id ?? undefined },
+        where: { id: existing.id },
+        data: {
+          // the IdP vouching for the address is the activation
+          status: "ACTIVE",
+          failedLoginCount: 0,
+          lockedUntil: null,
+          lastLoginAt: new Date(),
+        },
       });
-      if (employee && !employee.userId) {
-        await db.employee.update({
-          where: { id: employee.id },
-          data: { userId: dbUser.id },
-        });
-      }
       return true;
     },
 
-    async jwt({ token, user, trigger }) {
-      if (user?.id) token.uid = user.id;
+    async jwt({ token, user, account, trigger }) {
+      if (user) {
+        // on the sign-in request: pin the token to our own account id (for OIDC
+        // the provider's subject id is not ours)
+        if (account?.provider === "sso") {
+          const existing = await accountForSso(user.email);
+          if (existing) token.uid = existing.id;
+        } else if (user.id) {
+          token.uid = user.id;
+        }
+        token.authAt = Date.now();
+      }
       const uid = token.uid as string | undefined;
       if (!uid) return token;
 
@@ -230,8 +312,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.employeeId = (token.employeeId as string | null) ?? null;
       session.user.employeeName = (token.employeeName as string | null) ?? null;
       session.user.jobRole = (token.jobRole as string | null) ?? null;
-      session.user.isDemo = Boolean(token.isDemo);
+      session.user.authAt = typeof token.authAt === "number" ? token.authAt : 0;
       return session;
     },
   },
 });
+
+/** Which sign-in doors this deployment has open — read by the login page. */
+export const signInOptions = {
+  demo: demoLoginEnabled,
+  sso: ssoEnabled ? (process.env.AUTH_SSO_NAME ?? "1Moby SSO") : null,
+};
