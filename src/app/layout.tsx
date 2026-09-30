@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { Geologica } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { UiProvider } from "@/lib/ui-state";
 import { Toast } from "@/components/layout/Toast";
 
-const geologica = Geologica({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+// Self-hosted from npm rather than fetched from Google Fonts at build time, so
+// a build never depends on (or breaks with) the Google Fonts CSS format.
+const geologica = localFont({
+  src: "../../node_modules/@fontsource-variable/geologica/files/geologica-latin-wght-normal.woff2",
+  weight: "100 900",
   variable: "--font-geologica",
   display: "swap",
 });
@@ -14,7 +16,7 @@ const geologica = Geologica({
 export const metadata: Metadata = {
   title: "1Moby · Comprehensive Assessment System",
   description:
-    "Demo of the 1Moby competency assessment, IDP and LMS platform. All data is mocked.",
+    "1Moby competency assessment, individual development plans and learning.",
 };
 
 export default function RootLayout({
