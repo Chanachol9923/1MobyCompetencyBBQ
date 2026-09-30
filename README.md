@@ -64,8 +64,10 @@ surname — opens every module. Nobody can sign themselves up:
 3. The person opens it and sets their own password. No administrator ever sees a password; only a
    scrypt hash and a SHA-256 of each link are stored.
 
-After that: five wrong passwords lock the account for 15 minutes (HROD can unlock it); a forgotten
-password is a **reset link** from the same screen; suspending an account or deactivating the staff
+After that: five wrong passwords lock the account for 15 minutes (HROD can unlock it). **Reset
+password** goes to the person's notifications and a banner by default; it waits there until they
+press Start, which only then makes their one-time link. Someone who cannot sign in anywhere gets a
+link HROD sends them instead; suspending an account or deactivating the staff
 record signs the person out everywhere; changing a password retires every other session.
 
 `AUTH_SSO_ISSUER`, `AUTH_SSO_CLIENT_ID` and `AUTH_SSO_CLIENT_SECRET` add a "Continue with 1Moby

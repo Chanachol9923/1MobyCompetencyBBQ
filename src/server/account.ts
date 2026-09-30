@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
+  createOneTimeToken,
   hashPassword,
   hashToken,
   passwordProblems,
@@ -19,6 +20,56 @@ import {
   type PasswordProblem,
 } from "@/lib/password";
 import { assertViewer, NotAuthorised, recordActivity } from "@/server/session";
+
+/** The link made when someone presses Start is short-lived: they use it now. */
+const STARTED_RESET_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Start: spend the pending request and hand back a fresh one-time link for
+ * this person alone. Only a signed-in person with an open request gets one.
+ */
+export async function startPasswordReset(): Promise<
+  { ok: true; path: string } | { ok: false; reason: "none" }
+> {
+  let viewer;
+  try {
+    viewer = await assertViewer();
+  } catch {
+    return { ok: false, reason: "none" };
+  }
+  const now = new Date();
+  const result = await db.$transaction(async (tx) => {
+    const spent = await tx.accessToken.updateMany({
+      where: {
+        userId: viewer.userId,
+        purpose: "RESET",
+        usedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { usedAt: now },
+    });
+    if (spent.count === 0) return null;
+    const { token, tokenHash } = createOneTimeToken();
+    await tx.accessToken.create({
+      data: {
+        userId: viewer.userId,
+        purpose: "RESET",
+        tokenHash,
+        expiresAt: new Date(now.getTime() + STARTED_RESET_TTL_MS),
+        createdById: viewer.userId,
+      },
+    });
+    if (viewer.employeeId) {
+      await tx.notification.updateMany({
+        where: { employeeId: viewer.employeeId, href: "/account/reset", readAt: null },
+        data: { readAt: now },
+      });
+    }
+    return token;
+  });
+  if (!result) return { ok: false, reason: "none" };
+  return { ok: true, path: `/activate/${result}` };
+}
 
 export type LinkState =
   | { state: "valid"; loginId: string; name: string; purpose: "ACTIVATE" | "RESET" }

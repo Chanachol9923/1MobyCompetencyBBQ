@@ -209,6 +209,94 @@ async function issueLink(
   return { path: `/activate/${token}`, expiresAt };
 }
 
+/** How long a reset request waits in someone's notifications. */
+const RESET_REQUEST_TTL_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * Ask someone to set a new password, in the app rather than by a link the
+ * administrator has to pass on. It lands in their notifications and as a
+ * banner, and stays until they press Start — which is the moment the one-time
+ * link is made, for them only. Needs a staff record (notifications belong to
+ * one) and a way in: someone who cannot sign in anywhere needs a link instead.
+ */
+export async function requestPasswordReset(
+  input: z.input<typeof userOnlySchema>,
+): Promise<ActionResult> {
+  return guarded(PERMISSIONS.MANAGE_USERS, async (viewer) => {
+    const parsed = userOnlySchema.safeParse(input);
+    if (!parsed.success) return fail("Unknown account.", "ไม่พบบัญชีผู้ใช้");
+    const user = await db.user.findUnique({
+      where: { id: parsed.data.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        status: true,
+        passwordSetAt: true,
+        employee: { select: { id: true, name: true } },
+      },
+    });
+    if (!user) return fail("That account no longer exists.", "ไม่พบบัญชีผู้ใช้นี้แล้ว");
+    if (user.status !== "ACTIVE" || !user.passwordSetAt) {
+      return fail(
+        "This account has not been activated yet — send it an activation link instead.",
+        "บัญชีนี้ยังไม่ได้เปิดใช้งาน กรุณาส่งลิงก์เปิดใช้งานแทน",
+      );
+    }
+    if (!user.employee) {
+      return fail(
+        "This account has no staff record, so it has no notifications. Use a link instead.",
+        "บัญชีนี้ไม่มีข้อมูลพนักงาน จึงไม่มีการแจ้งเตือน กรุณาใช้ลิงก์แทน",
+      );
+    }
+    const employee = user.employee;
+    const expiresAt = new Date(Date.now() + RESET_REQUEST_TTL_MS);
+
+    await db.$transaction(async (tx) => {
+      // the request itself: an open RESET token nobody holds. Pressing Start
+      // spends it and issues the real link.
+      await tx.accessToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      await tx.accessToken.create({
+        data: {
+          userId: user.id,
+          purpose: "RESET",
+          tokenHash: createOneTimeToken().tokenHash,
+          expiresAt,
+          createdById: viewer.userId,
+        },
+      });
+      await tx.notification.create({
+        data: {
+          employeeId: employee.id,
+          kind: "SYSTEM",
+          titleEn: "Set a new password",
+          titleTh: "ตั้งรหัสผ่านใหม่",
+          bodyEn: `${viewer.name} asked you to set a new password. Open this and press Start.`,
+          bodyTh: `${viewer.name} ขอให้คุณตั้งรหัสผ่านใหม่ เปิดรายการนี้แล้วกดเริ่ม`,
+          href: "/account/reset",
+        },
+      });
+    });
+
+    await recordActivity({
+      viewer,
+      action: "Requested password reset",
+      targetType: "user",
+      targetId: user.id,
+      targetLabel: user.email,
+      detail: "Sent to their notifications",
+    });
+    revalidateAdmin();
+    return done(
+      `Sent to ${employee.name}'s notifications. It waits there until they press Start (valid 72 hours).`,
+      `ส่งไปที่การแจ้งเตือนของ ${employee.name} แล้ว จะค้างอยู่จนกว่าจะกดเริ่ม (ใช้ได้ 72 ชั่วโมง)`,
+    );
+  });
+}
+
 const USER_ROW_SELECT = {
   id: true,
   email: true,

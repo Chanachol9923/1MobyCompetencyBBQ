@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
+  Bell,
   CheckCircle2,
   Clock3,
   Copy,
@@ -63,6 +64,7 @@ import {
   issueAccessLink,
   linkEmployee,
   proposeAccount,
+  requestPasswordReset,
   searchLinkableEmployees,
   setUserRole,
   setUserStatus,
@@ -92,6 +94,7 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<AdminUserRow | null>(null);
+  const [resetting, setResetting] = useState<AdminUserRow | null>(null);
   const [confirm, setConfirm] = useState<
     { kind: "suspend" | "reactivate" | "link"; user: AdminUserRow } | null
   >(null);
@@ -296,11 +299,15 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
                           size="sm"
                           variant={u.status === "PENDING" ? "secondary" : "outline"}
                           disabled={busyId === u.id}
-                          onClick={() => runLink(u.id, () => issueAccessLink({ userId: u.id }))}
+                          onClick={() =>
+                            u.hasPassword
+                              ? setResetting(u)
+                              : runLink(u.id, () => issueAccessLink({ userId: u.id }))
+                          }
                         >
-                          <Mail size={14} />
+                          {u.hasPassword ? <KeyRound size={14} /> : <Mail size={14} />}
                           {u.hasPassword
-                            ? tt("Reset link", "ลิงก์ตั้งรหัสใหม่")
+                            ? tt("Reset password", "รีเซ็ตรหัสผ่าน")
                             : tt("Activation link", "ลิงก์เปิดใช้งาน")}
                         </Button>
                       ) : null}
@@ -444,6 +451,24 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
 
       {issued ? <IssuedLinkModal link={issued} onClose={() => setIssued(null)} /> : null}
 
+      {resetting ? (
+        <ResetModal
+          user={resetting}
+          busy={busyId === resetting.id}
+          onClose={() => setResetting(null)}
+          onNotify={() => {
+            const u = resetting;
+            setResetting(null);
+            run(u.id, () => requestPasswordReset({ userId: u.id }));
+          }}
+          onLink={() => {
+            const u = resetting;
+            setResetting(null);
+            runLink(u.id, () => issueAccessLink({ userId: u.id }));
+          }}
+        />
+      ) : null}
+
       {bulk === "confirm" || bulk === "running" ? (
         <Modal
           open
@@ -526,7 +551,7 @@ function StatusDetail({ row }: { row: AdminUserRow }) {
         )
       : tt("Has not signed in yet", "ยังไม่เคยเข้าสู่ระบบ");
     if (row.openLink && !row.openLink.expired) {
-      text += tt(" · reset link open", " · มีลิงก์ตั้งรหัสใหม่ค้างอยู่");
+      text += tt(" · password reset requested", " · รอตั้งรหัสผ่านใหม่");
     }
   }
   return text ? <span className="mt-1 block text-[11px] text-muted">{text}</span> : null;
@@ -1149,6 +1174,104 @@ function LinkEmployeeModal({
         )}
       </p>
       <EmployeePicker userId={user.id} picked={picked} onPick={(id) => setPicked(id)} />
+    </Modal>
+  );
+}
+
+/* ---------------------------------------------------------- reset password */
+
+/**
+ * Two ways to reset, because they suit different situations. The default goes
+ * to the person's notifications: nothing for the administrator to pass on, and
+ * the link is only made when they press Start. Someone who cannot sign in on
+ * any device never sees a notification, so for them there is a link to send.
+ */
+function ResetModal({
+  user,
+  busy,
+  onClose,
+  onNotify,
+  onLink,
+}: {
+  user: AdminUserRow;
+  busy: boolean;
+  onClose: () => void;
+  onNotify: () => void;
+  onLink: () => void;
+}) {
+  const { t, tt } = useT();
+  const canNotify = user.employeeId !== null && user.status === "ACTIVE";
+  const name = user.name ?? user.email;
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={tt("Reset password", "รีเซ็ตรหัสผ่าน")}
+      subtitle={`${name} · ${user.email}`}
+      width="max-w-lg"
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          {t("action.cancel")}
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <button
+          type="button"
+          disabled={!canNotify || busy}
+          onClick={onNotify}
+          className="flex w-full items-start gap-3 rounded-xl border border-brand/40 bg-brand-tint/40 p-4 text-left transition-colors hover:bg-brand-tint disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand text-white">
+            <Bell size={17} />
+          </span>
+          <span className="min-w-0">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
+              {tt("Send to their notifications", "ส่งไปที่การแจ้งเตือน")}
+              {canNotify ? <Pill tone="brand">{tt("Recommended", "แนะนำ")}</Pill> : null}
+            </span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted">
+              {canNotify
+                ? tt(
+                    `${name} sees it in the bell and as a banner until they press Start, which opens the screen to choose a new password. Nothing for you to pass on.`,
+                    `${name} จะเห็นในการแจ้งเตือนและแถบด้านบนจนกว่าจะกดเริ่ม แล้วตั้งรหัสผ่านใหม่ได้ทันที คุณไม่ต้องส่งอะไรต่อ`,
+                  )
+                : tt(
+                    "Not available: this account has no staff record, so it has no notifications.",
+                    "ใช้ไม่ได้ เพราะบัญชีนี้ไม่มีข้อมูลพนักงาน จึงไม่มีการแจ้งเตือน",
+                  )}
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onLink}
+          className="flex w-full items-start gap-3 rounded-xl border border-line p-4 text-left transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface text-ink">
+            <Link2 size={17} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-ink">
+              {tt("Get a link to send yourself", "รับลิงก์ไปส่งเอง")}
+            </span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted">
+              {tt(
+                "For someone who cannot sign in on any device — they forgot the password everywhere. Send it by company chat or email. Valid 24 hours.",
+                "สำหรับคนที่เข้าสู่ระบบไม่ได้เลยจากทุกอุปกรณ์ เช่น ลืมรหัสผ่าน ส่งให้ทางแชตหรืออีเมลบริษัท ใช้ได้ 24 ชั่วโมง",
+              )}
+            </span>
+          </span>
+        </button>
+      </div>
+      <p className="mt-4 text-[11px] leading-relaxed text-muted">
+        {tt(
+          "Their current password keeps working until they set the new one. Either way, only the newest request works.",
+          "รหัสผ่านเดิมยังใช้ได้จนกว่าจะตั้งรหัสใหม่ ไม่ว่าทางไหน คำขอล่าสุดเท่านั้นที่ใช้ได้",
+        )}
+      </p>
     </Modal>
   );
 }

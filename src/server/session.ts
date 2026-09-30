@@ -28,6 +28,8 @@ export type Viewer = {
   level: string | null;
   /** ids this viewer directly manages */
   reportIds: string[];
+  /** set while an administrator's request to set a new password is open */
+  resetPendingUntil: string | null;
 };
 
 /** Cached per request, so ten components asking costs one query. */
@@ -44,6 +46,12 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
       image: true,
       status: true,
       passwordSetAt: true,
+      accessTokens: {
+        where: { purpose: "RESET", usedAt: null, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { expiresAt: true },
+      },
       role: {
         select: {
           key: true,
@@ -87,6 +95,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     jobRoleName: user.employee?.jobRole.name ?? null,
     level: user.employee?.jobRole.level ?? null,
     reportIds: user.employee?.reports.map((r) => r.id) ?? [],
+    resetPendingUntil: user.accessTokens[0]?.expiresAt.toISOString() ?? null,
   };
 });
 

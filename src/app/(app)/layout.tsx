@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/server/session";
 import { ViewerProvider, type ClientViewer } from "@/lib/viewer";
 import { AppShell } from "@/components/layout/AppShell";
+import { ResetBanner } from "@/components/auth/ResetBanner";
 
 /**
  * Server layout: it resolves who is signed in once per request and hands the
@@ -38,7 +39,10 @@ export default async function AppLayout({
 
   return (
     <ViewerProvider viewer={clientViewer}>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        {viewer.resetPendingUntil ? <ResetBanner /> : null}
+        {children}
+      </AppShell>
     </ViewerProvider>
   );
 }
