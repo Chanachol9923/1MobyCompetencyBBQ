@@ -276,8 +276,8 @@ export function PathJourney({ path }: { path: PathView }) {
                   <Field
                     label={tt("Deliverable note", "บันทึกสิ่งที่ส่งมอบ")}
                     hint={tt(
-                      "A few sentences is enough — it is stored with your submission.",
-                      "เขียนสั้น ๆ ไม่กี่ประโยคก็พอ ระบบจะเก็บไว้พร้อมการส่งงาน",
+                      "A few sentences is enough — it is saved with your submission.",
+                      "เขียนสั้น ๆ ไม่กี่ประโยคก็พอ ระบบจะบันทึกไว้พร้อมการส่งงาน",
                     )}
                   >
                     <Textarea

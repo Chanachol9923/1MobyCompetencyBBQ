@@ -23,6 +23,7 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "nav.employee": { en: "Employee", th: "พนักงาน" },
   "nav.announcement": { en: "Announcement", th: "ประกาศ" },
   "nav.announcements": { en: "Announcements", th: "ประกาศ" },
+  "nav.staffRecords": { en: "Staff records", th: "ข้อมูลพนักงาน" },
   "nav.auditLog": { en: "Activity Log", th: "บันทึกกิจกรรม" },
   "nav.accounts": { en: "Accounts", th: "บัญชีผู้ใช้" },
   "nav.roles": { en: "Roles & permissions", th: "บทบาทและสิทธิ์" },
@@ -154,14 +155,6 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "admin.noMatch": {
     en: "Nothing matches the current filters.",
     th: "ไม่พบข้อมูลที่ตรงกับตัวกรองปัจจุบัน",
-  },
-  "admin.demoOnly": {
-    en: "Demo only — changes stay in this browser and are not persisted to a backend.",
-    th: "เวอร์ชันสาธิต — การเปลี่ยนแปลงถูกเก็บไว้ในเบราว์เซอร์นี้เท่านั้น ไม่ได้บันทึกลงเซิร์ฟเวอร์",
-  },
-  "admin.onlyDemoData": {
-    en: "This only affects the demo data.",
-    th: "มีผลกับข้อมูลสาธิตเท่านั้น",
   },
 
   /* ----------------------------------------------- reward shared vocabulary */

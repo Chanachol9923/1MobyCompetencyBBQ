@@ -10,8 +10,13 @@ import {
   Download,
   Gift,
   Mail,
+  Megaphone,
   Radio,
+  ScrollText,
+  ShieldCheck,
   Trophy,
+  UserCog,
+  Users,
 } from "lucide-react";
 import { Card, CardHeader, Modal, PageHeading, Pill, Progress } from "@/components/ui";
 import { Donut, DonutLegend, type DonutSlice } from "@/components/charts";
@@ -64,6 +69,20 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
 
   const MANAGEMENT_TILES = [
     {
+      href: "/admin/employee",
+      label: t("nav.staffRecords"),
+      hint: tt("People, org chart, career roles", "พนักงาน ผังองค์กร บทบาทสายอาชีพ"),
+      icon: Users,
+      requires: PERMISSIONS.MANAGE_USERS,
+    },
+    {
+      href: "/admin/employee/accounts",
+      label: t("nav.accounts"),
+      hint: tt("Logins, activation links, roles", "บัญชีเข้าใช้ ลิงก์เปิดใช้งาน บทบาท"),
+      icon: UserCog,
+      requires: PERMISSIONS.MANAGE_USERS,
+    },
+    {
       href: "/admin/assessment",
       label: t("nav.assessment"),
       hint: tt("Cycle, weighting, framework", "รอบประเมิน น้ำหนัก กรอบสมรรถนะ"),
@@ -90,6 +109,27 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
       hint: tt("Catalogue and fulfilment", "รายการของรางวัลและการส่งมอบ"),
       icon: Gift,
       requires: PERMISSIONS.MANAGE_REWARDS,
+    },
+    {
+      href: "/announcements",
+      label: t("nav.announcements"),
+      hint: tt("Write, schedule, publish", "เขียน ตั้งเวลา เผยแพร่"),
+      icon: Megaphone,
+      requires: PERMISSIONS.SEND_ANNOUNCEMENTS,
+    },
+    {
+      href: "/admin/roles",
+      label: t("nav.roles"),
+      hint: tt("Who may do what", "ใครทำอะไรได้บ้าง"),
+      icon: ShieldCheck,
+      requires: PERMISSIONS.MANAGE_ROLES,
+    },
+    {
+      href: "/admin/audit",
+      label: t("nav.auditLog"),
+      hint: tt("Every change, who and when", "ทุกการเปลี่ยนแปลง ใครทำ เมื่อไร"),
+      icon: ScrollText,
+      requires: PERMISSIONS.VIEW_AUDIT_LOG,
     },
   ].filter((tile) => can(tile.requires));
 
@@ -160,8 +200,8 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
       <PageHeading
         title={tt("Admin Overview", "ภาพรวมผู้ดูแลระบบ")}
         subtitle={tt(
-          "Cycle progress, organisation shape and every person's derived numbers.",
-          "ความคืบหน้าของรอบประเมิน โครงสร้างองค์กร และตัวเลขที่คำนวณได้ของพนักงานแต่ละคน",
+          "How the assessment cycle is going, and where everyone stands.",
+          "ความคืบหน้าของรอบประเมิน และสถานะของพนักงานทุกคน",
         )}
       />
 
@@ -285,7 +325,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
               "แสดงเฉพาะส่วนที่บทบาทของคุณมีสิทธิ์จัดการเท่านั้น",
             )}
           </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {MANAGEMENT_TILES.map((tile) => {
               const Icon = tile.icon;
               return (
@@ -299,7 +339,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
                     <span className="block text-sm font-bold text-white">
                       {tile.label}
                     </span>
-                    <span className="block truncate text-xs text-white/80">
+                    <span className="block text-xs text-white/80">
                       {tile.hint}
                     </span>
                   </span>
@@ -315,7 +355,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
         <Card className="flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3 p-5">
             <h3 className="text-2xl font-bold text-ink">
-              {tt("All User", "ผู้ใช้งานทั้งหมด")}{" "}
+              {tt("All staff", "พนักงานทั้งหมด")}{" "}
               <span className="text-base font-medium text-muted">
                 ({counts.headcount})
               </span>

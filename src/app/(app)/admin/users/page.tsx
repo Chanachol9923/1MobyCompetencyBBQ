@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Accounts moved into Manage Employee, as a tab next to the staff records. */
+/** Accounts now live under Employee. */
 export default function AdminUsersPage() {
-  redirect("/admin/employee?tab=accounts");
+  redirect("/admin/employee/accounts");
 }

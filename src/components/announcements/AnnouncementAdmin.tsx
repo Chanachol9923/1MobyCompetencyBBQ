@@ -539,8 +539,8 @@ export function AnnouncementAdmin({
         <div className="p-5 pt-0">
           <Note>
             {tt(
-              "These rules are stored in the database and read here. Editing them, and the scheduler that fires them, are not part of this screen yet — an announcement is sent by publishing it above.",
-              "กฎเหล่านี้ถูกเก็บในฐานข้อมูลและแสดงผลที่นี่ ส่วนการแก้ไขกฎและตัวจัดตารางเวลายังไม่อยู่ในหน้านี้ — การส่งประกาศทำได้โดยกดเผยแพร่ด้านบน",
+              "Automatic reminders the system sends on its own. They are set up by the system team; to reach people yourself, publish an announcement above.",
+              "การแจ้งเตือนอัตโนมัติที่ระบบส่งเอง ตั้งค่าโดยทีมดูแลระบบ หากต้องการแจ้งพนักงานเอง ให้เผยแพร่ประกาศด้านบน",
             )}
           </Note>
         </div>
@@ -814,8 +814,8 @@ export function AnnouncementAdmin({
                     "การเผยแพร่จะสร้างการแจ้งเตือนให้ผู้รับทุกคนพร้อมลิงก์ไปยังประกาศ และบันทึกลงบันทึกกิจกรรม",
                   )
                 : tt(
-                    "A scheduled announcement is stored as a draft with its publish time and notifies nobody until someone presses Publish now.",
-                    "ประกาศที่ตั้งเวลาไว้จะถูกเก็บเป็นฉบับร่างพร้อมเวลาเผยแพร่ และจะไม่แจ้งเตือนใครจนกว่าจะกดเผยแพร่ทันที",
+                    "A scheduled announcement stays a draft until its publish time, then goes out and notifies its audience on its own. You can still publish it early.",
+                    "ประกาศที่ตั้งเวลาไว้จะเป็นฉบับร่างจนถึงเวลาเผยแพร่ แล้วจะเผยแพร่และแจ้งเตือนผู้รับเอง หรือกดเผยแพร่ก่อนเวลาก็ได้",
                   )}
             </Note>
           </div>

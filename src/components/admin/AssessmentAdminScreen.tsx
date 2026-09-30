@@ -388,8 +388,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-xl text-xs leading-relaxed text-muted">
               {tt(
-                "Moving one slider redistributes the rest so the four sections always add up to 100%. The server checks that total again before it writes the cycle's four weight columns — a request that does not add up is refused.",
-                "เมื่อเลื่อนแถบหนึ่ง ระบบจะปรับส่วนที่เหลือให้ผลรวมเท่ากับ 100% เสมอ และเซิร์ฟเวอร์จะตรวจผลรวมอีกครั้งก่อนบันทึกลงคอลัมน์น้ำหนักทั้งสี่ของรอบประเมิน หากไม่ครบ 100% จะถูกปฏิเสธ",
+                "Moving one slider adjusts the others, so the four sections always add up to 100%.",
+                "เมื่อเลื่อนแถบหนึ่ง ระบบจะปรับแถบอื่นให้ผลรวมเท่ากับ 100% เสมอ",
               )}
             </p>
             <Button
@@ -556,8 +556,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
         <div className="border-t border-line/70 p-5">
           <Note>
             {tt(
-              "Each cell writes an ExpectedLevel row the moment you confirm it. A green dot means somebody already has a score there this cycle — turning that cell off does not delete their score, it stops it being counted.",
-              "แต่ละช่องจะบันทึกลงตาราง ExpectedLevel ทันทีที่ยืนยัน จุดสีเขียวหมายถึงมีพนักงานได้คะแนนในช่องนั้นแล้วในรอบนี้ การปิดช่องจะไม่ลบคะแนนเดิม เพียงแต่จะไม่ถูกนำมาคำนวณ",
+              "Each cell is saved as soon as you confirm it. A green dot means someone already has a score there this cycle — turning the cell off keeps their score but stops counting it.",
+              "แต่ละช่องจะบันทึกทันทีที่ยืนยัน จุดสีเขียวหมายถึงมีพนักงานได้คะแนนในช่องนั้นแล้วในรอบนี้ การปิดช่องจะไม่ลบคะแนนเดิม เพียงแต่จะไม่ถูกนำมาคำนวณ",
             )}
           </Note>
         </div>
@@ -569,8 +569,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           <CardHeader
             title={tt("Rating scale 1–4", "เกณฑ์การให้คะแนน 1–4")}
             subtitle={tt(
-              "The client's own level wording, read from the competency's own level rows.",
-              "ถ้อยคำระดับคะแนนของลูกค้า อ่านจากข้อมูลระดับของสมรรถนะนั้นโดยตรง",
+              "What each level means for this competency, as written in the framework.",
+              "ความหมายของแต่ละระดับในสมรรถนะนี้ ตามกรอบสมรรถนะขององค์กร",
             )}
             right={
               <Select

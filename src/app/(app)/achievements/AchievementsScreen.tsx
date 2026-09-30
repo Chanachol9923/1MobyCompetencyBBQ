@@ -118,7 +118,7 @@ export function AchievementsScreen({ data }: { data: AchievementsScreenData }) {
         <CardHeader
           title={tt("Leaderboard", "ตารางอันดับ")}
           subtitle={tt(
-            `Top ${Math.min(BOARD_SIZE, board.length)} of ${board.length} employees, by points ledger balance`,
+            `Top ${Math.min(BOARD_SIZE, board.length)} of ${board.length} employees, by points balance`,
             `อันดับ ${Math.min(BOARD_SIZE, board.length)} จากพนักงาน ${board.length} คน จัดตามยอดคะแนนคงเหลือ`,
           )}
           right={

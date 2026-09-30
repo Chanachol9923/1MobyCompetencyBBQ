@@ -586,8 +586,8 @@ export function EmployeesTab({
           {tt("Deactivate", "ปิดใช้งาน")}{" "}
           <span className="font-medium text-ink">{confirm?.name}</span>?{" "}
           {tt(
-            "They drop out of the roster, the leaderboard and the cycle counts. Nothing is deleted — their scores, certificates and points ledger all stay, and reactivating brings them straight back.",
-            "พนักงานจะหายจากรายชื่อ ตารางอันดับ และการนับในรอบประเมิน แต่ไม่มีข้อมูลใดถูกลบ คะแนน ใบรับรอง และบัญชีคะแนนยังอยู่ครบ และเปิดใช้งานใหม่ได้ทันที",
+            "They drop out of the roster, the leaderboard and the cycle counts. Nothing is deleted — their scores, certificates and points all stay, and their login is suspended. Reactivating brings the record straight back.",
+            "พนักงานจะหายจากรายชื่อ ตารางอันดับ และการนับในรอบประเมิน แต่ไม่มีข้อมูลใดถูกลบ คะแนน ใบรับรอง และแต้มสะสมยังอยู่ครบ และบัญชีเข้าสู่ระบบจะถูกระงับ เปิดใช้งานข้อมูลใหม่ได้ทันที",
           )}
         </p>
       </Modal>

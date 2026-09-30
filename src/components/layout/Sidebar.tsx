@@ -89,24 +89,63 @@ export function Sidebar() {
       <nav className="mt-2 flex-1 overflow-y-auto scroll-thin">
         {items.map((item) => {
           const Icon = NAV_ICON[item.href];
+          const inGroup = isActive(item.href);
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              aria-current={isActive(item.href) ? "page" : undefined}
-              className={cn(
-                "block px-4 py-3.5 text-[15px] font-bold text-white transition-colors duration-150",
-                "focus-visible:outline-white focus-visible:-outline-offset-2",
-                drawer && "flex min-h-[52px] items-center gap-3",
-                isActive(item.href) ? "bg-brand-dark" : "hover:bg-white/10",
-              )}
-            >
-              {drawer && Icon ? (
-                <Icon size={18} className="shrink-0 text-white/85" />
+            <div key={item.href}>
+              <Link
+                href={item.href}
+                onClick={() => setOpen(false)}
+                aria-current={inGroup && !item.children ? "page" : undefined}
+                className={cn(
+                  "block px-4 py-3.5 text-[15px] font-bold text-white transition-colors duration-150",
+                  "focus-visible:outline-white focus-visible:-outline-offset-2",
+                  drawer && "flex min-h-[52px] items-center gap-3",
+                  inGroup
+                    ? item.children
+                      ? "bg-brand-dark/60"
+                      : "bg-brand-dark"
+                    : "hover:bg-white/10",
+                )}
+              >
+                {drawer && Icon ? (
+                  <Icon size={18} className="shrink-0 text-white/85" />
+                ) : null}
+                {t(item.labelKey)}
+              </Link>
+              {item.children ? (
+                <ul className={cn("pb-1", inGroup && "bg-brand-dark/60")}>
+                  {item.children.map((child) => {
+                    const current = pathname === child.href;
+                    return (
+                      <li key={child.href}>
+                        <Link
+                          href={child.href}
+                          onClick={() => setOpen(false)}
+                          aria-current={current ? "page" : undefined}
+                          className={cn(
+                            "flex items-center gap-2 py-2 pl-8 pr-4 text-sm text-white/85 transition-colors duration-150",
+                            "focus-visible:outline-white focus-visible:-outline-offset-2",
+                            drawer && "min-h-11 pl-11",
+                            current
+                              ? "bg-brand-dark font-bold text-white"
+                              : "hover:bg-white/10 hover:text-white",
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              current ? "bg-white" : "bg-white/40",
+                            )}
+                          />
+                          {t(child.labelKey)}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
               ) : null}
-              {t(item.labelKey)}
-            </Link>
+            </div>
           );
         })}
       </nav>

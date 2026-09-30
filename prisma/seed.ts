@@ -653,13 +653,94 @@ async function seedAccounts() {
   console.log(`  accounts ${staff.length} staff + administrator ${adminEmail}`);
 }
 
+/**
+ * A starting development plan, the way a manager would write one after the
+ * review: each person's two widest gaps (supervisor score below expected),
+ * raised to the expected level over the quarter, through the course written
+ * for that competency. People who already have goals are left alone, so a
+ * re-seed never duplicates or overwrites a real plan.
+ */
+async function seedDevelopmentPlans() {
+  const cycle = await db.assessmentCycle.findFirst({
+    where: { status: "OPEN" },
+    orderBy: { startsAt: "desc" },
+  });
+  if (!cycle) return;
+
+  const [people, courses] = await Promise.all([
+    db.employee.findMany({
+      where: { active: true, managerId: { not: null }, idpGoals: { none: {} } },
+      select: {
+        id: true,
+        managerId: true,
+        manager: { select: { name: true } },
+        jobRole: {
+          select: { expectedLevels: { select: { competencyId: true, level: true } } },
+        },
+        assessmentsAbout: {
+          where: { cycleId: cycle.id, mode: "SUPERVISOR" },
+          select: { scores: { select: { competencyId: true, score: true } } },
+        },
+      },
+    }),
+    db.course.findMany({
+      where: { competencyId: { not: null } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, competencyId: true },
+    }),
+  ]);
+  const courseFor = new Map<string, string>();
+  for (const c of courses) if (!courseFor.has(c.competencyId!)) courseFor.set(c.competencyId!, c.id);
+
+  const DAY = 86_400_000;
+  const startDate = cycle.startsAt;
+  const dueDate = new Date(startDate.getTime() + 90 * DAY);
+  let written = 0;
+  for (const p of people) {
+    const scores = new Map(
+      p.assessmentsAbout.flatMap((a) => a.scores).map((s) => [s.competencyId, s.score]),
+    );
+    const gaps = p.jobRole.expectedLevels
+      .filter((e) => e.level !== null && scores.has(e.competencyId))
+      .map((e) => ({ competencyId: e.competencyId, from: scores.get(e.competencyId)!, to: e.level! }))
+      .filter((g) => g.from < g.to)
+      .sort((a, b) => a.from - a.to - (b.from - b.to))
+      .slice(0, 2);
+    for (const g of gaps) {
+      const courseId = courseFor.get(g.competencyId) ?? null;
+      await db.idpGoal.create({
+        data: {
+          employeeId: p.id,
+          competencyId: g.competencyId,
+          courseId,
+          fromLevel: g.from,
+          toLevel: g.to,
+          activity: courseId ? "ONLINE_COURSE" : "COACHING",
+          startDate,
+          dueDate,
+          remark: `Assigned by ${p.manager?.name ?? "your manager"} — one of the widest gaps from this cycle's review`,
+          createdById: p.managerId,
+        },
+      });
+      written++;
+    }
+  }
+  console.log(`  development goals ${written}`);
+}
+
 async function main() {
+  // SEED_ONLY=plans adds starting development plans to an existing database
+  if (process.env.SEED_ONLY === "plans") {
+    await seedDevelopmentPlans();
+    return;
+  }
   console.log("seeding 1Moby…");
   await seedRbac();
   await seedFramework();
   await seedOrg();
   await seedAssessments();
   await seedLearning();
+  await seedDevelopmentPlans();
   await seedEngagement();
   await seedComms();
   await seedAccounts();

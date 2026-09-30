@@ -14,15 +14,15 @@ export default function NotFound() {
         </h1>
         <p className="mt-1 text-sm text-muted">
           {tt(
-            "This screen is not part of the demo.",
-            "หน้านี้ไม่ได้อยู่ในเวอร์ชันสาธิต",
+            "The page may have moved, or the link is mistyped.",
+            "หน้านี้อาจถูกย้าย หรือพิมพ์ลิงก์ผิด",
           )}
         </p>
         <Link
-          href="/login"
+          href="/"
           className="mt-6 inline-flex h-10 items-center rounded-lg bg-brand px-5 text-sm font-medium text-white transition-colors hover:bg-brand-dark"
         >
-          {tt("Back to login", "กลับไปหน้าเข้าสู่ระบบ")}
+          {tt("Go to home", "ไปหน้าแรก")}
         </Link>
       </div>
     </main>

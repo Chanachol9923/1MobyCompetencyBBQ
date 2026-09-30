@@ -131,8 +131,8 @@ export function AuditScreen({
       <PageHeading
         title={t("nav.auditLog")}
         subtitle={tt(
-          "Every state-changing action on the server, newest first.",
-          "ทุกการกระทำที่เปลี่ยนแปลงข้อมูลบนเซิร์ฟเวอร์ เรียงจากใหม่ไปเก่า",
+          "Every change made in the system — who, what and when — newest first.",
+          "ทุกการเปลี่ยนแปลงในระบบ ใครทำ ทำอะไร เมื่อไร เรียงจากใหม่ไปเก่า",
         )}
         right={
           <Button variant="outline" onClick={download} disabled={exporting || !data.total}>
@@ -291,8 +291,8 @@ export function AuditScreen({
                       hint={
                         data.totalUnfiltered === 0
                           ? tt(
-                              "Every server action writes a row here as soon as it succeeds.",
-                              "ทุกการกระทำบนเซิร์ฟเวอร์จะบันทึกลงที่นี่ทันทีที่ทำสำเร็จ",
+                              "Changes appear here as soon as someone makes them.",
+                              "การเปลี่ยนแปลงจะปรากฏที่นี่ทันทีที่มีคนดำเนินการ",
                             )
                           : tt(
                               "Clear a filter or widen the date range.",
@@ -340,8 +340,8 @@ export function AuditScreen({
         <div className="border-t border-line/70 p-5">
           <Note>
             {tt(
-              "ActivityLog is append-only: rows are inserted and read, never updated or deleted, so the trail cannot be quietly rewritten. Filtering and paging run in SQL, and the export carries up to 5,000 matching rows.",
-              "ตาราง ActivityLog เป็นแบบเพิ่มอย่างเดียว บันทึกและอ่านได้เท่านั้น ไม่มีการแก้ไขหรือลบ ร่องรอยจึงถูกแก้ย้อนหลังไม่ได้ การกรองและแบ่งหน้าทำงานที่ฐานข้อมูล และการส่งออกรองรับสูงสุด 5,000 รายการ",
+              "Entries can never be edited or deleted, so the history cannot be rewritten. The export includes up to 5,000 entries matching the filters.",
+              "รายการในบันทึกแก้ไขหรือลบไม่ได้ ประวัติจึงถูกแก้ย้อนหลังไม่ได้ การส่งออกรองรับสูงสุด 5,000 รายการตามตัวกรอง",
             )}
           </Note>
         </div>

@@ -67,6 +67,7 @@ const CONTENT_PATHS = [
   "/admin/reward",
   "/admin/achievements",
   "/admin/employee",
+  "/admin/employee/accounts",
   "/admin/lms",
   "/admin/assessment",
   "/reward",

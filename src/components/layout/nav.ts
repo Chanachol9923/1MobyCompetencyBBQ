@@ -8,6 +8,8 @@ export type NavItem = {
   requires?: PermissionKey;
   /** shown only when the viewer is linked to a staff record */
   requiresEmployee?: boolean;
+  /** sub-pages listed under this item in the sidebar */
+  children?: { href: string; labelKey: string }[];
 };
 
 /**
@@ -83,7 +85,16 @@ const ALL_ITEMS: NavItem[] = [
 const ADMIN_ITEMS: NavItem[] = [
   { href: "/admin", label: "Dashboard", labelKey: "nav.dashboard", requires: PERMISSIONS.MANAGE_USERS },
   { href: "/admin/lms", label: "LMS", labelKey: "nav.lms", requires: PERMISSIONS.MANAGE_LMS },
-  { href: "/admin/employee", label: "Employee", labelKey: "nav.employee", requires: PERMISSIONS.MANAGE_USERS },
+  {
+    href: "/admin/employee",
+    label: "Employee",
+    labelKey: "nav.employee",
+    requires: PERMISSIONS.MANAGE_USERS,
+    children: [
+      { href: "/admin/employee", labelKey: "nav.staffRecords" },
+      { href: "/admin/employee/accounts", labelKey: "nav.accounts" },
+    ],
+  },
   { href: "/admin/roles", label: "Roles", labelKey: "nav.roles", requires: PERMISSIONS.MANAGE_ROLES },
   { href: "/admin/assessment", label: "Assessment", labelKey: "nav.assessment", requires: PERMISSIONS.MANAGE_CYCLE },
   { href: "/admin/achievements", label: "Achievements", labelKey: "nav.achievements", requires: PERMISSIONS.MANAGE_REWARDS },

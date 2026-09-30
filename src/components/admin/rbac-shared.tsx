@@ -84,8 +84,8 @@ export function PropagationNote({ className }: { className?: string }) {
       <Clock3 size={14} className="mt-0.5 shrink-0 text-brand" />
       <span>
         {tt(
-          "Saved immediately. People who are already signed in pick the change up within five minutes — that is how long a session caches its permission claims — or straight away the next time they sign in.",
-          "บันทึกทันที ผู้ที่กำลังเข้าสู่ระบบอยู่จะได้รับผลภายใน 5 นาที (ตามอายุของสิทธิ์ที่แคชไว้ในเซสชัน) หรือทันทีเมื่อเข้าสู่ระบบครั้งถัดไป",
+          "Saved immediately. Access that was removed is blocked at once; menus of people already signed in update within five minutes, or on their next sign-in.",
+          "บันทึกทันที สิทธิ์ที่ถูกถอนจะถูกปิดกั้นทันที ส่วนเมนูของผู้ที่เข้าสู่ระบบอยู่จะอัปเดตภายใน 5 นาที หรือเมื่อเข้าสู่ระบบครั้งถัดไป",
         )}
       </span>
     </p>

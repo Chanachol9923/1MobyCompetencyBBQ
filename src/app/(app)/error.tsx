@@ -31,7 +31,7 @@ export default function AppError({
         </h1>
         <p className="mt-1 text-sm text-muted">
           {tt(
-            "The rest of the demo is still fine. Try again, or go back to the dashboard.",
+            "The rest of the system is still fine. Try again, or go back to your home page.",
             "ส่วนอื่นของระบบยังใช้งานได้ตามปกติ ลองใหม่อีกครั้ง หรือกลับไปหน้าแดชบอร์ด",
           )}
         </p>
@@ -51,10 +51,10 @@ export default function AppError({
           </button>
           <button
             type="button"
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/")}
             className="inline-flex h-11 items-center rounded-lg border border-line px-5 text-sm font-medium text-ink transition-colors hover:bg-surface"
           >
-            {tt("Back to dashboard", "กลับไปแดชบอร์ด")}
+            {tt("Back to home", "กลับหน้าแรก")}
           </button>
         </div>
       </div>

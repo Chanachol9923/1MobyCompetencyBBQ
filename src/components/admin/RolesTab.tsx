@@ -212,8 +212,8 @@ export function MatrixLegend({ className }: { className?: string }) {
       <span className="inline-flex items-center gap-1 text-xs text-muted">
         <Lock size={12} />
         {tt(
-          "a locked cell is one your own role needs to stay on this screen — the server refuses it either way",
-          "ช่องที่ล็อกไว้คือสิทธิ์ที่บทบาทของคุณต้องใช้เข้าถึงหน้านี้ ซึ่งเซิร์ฟเวอร์จะปฏิเสธอยู่แล้วหากถอดออก",
+          "locked switches are ones your own role needs to keep managing this screen",
+          "สวิตช์ที่ล็อกไว้คือสิทธิ์ที่บทบาทของคุณต้องใช้เพื่อจัดการหน้านี้ต่อ",
         )}
       </span>
     </div>

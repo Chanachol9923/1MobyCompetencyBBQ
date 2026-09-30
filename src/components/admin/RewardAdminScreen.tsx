@@ -725,8 +725,8 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
         {cancelTarget ? (
           <p className="text-sm leading-relaxed text-muted">
             {tt(
-              `${cancelTarget.employeeName} gets ${formatNumber(cancelTarget.points)} points back on their ledger and "${cancelTarget.rewardNameEn}" returns to stock. Both happen together or not at all.`,
-              `${cancelTarget.employeeName} จะได้รับ ${formatNumber(cancelTarget.points)} คะแนนคืนเข้าบัญชีคะแนน และ "${cancelTarget.rewardNameTh ?? cancelTarget.rewardNameEn}" จะกลับเข้าสต๊อก ทั้งสองอย่างจะเกิดขึ้นพร้อมกันเท่านั้น`,
+              `${cancelTarget.employeeName} gets ${formatNumber(cancelTarget.points)} points back and "${cancelTarget.rewardNameEn}" returns to stock.`,
+              `${cancelTarget.employeeName} จะได้รับ ${formatNumber(cancelTarget.points)} คะแนนคืน และ "${cancelTarget.rewardNameTh ?? cancelTarget.rewardNameEn}" จะกลับเข้าสต๊อก`,
             )}
           </p>
         ) : null}

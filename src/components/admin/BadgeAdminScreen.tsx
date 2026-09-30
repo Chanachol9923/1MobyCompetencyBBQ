@@ -468,8 +468,8 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
           <Field
             label={t("label.points")}
             hint={tt(
-              "Awarded on the ledger when the badge is granted.",
-              "จะบันทึกลงบัญชีคะแนนเมื่อมีการมอบเหรียญ",
+              "Added to the person's points when they receive the badge.",
+              "จะเพิ่มเข้าคะแนนของพนักงานเมื่อได้รับเหรียญ",
             )}
           >
             <Input

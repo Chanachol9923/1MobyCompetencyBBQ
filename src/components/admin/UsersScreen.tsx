@@ -83,14 +83,7 @@ type StatusFilter = "all" | "PENDING" | "ACTIVE" | "SUSPENDED";
  * then hands the person a one-time link to set their own password. Every
  * button below is a guarded server action; the screen only decides what to offer.
  */
-export function UsersScreen({
-  data,
-  embedded = false,
-}: {
-  data: UsersScreenData;
-  /** inside Manage Employee, which supplies the page heading and tabs */
-  embedded?: boolean;
-}) {
+export function UsersScreen({ data }: { data: UsersScreenData }) {
   const { t, tt } = useT();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [issued, setIssued] = useState<IssuedLink | null>(null);
@@ -164,15 +157,8 @@ export function UsersScreen({
   ];
 
   return (
-    <div className={embedded ? undefined : "mx-auto max-w-[1200px] p-6 lg:p-10"}>
-      {embedded ? (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-2xl text-sm text-muted">{intro}</p>
-          {createButton}
-        </div>
-      ) : (
-        <PageHeading title={tt("Accounts", "บัญชีผู้ใช้")} subtitle={intro} right={createButton} />
-      )}
+    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
+      <PageHeading title={tt("Accounts", "บัญชีผู้ใช้")} subtitle={intro} right={createButton} />
 
       <ResultBanner result={result} onDismiss={() => setResult(null)} />
 
@@ -388,7 +374,7 @@ export function UsersScreen({
           <div className="flex flex-wrap items-center gap-2">
             <Pill tone="brand">
               <ShieldCheck size={13} className="mr-1" />
-              {tt("Enforced on the server", "บังคับใช้ที่ฝั่งเซิร์ฟเวอร์")}
+              {tt("Account safety", "ความปลอดภัยของบัญชี")}
             </Pill>
             <span className="text-xs text-muted">
               {tt(
@@ -604,8 +590,8 @@ function EmployeePicker({
           <EmptyState
             title={tt("Everyone matching already has an account", "ทุกคนที่ตรงกับคำค้นหามีบัญชีแล้ว")}
             hint={tt(
-              "Add the person on the Employees tab first, or widen the search.",
-              "เพิ่มพนักงานที่แท็บพนักงานก่อน หรือลองค้นหาให้กว้างขึ้น",
+              "Add the person under Employee → Staff records first, or widen the search.",
+              "เพิ่มพนักงานที่ Employee → ข้อมูลพนักงาน ก่อน หรือลองค้นหาให้กว้างขึ้น",
             )}
           />
         ) : (
@@ -910,8 +896,8 @@ function IssuedLinkModal({ link, onClose }: { link: IssuedLink; onClose: () => v
       </pre>
       <p className="mt-3 text-[11px] text-muted">
         {tt(
-          "Only a fingerprint of the link is stored, so it cannot be shown again. If it is lost, issue a new one — the old one stops working.",
-          "ระบบเก็บเฉพาะลายนิ้วมือของลิงก์ จึงแสดงซ้ำไม่ได้ หากลิงก์หาย ให้ออกลิงก์ใหม่ ลิงก์เดิมจะใช้ไม่ได้ทันที",
+          "For security the link is shown only once. If it gets lost, issue a new one — the old one stops working.",
+          "เพื่อความปลอดภัย ลิงก์จะแสดงเพียงครั้งเดียว หากลิงก์หาย ให้ออกลิงก์ใหม่ ลิงก์เดิมจะใช้ไม่ได้ทันที",
         )}
       </p>
     </Modal>

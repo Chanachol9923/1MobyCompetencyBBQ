@@ -198,7 +198,7 @@ docs/                    design brief and the phase briefs
 
 ## Known limits
 
-- Scheduled announcements do not publish themselves; someone presses **Publish now**.
+- Scheduled announcements publish the next time anyone opens the system after their time, not by a background job.
 - `channel` records that something should also be emailed, but no mailer is wired.
 - Exports are CSV rather than `.xlsx`; certificates render in the browser, not as PDFs.
 - Activation and reset links are handed over by the administrator; no mailer sends them.

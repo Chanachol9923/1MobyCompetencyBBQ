@@ -54,7 +54,12 @@ import type {
 
 /* ------------------------------------------------------------------ plumbing */
 
-const ADMIN_PATHS = ["/admin/employee", "/admin/roles", "/admin/audit"];
+const ADMIN_PATHS = [
+  "/admin/employee",
+  "/admin/employee/accounts",
+  "/admin/roles",
+  "/admin/audit",
+];
 
 function revalidateAdmin() {
   for (const p of ADMIN_PATHS) revalidatePath(p);

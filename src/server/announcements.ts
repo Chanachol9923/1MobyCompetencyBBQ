@@ -168,6 +168,7 @@ export async function listMyAnnouncements(input: {
   q?: string;
 }): Promise<AnnouncementFeed> {
   const viewer = await assertViewer();
+  await releaseDueAnnouncements();
   const scope = await scopeFor(viewer);
   const parsed = feedInput.safeParse(input ?? {});
   const { filter, q } = parsed.success ? parsed.data : { filter: "all" as const, q: "" };
@@ -319,6 +320,7 @@ export async function markAnnouncementRead(id: string): Promise<ActionResult> {
 
 export async function listMyNotifications(): Promise<NotificationFeed> {
   const viewer = await assertViewer();
+  await releaseDueAnnouncements();
   if (!viewer.employeeId) return { items: [], unreadCount: 0 };
 
   const [rows, unreadCount] = await Promise.all([
@@ -493,6 +495,46 @@ async function fanOut(a: Publishable): Promise<number> {
   return ids.length;
 }
 
+/**
+ * Scheduled announcements go out on their own. There is no background job:
+ * whenever someone opens the feed, the bell or the manage screen, anything
+ * whose publish time has passed is published and its notifications sent. The
+ * status flip is conditional, so two requests arriving together cannot both
+ * win and notify everyone twice.
+ */
+async function releaseDueAnnouncements(): Promise<void> {
+  const due = await db.announcement.findMany({
+    where: { status: "DRAFT", publishAt: { not: null, lte: new Date() } },
+    select: {
+      id: true,
+      publishAt: true,
+      titleEn: true,
+      titleTh: true,
+      bodyEn: true,
+      bodyTh: true,
+      audience: true,
+      audienceRef: true,
+      channel: true,
+    },
+  });
+  for (const row of due) {
+    const claimed = await db.announcement.updateMany({
+      where: { id: row.id, status: "DRAFT", publishAt: row.publishAt },
+      data: { status: "PUBLISHED", publishedAt: row.publishAt, publishAt: null },
+    });
+    if (claimed.count !== 1) continue;
+    const notified = await fanOut(row);
+    await recordActivity({
+      viewer: null,
+      action: "Published announcement",
+      targetType: "announcement",
+      targetId: row.id,
+      targetLabel: row.titleEn,
+      detail: `scheduled · ${row.audience} · ${row.channel} · notified ${notified}`,
+    });
+  }
+}
+
 function revalidateAnnouncements() {
   revalidatePath("/announcements");
   // the bell lives in the shell
@@ -510,6 +552,7 @@ function scheduleOf(draft: Draft): { publishAt: Date | null; publish: boolean } 
 
 export async function listAnnouncementsForAdmin(): Promise<AdminAnnouncementRow[]> {
   await assertPermission(PERMISSIONS.SEND_ANNOUNCEMENTS);
+  await releaseDueAnnouncements();
   const rows = await db.announcement.findMany({
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
     select: {

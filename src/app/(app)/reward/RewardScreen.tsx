@@ -111,8 +111,8 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
         <p className="mt-1 text-4xl font-bold sm:text-5xl">{formatNumber(balance)}</p>
         <p className="mt-2 text-xs text-white/75">
           {tt(
-            "Summed from every entry in your points ledger — never a stored total.",
-            "คำนวณจากทุกรายการในบัญชีคะแนนของคุณ ไม่ใช่ยอดที่เก็บไว้ล่วงหน้า",
+            "Earn points by finishing courses, assessments and your development plan, then spend them below.",
+            "สะสมคะแนนจากการเรียนจบหลักสูตร การทำแบบประเมิน และแผนพัฒนา แล้วนำมาแลกของรางวัลด้านล่าง",
           )}
         </p>
       </div>
@@ -123,13 +123,13 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
           icon={<Star size={20} />}
           label={tt("Total Point", "คะแนนสะสมทั้งหมด")}
           value={formatNumber(totalEarned)}
-          hint={tt("Balance + spent", "คงเหลือ + ที่ใช้ไป")}
+          hint={tt("Everything you have earned", "คะแนนทั้งหมดที่เคยได้รับ")}
         />
         <StatTile
           icon={<ShoppingCart size={20} />}
           label={tt("Points Spent", "คะแนนที่ใช้ไป")}
           value={formatNumber(spent)}
-          hint={tt("Sum of your redemptions", "ผลรวมของรายการที่แลก")}
+          hint={tt("Used on rewards", "ใช้แลกของรางวัลไปแล้ว")}
         />
         <StatTile
           icon={<Gift size={20} />}
@@ -329,8 +329,8 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
         onClose={() => setPending(null)}
         title={tt("Confirm redemption", "ยืนยันการแลกของรางวัล")}
         subtitle={tt(
-          "The points come out of your ledger the moment this succeeds.",
-          "คะแนนจะถูกหักจากบัญชีคะแนนของคุณทันทีที่ทำรายการสำเร็จ",
+          "The points are deducted as soon as you confirm. HROD will arrange delivery.",
+          "คะแนนจะถูกหักทันทีที่ยืนยัน และฝ่าย HROD จะดำเนินการส่งของรางวัลให้",
         )}
         footer={
           <>

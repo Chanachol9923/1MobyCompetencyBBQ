@@ -1,32 +1,19 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { PERMISSIONS } from "@/lib/permissions";
 import { requirePermission } from "@/server/session";
 import { getEmployeeAdminData } from "@/server/admin-content";
-import { getUsersScreenData } from "@/server/admin-users";
 import {
   EmployeeAdminScreen,
   type EmployeeTabKey,
 } from "@/components/admin/EmployeeAdminScreen";
 
-export const metadata: Metadata = { title: "Manage Employee" };
+export const metadata: Metadata = { title: "Staff records" };
 
 export const dynamic = "force-dynamic";
 
-const TABS: EmployeeTabKey[] = [
-  "employees",
-  "accounts",
-  "position",
-  "role",
-  "department",
-  "division",
-  "permissions",
-];
+const TABS: EmployeeTabKey[] = ["employees", "position", "role", "department", "division"];
 
-/**
- * Staff records and their login accounts on one screen: both need
- * `manage_users`, and creating a person is usually followed by creating their
- * account. Both reads run together; switching tab costs no round trip.
- */
 export default async function ManageEmployeePage({
   searchParams,
 }: {
@@ -34,7 +21,9 @@ export default async function ManageEmployeePage({
 }) {
   await requirePermission(PERMISSIONS.MANAGE_USERS);
   const { tab } = await searchParams;
-  const [data, accounts] = await Promise.all([getEmployeeAdminData(), getUsersScreenData()]);
+  // accounts were a tab here for a while; keep those links working
+  if (tab === "accounts") redirect("/admin/employee/accounts");
+  const data = await getEmployeeAdminData();
   const initialTab = TABS.includes(tab as EmployeeTabKey) ? (tab as EmployeeTabKey) : "employees";
-  return <EmployeeAdminScreen data={data} accounts={accounts} initialTab={initialTab} />;
+  return <EmployeeAdminScreen data={data} initialTab={initialTab} />;
 }

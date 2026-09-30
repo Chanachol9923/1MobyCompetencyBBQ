@@ -45,8 +45,8 @@ export function RolesScreen({ data }: { data: RolesScreenData }) {
       <PageHeading
         title={tt("Roles & permissions", "บทบาทและสิทธิ์การใช้งาน")}
         subtitle={tt(
-          "Roles are data, not code. What you set here is what the server enforces on every request.",
-          "บทบาทเป็นข้อมูลในฐานข้อมูล ไม่ใช่โค้ด สิ่งที่กำหนดที่นี่คือสิ่งที่เซิร์ฟเวอร์บังคับใช้ในทุกคำขอ",
+          "Decide what each role can see and do. Changes apply to everyone who holds the role.",
+          "กำหนดว่าแต่ละบทบาทเห็นและทำอะไรได้บ้าง การเปลี่ยนแปลงมีผลกับทุกคนที่มีบทบาทนั้น",
         )}
         right={
           <Button onClick={() => setCreating(true)}>
@@ -137,8 +137,8 @@ export function RolesScreen({ data }: { data: RolesScreenData }) {
             </span>
           }
           subtitle={tt(
-            "Each switch is a row in the database. Toggling one saves at once — there is no Save button to forget.",
-            "สวิตช์แต่ละตัวคือข้อมูลหนึ่งแถวในฐานข้อมูล การสลับจะบันทึกทันที ไม่ต้องกดปุ่มบันทึก",
+            "Each switch saves as soon as you flip it — there is no Save button.",
+            "สวิตช์แต่ละตัวบันทึกทันทีที่สลับ ไม่ต้องกดปุ่มบันทึก",
           )}
         />
         <RolesTab
