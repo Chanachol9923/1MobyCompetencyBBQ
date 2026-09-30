@@ -92,9 +92,8 @@ export function CareerPathCard({ jobRoles }: { jobRoles: JobRoleRow[] }) {
       </TableWrap>
       <div className="p-5 pt-4">
         <Note>
-          {tt(
-            "A promotion moves the employee up one rung, which switches the expected-level column applied to their competency assessment.",
-            "การเลื่อนระดับจะทำให้พนักงานขยับขึ้นหนึ่งขั้น และเปลี่ยนคอลัมน์ระดับที่คาดหวังที่ใช้ประเมินสมรรถนะของเขา",
+          {tt("A promotion moves the employee up one step, which changes the levels they are expected to reach.",
+            "การเลื่อนระดับจะทำให้พนักงานขยับขึ้นหนึ่งขั้น และเปลี่ยนระดับสมรรถนะที่คาดหวังจากเขา",
           )}
         </Note>
       </div>

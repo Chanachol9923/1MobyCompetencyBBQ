@@ -159,13 +159,13 @@ export function OrgTab({
           </Button>
           <Button size="sm" onClick={openAdd}>
             <Plus size={15} />
-            {tt(`Create New ${noun.en}`, `สร้าง${noun.th}ใหม่`)}
+            {tt(`New ${noun.en.toLowerCase()}`, `${noun.th}ใหม่`)}
           </Button>
         </div>
       </div>
 
       <TableWrap>
-        <table className="w-full min-w-[720px] border-collapse">
+        <table className="w-full min-w-[720px] xl:min-w-0 border-collapse">
           <thead>
             <tr className="border-y border-line/70 bg-surface/60">
               <Th>{noun.label}</Th>
@@ -225,7 +225,7 @@ export function OrgTab({
         title={
           editing
             ? tt(`Edit ${noun.en}`, `แก้ไข${noun.th}`)
-            : tt(`Add New ${noun.en}`, `เพิ่ม${noun.th}ใหม่`)
+            : tt(`Add ${noun.en.toLowerCase()}`, `เพิ่ม${noun.th}`)
         }
         footer={
           <>

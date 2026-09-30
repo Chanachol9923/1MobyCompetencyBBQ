@@ -225,7 +225,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
-        title={tt("Rewards Management", "จัดการของรางวัล")}
+        title={tt("Manage rewards", "จัดการของรางวัล")}
         subtitle={tt(
           "The catalogue employees redeem against, and the queue of what they have claimed.",
           "รายการของรางวัลที่พนักงานใช้คะแนนแลก และคิวรายการที่รอส่งมอบ",
@@ -237,7 +237,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <CountTile
           value={counts.total}
-          label={tt("Total Rewards", "ของรางวัลทั้งหมด")}
+          label={tt("Total rewards", "ของรางวัลทั้งหมด")}
           icon={<Gift size={20} />}
         />
         <CountTile
@@ -293,18 +293,18 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
               <SearchInput
                 value={query}
                 onChange={setQuery}
-                placeholder={tt("Search Rewards", "ค้นหาของรางวัล")}
+                placeholder={tt("Search rewards", "ค้นหาของรางวัล")}
                 className="w-full sm:w-56"
               />
               <Button size="sm" onClick={openAdd}>
                 <Plus size={15} />
-                {tt("Add New Reward", "เพิ่มของรางวัล")}
+                {tt("Add reward", "เพิ่มของรางวัล")}
               </Button>
             </div>
           </div>
 
           <TableWrap>
-            <table className="w-full min-w-[880px] border-collapse">
+            <table className="w-full min-w-[880px] xl:min-w-0 border-collapse">
               <thead>
                 <tr className="border-y border-line/70 bg-surface/60">
                   <Th>{tt("Reward", "ของรางวัล")}</Th>
@@ -456,7 +456,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
             }
           />
           <TableWrap>
-            <table className="w-full min-w-[860px] border-collapse">
+            <table className="w-full min-w-[860px] xl:min-w-0 border-collapse">
               <thead>
                 <tr className="border-y border-line/70 bg-surface/60">
                   <Th>{t("label.employee")}</Th>
@@ -519,7 +519,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
                               }
                             >
                               <Check size={13} className="text-success" />
-                              {tt("Mark delivered", "บันทึกว่าส่งมอบ")}
+                              {tt("Mark delivered", "ทำเครื่องหมายว่าส่งแล้ว")}
                             </Button>
                             <IconAction
                               tone="danger"
@@ -563,8 +563,8 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
         onClose={() => setOpen(false)}
         title={
           editing
-            ? tt("Edit Reward", "แก้ไขของรางวัล")
-            : tt("Add New Reward", "เพิ่มของรางวัล")
+            ? tt("Edit reward", "แก้ไขของรางวัล")
+            : tt("Add reward", "เพิ่มของรางวัล")
         }
         subtitle={tt(
           "Both names are shown to staff — Thai first for a Thai reader.",
@@ -593,7 +593,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
           <Field label={`${tt("Reward title (English)", "ชื่อของรางวัล (อังกฤษ)")} *`}>
             <Input
               value={draft.nameEn}
-              placeholder={tt("Enter Reward Title", "กรอกชื่อของรางวัล")}
+              placeholder={tt("Reward name", "ชื่อของรางวัล")}
               onChange={(e) => set("nameEn", e.target.value)}
             />
           </Field>

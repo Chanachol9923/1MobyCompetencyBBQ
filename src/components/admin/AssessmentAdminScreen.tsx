@@ -232,7 +232,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
-        title={tt("Manage Assessment", "จัดการการประเมิน")}
+        title={tt("Manage assessments", "จัดการการประเมิน")}
         subtitle={tt(
           "The cycle, how the final score is weighted, and the framework itself.",
           "รอบการประเมิน การถ่วงน้ำหนักคะแนนสุดท้าย และกรอบสมรรถนะ",
@@ -241,7 +241,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           cycle ? (
             <Pill tone={cycle.status === "OPEN" ? "brand" : "neutral"}>
               {cycle.status === "OPEN"
-                ? tt("On Going", "กำลังดำเนินการ")
+                ? tt("In progress", "กำลังดำเนินการ")
                 : cycle.status}
             </Pill>
           ) : null
@@ -657,7 +657,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           </div>
         </div>
         <TableWrap>
-          <table className="w-full min-w-[900px] border-collapse">
+          <table className="w-full min-w-[900px] xl:min-w-0 border-collapse">
             <thead>
               <tr className="border-y border-line/70 bg-surface/60">
                 <Th>{t("label.employee")}</Th>

@@ -23,11 +23,16 @@ export type Lang = "en" | "th";
 
 const LANG_KEY = "1moby-lang";
 
+export type ToastTone = "success" | "error";
+export type ToastMessage = { id: number; message: string; tone: ToastTone };
+
 type UiState = {
   lang: Lang;
   setLang: (lang: Lang) => void;
-  toast: string | null;
-  notify: (message: string) => void;
+  toast: ToastMessage | null;
+  /** success toasts leave on their own; errors stay longer and can be closed */
+  notify: (message: string, tone?: ToastTone) => void;
+  dismissToast: () => void;
 };
 
 const UiContext = createContext<UiState | null>(null);
@@ -40,7 +45,7 @@ export function UiProvider({
   initialLang?: Lang;
 }) {
   const [lang, setLangState] = useState<Lang>(initialLang);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   // read the stored preference after mount, so the server and the first client
   // render agree and React does not report a hydration mismatch
@@ -63,16 +68,20 @@ export function UiProvider({
     document.documentElement.lang = next;
   }, []);
 
-  const notify = useCallback((message: string) => {
-    setToast(message);
-    window.setTimeout(() => {
-      setToast((current) => (current === message ? null : current));
-    }, 2600);
+  const notify = useCallback((message: string, tone: ToastTone = "success") => {
+    const id = Date.now() + Math.random();
+    setToast({ id, message, tone });
+    window.setTimeout(
+      () => setToast((current) => (current?.id === id ? null : current)),
+      tone === "error" ? 7000 : 3500,
+    );
   }, []);
 
+  const dismissToast = useCallback(() => setToast(null), []);
+
   const value = useMemo(
-    () => ({ lang, setLang, toast, notify }),
-    [lang, setLang, toast, notify],
+    () => ({ lang, setLang, toast, notify, dismissToast }),
+    [lang, setLang, toast, notify, dismissToast],
   );
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;

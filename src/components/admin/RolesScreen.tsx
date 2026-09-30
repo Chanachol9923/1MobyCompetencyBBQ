@@ -332,9 +332,8 @@ function EditRoleModal({
           />
         </Field>
         <p className="rounded-lg bg-surface px-3 py-2 text-[11px] leading-relaxed text-muted">
-          {tt(
-            `The key "${role.key}" cannot be changed — sign-in and seeding look roles up by it.`,
-            `คีย์ "${role.key}" แก้ไขไม่ได้ เพราะระบบเข้าสู่ระบบและการสร้างข้อมูลเริ่มต้นอ้างอิงบทบาทจากคีย์นี้`,
+          {tt(`The key "${role.key}" cannot be changed — the system uses it to identify this role.`,
+            `คีย์ "${role.key}" แก้ไขไม่ได้ เพราะระบบใช้คีย์นี้ระบุบทบาท`,
           )}
         </p>
       </div>

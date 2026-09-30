@@ -282,8 +282,8 @@ export function DashboardView({
           <section className="flex min-w-0 flex-col">
             <h2 className="mb-4 text-lg text-ink">
               {isManager
-                ? tt("Team Competency Heat map", "แผนภาพความร้อนสมรรถนะทีม")
-                : tt("My Development Plan", "แผนพัฒนาของฉัน")}
+                ? tt("Team competency heat map", "ฮีตแมปสมรรถนะของทีม")
+                : tt("My development plan", "แผนพัฒนาของฉัน")}
             </h2>
             <Card className="flex flex-1 flex-col p-4">
               {isManager ? (

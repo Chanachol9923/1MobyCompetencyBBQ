@@ -159,7 +159,7 @@ export function Topbar() {
                 disabled={unread === 0}
                 className="rounded px-1 text-xs font-medium text-brand transition-colors hover:underline disabled:opacity-45 disabled:hover:no-underline max-lg:min-h-11"
               >
-                {tt("Mark all read", "อ่านทั้งหมดแล้ว")}
+                {tt("Mark all as read", "อ่านทั้งหมดแล้ว")}
               </button>
             </div>
             <ul className="max-h-[360px] overflow-y-auto scroll-thin max-lg:max-h-[min(360px,60dvh)]">

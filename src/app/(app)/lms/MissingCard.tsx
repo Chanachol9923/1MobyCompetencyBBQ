@@ -37,7 +37,7 @@ export function MissingCard({ kind }: { kind: "course" | "path" }) {
         <div className="grid place-items-center pb-8">
           <Link href="/lms">
             <Button variant="outline">
-              {tt("Back to catalogue", "กลับไปหน้าแคตตาล็อก")}
+              {tt("Back to courses", "กลับไปหน้าหลักสูตร")}
             </Button>
           </Link>
         </div>

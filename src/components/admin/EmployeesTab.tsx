@@ -5,7 +5,6 @@ import { Download, KeyRound, Pencil, Power, PowerOff, Plus } from "lucide-react"
 import { Avatar, Button, Field, Input, Modal, Pill, Select, Textarea } from "@/components/ui";
 import {
   IconAction,
-  Note,
   SearchInput,
   TableWrap,
   Td,
@@ -23,6 +22,7 @@ import {
   updateEmployee,
 } from "@/server/admin-content";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 type Draft = {
   employeeCode: string;
@@ -245,79 +245,94 @@ export function EmployeesTab({
           </Button>
           <Button size="sm" onClick={openAdd} disabled={jobRoles.length === 0}>
             <Plus size={15} />
-            {tt("Add New Employees", "เพิ่มพนักงานใหม่")}
+            {tt("Add employee", "เพิ่มพนักงาน")}
           </Button>
         </div>
       </div>
 
       <TableWrap>
-        <table className="w-full min-w-[1400px] border-collapse">
+        {/* six columns that fit a laptop screen; grade, business unit and
+            remarks live in each person's details and in the CSV export */}
+        <table className="w-full border-collapse">
           <thead>
             <tr className="border-y border-line/70 bg-surface/60">
               <Th>{t("label.employee")}</Th>
-              <Th>{t("label.employeeId")}</Th>
-              <Th>{t("label.level")}</Th>
-              <Th>{t("label.role")}</Th>
               <Th>{t("label.position")}</Th>
-              <Th>{t("label.grade")}</Th>
-              <Th>{t("label.businessUnit")}</Th>
               <Th>{t("label.department")}</Th>
-              <Th>{t("label.division")}</Th>
               <Th>{t("label.reportTo")}</Th>
-              <Th>{t("label.remark")}</Th>
-              <Th className="text-right">{t("label.actions")}</Th>
+              <Th>{t("label.status")}</Th>
+              <Th className="w-24 text-right">{t("label.actions")}</Th>
             </tr>
           </thead>
           <tbody>
             {visible.map((p) => (
-              <tr key={p.id} className="border-b border-line/60 last:border-0">
+              <tr
+                key={p.id}
+                className={cn(
+                  "border-b border-line/60 transition-colors last:border-0 hover:bg-surface/40",
+                  !p.active && "opacity-60",
+                )}
+              >
                 <Td>
                   <div className="flex items-center gap-3">
                     <Avatar name={p.name} size={32} />
                     <span className="min-w-0">
-                      <span className="flex items-center gap-1.5 font-bold">
-                        {p.name}
-                        {p.hasLogin ? (
-                          <KeyRound
-                            size={11}
-                            className="shrink-0 text-brand"
-                            aria-label={tt("Has a login", "มีบัญชีเข้าสู่ระบบ")}
-                          />
-                        ) : null}
-                      </span>
-                      <span className="block text-[10px] text-muted">
-                        {p.nickname ?? p.email}
+                      <span className="block font-bold text-ink">{p.name}</span>
+                      <span className="block text-[11px] text-muted">
+                        <span className="font-mono">{p.employeeCode}</span>
+                        {p.nickname ? ` · ${p.nickname}` : ""}
                       </span>
                     </span>
                   </div>
                 </Td>
-                <Td className="font-bold">{p.employeeCode}</Td>
-                <Td className="whitespace-nowrap text-muted">{p.level}</Td>
-                <Td className="font-bold">{p.jobRoleName}</Td>
-                <Td className="text-muted">{p.positionName ?? "—"}</Td>
-                <Td className="text-muted">{p.grade ?? "—"}</Td>
-                <Td className="text-muted">{p.businessUnit ?? "—"}</Td>
-                <Td className="font-bold">{p.departmentName ?? "—"}</Td>
-                <Td className="max-w-[220px] text-muted">{p.divisionName ?? "—"}</Td>
-                <Td className="whitespace-nowrap text-muted">
-                  {p.managerName ?? "—"}
+                <Td>
+                  <span className="block font-medium text-ink">
+                    {p.positionName ?? p.jobRoleName}
+                  </span>
+                  <span className="block text-[11px] text-muted">
+                    {p.jobRoleName} · {p.level}
+                  </span>
+                </Td>
+                <Td>
+                  <span className="block font-medium text-ink">{p.departmentName ?? "—"}</span>
+                  {p.divisionName ? (
+                    <span className="block text-[11px] text-muted">{p.divisionName}</span>
+                  ) : null}
+                </Td>
+                <Td>
+                  <span className="block text-ink">{p.managerName ?? "—"}</span>
                   {p.reportCount ? (
-                    <span className="ml-1 text-[10px] text-brand">
-                      {tt(`(+${p.reportCount})`, `(+${p.reportCount})`)}
+                    <span className="block text-[11px] text-brand">
+                      {tt(
+                        `Manages ${p.reportCount}`,
+                        `ดูแล ${p.reportCount} คน`,
+                      )}
                     </span>
                   ) : null}
                 </Td>
-                <Td className="max-w-[180px] text-muted">
-                  {p.active ? (
-                    (p.remark ?? "—")
-                  ) : (
-                    <Pill tone="neutral">{tt("Deactivated", "ปิดใช้งาน")}</Pill>
-                  )}
+                <Td>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {p.active ? (
+                      <Pill tone="success">{tt("Active", "ทำงานอยู่")}</Pill>
+                    ) : (
+                      <Pill tone="neutral">{tt("Deactivated", "ปิดใช้งาน")}</Pill>
+                    )}
+                    {p.hasLogin ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] text-muted"
+                        title={tt("Has a login account", "มีบัญชีเข้าสู่ระบบ")}
+                      >
+                        <KeyRound size={11} className="text-brand" />
+                        {tt("Login", "มีบัญชี")}
+                      </span>
+                    ) : null}
+                  </div>
                 </Td>
                 <Td>
                   <div className="flex justify-end gap-2">
                     <IconAction
                       tone="brand"
+                      title={t("action.edit")}
                       aria-label={`${t("action.edit")} ${p.name}`}
                       onClick={() => openEdit(p)}
                     >
@@ -326,6 +341,11 @@ export function EmployeesTab({
                     <IconAction
                       tone={p.active ? "danger" : "muted"}
                       disabled={busy}
+                      title={
+                        p.active
+                          ? tt("Deactivate", "ปิดใช้งาน")
+                          : tt("Reactivate", "เปิดใช้งานอีกครั้ง")
+                      }
                       aria-label={
                         p.active
                           ? tt(`Deactivate ${p.name}`, `ปิดใช้งาน ${p.name}`)
@@ -345,7 +365,7 @@ export function EmployeesTab({
             ))}
             {visible.length === 0 ? (
               <tr>
-                <Td colSpan={12} className="py-10 text-center text-muted">
+                <Td colSpan={6} className="py-10 text-center text-muted">
                   {t("admin.noMatch")}
                 </Td>
               </tr>
@@ -354,19 +374,13 @@ export function EmployeesTab({
         </table>
       </TableWrap>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line/70 p-5">
+      <div className="border-t border-line/70 px-5 py-4">
         <p className="text-xs text-muted">
           {tt(
-            `${visible.length} of ${counts.active} active employees · ${counts.withLogin} have a login`,
-            `${visible.length} จาก ${counts.active} คนที่ทำงานอยู่ · มีบัญชีเข้าสู่ระบบ ${counts.withLogin} คน`,
+            `Showing ${visible.length} of ${counts.active} active employees · ${counts.withLogin} have a login account. Grade, business unit and remarks are in each person's details and the CSV export.`,
+            `แสดง ${visible.length} จาก ${counts.active} คนที่ทำงานอยู่ · มีบัญชีเข้าสู่ระบบ ${counts.withLogin} คน ระดับเกรด หน่วยธุรกิจ และหมายเหตุ ดูได้ในรายละเอียดของแต่ละคนและไฟล์ CSV`,
           )}
         </p>
-        <Note className="max-w-xl">
-          {tt(
-            "Columns follow the requirement pack's Data Set: Employee_ID, Level, Role, Business Unit, Department, Division, Report to and Remark. Level follows the career role, because that is what the expected-level matrix is keyed on.",
-            "คอลัมน์เป็นไปตามชุดข้อมูลในเอกสารความต้องการ: รหัสพนักงาน ระดับ บทบาท หน่วยธุรกิจ ฝ่าย แผนก ผู้บังคับบัญชา และหมายเหตุ โดยระดับจะอ้างอิงตามบทบาทสายอาชีพ เพราะเป็นคีย์ของตารางระดับที่คาดหวัง",
-          )}
-        </Note>
       </div>
 
       {/* ------------------------------------------------- create / edit */}
@@ -375,8 +389,8 @@ export function EmployeesTab({
         onClose={() => setMode("closed")}
         title={
           mode === "edit"
-            ? tt("Edit Employee", "แก้ไขข้อมูลพนักงาน")
-            : tt("Add New Employee", "เพิ่มพนักงานใหม่")
+            ? tt("Edit employee", "แก้ไขข้อมูลพนักงาน")
+            : tt("Add employee", "เพิ่มพนักงาน")
         }
         subtitle={tt(
           "Fields marked * are required.",
@@ -406,14 +420,14 @@ export function EmployeesTab({
           <Field label={`${t("label.name")} *`}>
             <Input
               value={draft.name}
-              placeholder={tt("Enter Employee Name", "กรอกชื่อพนักงาน")}
+              placeholder={tt("First and last name", "ชื่อและนามสกุล")}
               onChange={(e) => set("name", e.target.value)}
             />
           </Field>
           <Field label={t("label.nickname")}>
             <Input
               value={draft.nickname}
-              placeholder={tt("Enter Nickname", "กรอกชื่อเล่น")}
+              placeholder={tt("Optional", "ไม่บังคับ")}
               onChange={(e) => set("nickname", e.target.value)}
             />
           </Field>
@@ -424,7 +438,7 @@ export function EmployeesTab({
             <Input
               maxLength={4}
               value={draft.employeeCode}
-              placeholder={tt("Enter Employee ID", "กรอกรหัสพนักงาน")}
+              placeholder={tt("e.g. 1ASD", "เช่น 1ASD")}
               onChange={(e) => set("employeeCode", e.target.value)}
             />
           </Field>
@@ -446,7 +460,7 @@ export function EmployeesTab({
               type="email"
               disabled={Boolean(editing?.hasLogin)}
               value={draft.email}
-              placeholder={tt("Enter Employee Email", "กรอกอีเมลพนักงาน")}
+              placeholder={tt("name.sur@1moby.com", "name.sur@1moby.com")}
               onChange={(e) => set("email", e.target.value)}
             />
           </Field>
@@ -491,7 +505,7 @@ export function EmployeesTab({
           <Field label={t("label.businessUnit")}>
             <Input
               value={draft.businessUnit}
-              placeholder={tt("Enter business unit", "กรอกหน่วยธุรกิจ")}
+              placeholder={tt("e.g. Software Production", "เช่น Software Production")}
               onChange={(e) => set("businessUnit", e.target.value)}
             />
           </Field>

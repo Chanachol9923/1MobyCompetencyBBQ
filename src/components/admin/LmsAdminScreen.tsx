@@ -283,7 +283,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
-        title={tt("Manage LMS", "จัดการระบบการเรียนรู้")}
+        title={tt("Manage courses", "จัดการหลักสูตร")}
         subtitle={tt(
           "The course library employees learn from — courses, chapters and what each one is tagged against.",
           "คลังหลักสูตรที่พนักงานใช้เรียน — หลักสูตร บทเรียน และสมรรถนะที่เชื่อมโยง",
@@ -295,7 +295,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <CountTile
           value={counts.total}
-          label={tt("Total Courses", "หลักสูตรทั้งหมด")}
+          label={tt("Total courses", "หลักสูตรทั้งหมด")}
           icon={<BookOpen size={20} />}
         />
         <CountTile
@@ -312,7 +312,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
         />
         <CountTile
           value={counts.taggedCompetencies}
-          label={tt("Skills Tags", "แท็กสมรรถนะ")}
+          label={tt("Skill tags", "แท็กสมรรถนะ")}
           tone="amber"
           icon={<Tags size={20} />}
         />
@@ -333,7 +333,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
             className="w-full sm:w-64"
             aria-label={t("label.competency")}
           >
-            <option value="all">{tt("All Competency", "ทุกสมรรถนะ")}</option>
+            <option value="all">{tt("All competencies", "ทุกสมรรถนะ")}</option>
             {competencies.map((c) => (
               <option key={c.id} value={c.id}>
                 {competencyName(c)}
@@ -342,12 +342,12 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           </Select>
           <Button className="ml-auto" size="sm" onClick={openCreate}>
             <Plus size={15} />
-            {tt("Create New Course", "สร้างหลักสูตรใหม่")}
+            {tt("New course", "หลักสูตรใหม่")}
           </Button>
         </div>
 
         <TableWrap>
-          <table className="w-full min-w-[960px] border-collapse">
+          <table className="w-full min-w-[960px] xl:min-w-0 border-collapse">
             <thead>
               <tr className="border-y border-line/70 bg-surface/60">
                 <Th>{t("label.course")}</Th>
@@ -468,7 +468,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
         open={open}
         onClose={() => setOpen(false)}
         title={
-          editing ? tt("Edit Course", "แก้ไขหลักสูตร") : tt("Create Course", "สร้างหลักสูตร")
+          editing ? tt("Edit course", "แก้ไขหลักสูตร") : tt("Create course", "สร้างหลักสูตร")
         }
         subtitle={
           step === 1
@@ -511,7 +511,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
             <Field label={`${tt("Course name (English)", "ชื่อหลักสูตร (อังกฤษ)")} *`}>
               <Input
                 value={draft.titleEn}
-                placeholder={tt("Enter Course Name...", "กรอกชื่อหลักสูตร...")}
+                placeholder={tt("Course name", "ชื่อหลักสูตร")}
                 onChange={(e) => set("titleEn", e.target.value)}
               />
             </Field>
@@ -567,7 +567,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
             >
               <Textarea
                 value={draft.descriptionEn}
-                placeholder={tt("Enter Description Detail", "กรอกรายละเอียด")}
+                placeholder={tt("What the course is about", "หลักสูตรนี้เกี่ยวกับอะไร")}
                 onChange={(e) => set("descriptionEn", e.target.value)}
               />
             </Field>
@@ -646,7 +646,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                     <Field label={`${tt("Chapter title (English)", "ชื่อบทเรียน (อังกฤษ)")} *`}>
                       <Input
                         value={ch.titleEn}
-                        placeholder={tt("Enter Chapter Name...", "กรอกชื่อบทเรียน...")}
+                        placeholder={tt("Chapter name", "ชื่อบทเรียน")}
                         onChange={(e) => setChapter(ch.uid, { titleEn: e.target.value })}
                       />
                     </Field>

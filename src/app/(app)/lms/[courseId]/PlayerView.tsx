@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useMemo, useState, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -33,6 +33,7 @@ import {
   pick,
 } from "@/components/learning/model";
 import { useT } from "@/lib/i18n";
+import { useUi } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
 import type { PlayerView as PlayerData } from "@/server/learning";
 import {
@@ -250,16 +251,21 @@ function Player({ view }: { view: PlayerData }) {
     </Link>
   );
 
-  const banner =
-    error !== null ? (
-      <p className="mb-4 rounded-lg border border-accent/40 bg-accent/5 px-4 py-2.5 text-sm text-accent">
-        {errorText(error)}
-      </p>
-    ) : message ? (
-      <p className="mb-4 rounded-lg border border-brand/30 bg-brand-tint px-4 py-2.5 text-sm text-brand">
-        {message}
-      </p>
-    ) : null;
+  // progress and problems go to the app-wide toast, like everywhere else
+  const { notify } = useUi();
+  useEffect(() => {
+    if (error === null) return;
+    notify(errorText(error), "error");
+    setError(null);
+    // errorText is recreated each render; the error value is the trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+  useEffect(() => {
+    if (!message) return;
+    notify(message);
+    setMessage(null);
+  }, [message, notify]);
+  const banner = null;
 
   if (!chapter) {
     return (
@@ -570,7 +576,7 @@ function Player({ view }: { view: PlayerData }) {
       {/* --------------------------------------------------------- ask AI */}
       <div className="mt-8 lg:mt-10">
         <p className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
-          <Sparkles size={12} /> {tt("Scripted demo", "ผู้ช่วยแบบสคริปต์")}
+          <Sparkles size={12} /> {tt("Built-in assistant", "ผู้ช่วยในตัว")}
         </p>
         <AiStudyPanel course={view} chapter={chapter} />
       </div>
@@ -600,7 +606,7 @@ function Player({ view }: { view: PlayerData }) {
               onClick={() => completeChapter(chapter.id)}
             >
               <Check size={16} />{" "}
-              {tt("Mark chapter complete", "ทำเครื่องหมายว่าเรียนจบบทนี้")}
+              {tt("Mark chapter complete", "เรียนจบบทนี้แล้ว")}
             </Button>
           )}
           {nextChapter ? (
@@ -613,7 +619,7 @@ function Player({ view }: { view: PlayerData }) {
           ) : (
             <Link href="/lms">
               <Button variant="outline">
-                {tt("Back to catalogue", "กลับไปหน้าแคตตาล็อก")}
+                {tt("Back to courses", "กลับไปหน้าหลักสูตร")}
               </Button>
             </Link>
           )}

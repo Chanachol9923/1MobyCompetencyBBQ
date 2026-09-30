@@ -155,13 +155,13 @@ export function JobRolesTab({
           </Button>
           <Button size="sm" onClick={openAdd}>
             <Plus size={15} />
-            {tt("Create New Role", "สร้างบทบาทใหม่")}
+            {tt("New role", "บทบาทใหม่")}
           </Button>
         </div>
       </div>
 
       <TableWrap>
-        <table className="w-full min-w-[820px] border-collapse">
+        <table className="w-full min-w-[820px] xl:min-w-0 border-collapse">
           <thead>
             <tr className="border-y border-line/70 bg-surface/60">
               <Th>{t("label.role")}</Th>
@@ -223,9 +223,8 @@ export function JobRolesTab({
 
       <div className="p-5">
         <Note>
-          {tt(
-            "A career role is the column of the expected-level matrix. Moving somebody between roles changes which competencies they are assessed on, and a role with no expected levels is assessed on nothing at all.",
-            "บทบาทสายอาชีพคือคอลัมน์ในตารางระดับที่คาดหวัง การย้ายพนักงานระหว่างบทบาทจะเปลี่ยนสมรรถนะที่ใช้ประเมิน และบทบาทที่ยังไม่กำหนดระดับที่คาดหวังจะไม่ถูกประเมินสมรรถนะใดเลย",
+          {tt("A career role decides which competencies someone is assessed on and the level expected for each. Moving someone to another role changes both; a role with no expected levels is not assessed at all.",
+            "บทบาทสายอาชีพเป็นตัวกำหนดว่าพนักงานถูกประเมินสมรรถนะใด และคาดหวังระดับเท่าไร การย้ายบทบาทจะเปลี่ยนทั้งสองอย่าง บทบาทที่ยังไม่กำหนดระดับที่คาดหวังจะไม่ถูกประเมินเลย",
           )}
         </Note>
       </div>

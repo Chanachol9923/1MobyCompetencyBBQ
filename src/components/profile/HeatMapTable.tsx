@@ -72,7 +72,7 @@ export function HeatMapTable({
     >
       <div
         role="table"
-        aria-label={tt("Team competency heat map", "แผนภาพความร้อนสมรรถนะทีม")}
+        aria-label={tt("Team competency heat map", "ฮีตแมปสมรรถนะของทีม")}
         className="min-w-0"
         style={{ minWidth }}
       >

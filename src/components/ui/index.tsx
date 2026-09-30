@@ -3,11 +3,13 @@
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 import { X } from "lucide-react";
+import { createPortal } from "react-dom";
 import {
   Children,
   Fragment,
   isValidElement,
   useEffect,
+  useId,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -334,6 +336,16 @@ export function Avatar({
 
 /* ------------------------------------------------------------------ Modal */
 
+/**
+ * One dialog for the whole app.
+ *
+ * It is portalled to <body>, so no ancestor's transform, filter or overflow
+ * can pin it to a corner of the page. Desktop: centred on screen, never taller
+ * than the viewport, the body scrolls while the title and buttons stay put.
+ * Phones: a sheet rising from the bottom edge. Escape or a click on the
+ * backdrop closes it; focus moves into the dialog, stays inside while it is
+ * open, and returns to whatever opened it.
+ */
 export function Modal({
   open,
   onClose,
@@ -352,67 +364,141 @@ export function Modal({
   width?: string;
 }) {
   const { tt } = useT();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const pressedOnBackdrop = useRef(false);
+  const titleId = useId();
+  const [mounted, setMounted] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose]);
+    const previouslyFocused = document.activeElement as HTMLElement | null;
 
-  if (!open) return null;
-  return (
+    // focus the first field (or the dialog itself) once it is on screen
+    const focusTimer = window.setTimeout(() => {
+      const root = dialogRef.current;
+      if (!root) return;
+      const auto = root.querySelector<HTMLElement>("[autofocus]");
+      const first = root.querySelector<HTMLElement>(
+        "[data-modal-body] input:not([type=hidden]):not([disabled]), [data-modal-body] select:not([disabled]), [data-modal-body] textarea:not([disabled])",
+      );
+      (auto ?? first ?? root).focus({ preventScroll: true });
+    }, 30);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      // keep Tab inside the dialog
+      const items = [
+        ...dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => el.offsetParent !== null);
+      if (items.length === 0) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+
+    // lock the page behind, without the layout jumping when the scrollbar goes
+    const { overflow, paddingRight } = document.body.style;
+    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+      document.body.style.paddingRight = paddingRight;
+      previouslyFocused?.focus?.({ preventScroll: true });
+    };
+  }, [open]);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
     <div
       className={cn(
-        "animate-backdrop fixed inset-0 z-50 flex justify-center bg-ink/40",
-        // desktop: unchanged — a dialog floating near the top of the viewport
-        "lg:items-start lg:overflow-y-auto lg:p-4 lg:py-10",
+        "animate-backdrop fixed inset-0 z-50 flex bg-ink/45",
+        // desktop and tablet: centred, with breathing room
+        "sm:items-center sm:justify-center sm:p-6",
         // phones: a sheet anchored to the bottom edge
-        "max-lg:items-end",
+        "max-sm:items-end",
       )}
+      onMouseDown={(e) => {
+        pressedOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onMouseUp={(e) => {
+        // only a click that both starts and ends on the backdrop closes it,
+        // so selecting text in a field and releasing outside does not
+        if (pressedOnBackdrop.current && e.target === e.currentTarget) onClose();
+        pressedOnBackdrop.current = false;
+      }}
     >
       <div
-        className={cn(
-          "bg-white shadow-xl",
-          "lg:animate-fade-up lg:w-full lg:rounded-2xl",
-          "max-lg:animate-sheet-up max-lg:flex max-lg:max-h-[92dvh] max-lg:w-full max-lg:max-w-none max-lg:flex-col max-lg:rounded-t-2xl",
-          width,
-        )}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={cn(
+          "flex w-full flex-col bg-white shadow-2xl outline-none",
+          "sm:animate-fade-up sm:max-h-[min(88dvh,900px)] sm:rounded-2xl",
+          "max-sm:animate-sheet-up max-sm:max-h-[92dvh] max-sm:rounded-t-2xl",
+          width,
+          "max-sm:max-w-none",
+        )}
       >
         {/* grab handle — reads as a sheet on touch devices */}
         <span
           aria-hidden
-          className="mx-auto mt-2.5 block h-1 w-10 shrink-0 rounded-full bg-line-2 lg:hidden"
+          className="mx-auto mt-2.5 block h-1 w-10 shrink-0 rounded-full bg-line-2 sm:hidden"
         />
-        <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4 max-lg:shrink-0">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-6 py-4">
           <div className="min-w-0">
-            <h3 className="text-lg font-bold text-ink">{title}</h3>
-            {subtitle ? <p className="text-xs text-muted">{subtitle}</p> : null}
+            <h3 id={titleId} className="text-lg font-bold text-ink">
+              {title}
+            </h3>
+            {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label={tt("Close", "ปิด")}
-            className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-surface hover:text-ink max-lg:grid max-lg:size-11 max-lg:place-items-center"
+            className="-mr-1 grid size-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-ink max-sm:size-11"
           >
             <X size={18} />
           </button>
         </div>
-        <div className="scroll-thin px-6 py-5 max-lg:min-h-0 max-lg:flex-1 max-lg:overflow-y-auto">
+        <div
+          data-modal-body
+          className="scroll-thin min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5"
+        >
           {children}
         </div>
         {footer ? (
-          <div className="flex justify-end gap-2 border-t border-line px-6 py-4 max-lg:shrink-0 max-lg:bg-white max-lg:pb-[calc(1rem+env(safe-area-inset-bottom))] max-lg:[&>*]:flex-1">
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-6 py-4 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))] max-sm:[&>*]:flex-1">
             {footer}
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -1,72 +1,12 @@
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
 import { signInOptions } from "@/lib/auth";
 import { LOGIN_DOMAIN } from "@/lib/login-id";
 import { getViewer } from "@/server/session";
 import { homeFor } from "@/components/layout/nav";
-import { LoginForm, type DemoAccount } from "./LoginForm";
+import { LoginForm } from "./LoginForm";
+import { loadTestAccounts } from "@/server/test-accounts";
 
 export const dynamic = "force-dynamic";
-
-/**
- * Test-mode suggestions under the Login ID field. Read from the database rather
- * than hard-coded, so they are always accounts that actually exist: one
- * individual contributor, one manager with reports, and the administrator.
- */
-async function loadDemoAccounts(): Promise<DemoAccount[]> {
-  if (!signInOptions.demo) return [];
-
-  const active = { status: "ACTIVE" as const };
-  const [ic, manager, admin] = await Promise.all([
-    db.employee.findFirst({
-      where: { reports: { none: {} }, jobRole: { name: "Executive" }, user: active },
-      orderBy: { name: "asc" },
-      select: { name: true, email: true, jobRole: { select: { name: true, level: true } } },
-    }),
-    db.employee.findFirst({
-      where: { reports: { some: {} }, user: active },
-      orderBy: { name: "asc" },
-      select: {
-        name: true,
-        email: true,
-        jobRole: { select: { name: true } },
-        _count: { select: { reports: true } },
-      },
-    }),
-    db.user.findFirst({
-      where: { role: { key: "admin" }, employee: null, ...active },
-      orderBy: { createdAt: "asc" },
-      select: { email: true, name: true },
-    }),
-  ]);
-
-  const out: DemoAccount[] = [];
-  if (ic) {
-    out.push({
-      loginId: ic.email,
-      name: ic.name,
-      roleLabel: "Employee",
-      detail: `${ic.jobRole.name} · ${ic.jobRole.level}`,
-    });
-  }
-  if (manager) {
-    out.push({
-      loginId: manager.email,
-      name: manager.name,
-      roleLabel: "Manager",
-      detail: `${manager.jobRole.name} · ${manager._count.reports} direct reports`,
-    });
-  }
-  if (admin) {
-    out.push({
-      loginId: admin.email,
-      name: admin.name ?? admin.email,
-      roleLabel: "Administrator",
-      detail: "HROD — runs the framework",
-    });
-  }
-  return out;
-}
 
 export default async function LoginPage({
   searchParams,
@@ -79,7 +19,7 @@ export default async function LoginPage({
   }
 
   const params = await searchParams;
-  const demoAccounts = await loadDemoAccounts();
+  const demoAccounts = await loadTestAccounts();
   const notice =
     params.notice === "activated" || params.notice === "password_changed"
       ? params.notice
@@ -89,11 +29,6 @@ export default async function LoginPage({
     <LoginForm
       loginDomain={LOGIN_DOMAIN}
       demoAccounts={demoAccounts}
-      // test mode only: the seeded accounts' shared password, so picking a
-      // suggestion fills both fields. Never sent when the flag is off.
-      demoPassword={
-        demoAccounts.length ? (process.env.SEED_DEMO_PASSWORD ?? null) : null
-      }
       ssoName={signInOptions.sso}
       error={viewer?.status === "SUSPENDED" ? "suspended" : params.error}
       code={params.code}

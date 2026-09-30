@@ -152,7 +152,7 @@ export function AuditScreen({
         />
         <CountTile
           value={data.actors.length}
-          label={tt("Distinct actors", "ผู้ดำเนินการ")}
+          label={tt("People involved", "จำนวนผู้ดำเนินการ")}
           tone="amber"
           icon={<User size={20} />}
         />
@@ -174,9 +174,8 @@ export function AuditScreen({
             <SearchInput
               value={query}
               onChange={setQuery}
-              placeholder={tt(
-                "Search action, target or detail...",
-                "ค้นหาการกระทำ เป้าหมาย หรือรายละเอียด...",
+              placeholder={tt("Search activity, item or detail...",
+                "ค้นหารายการ สิ่งที่เปลี่ยน หรือรายละเอียด...",
               )}
             />
           </div>
@@ -198,7 +197,7 @@ export function AuditScreen({
               value={filters.action}
               onChange={(e) => apply({ action: e.target.value })}
             >
-              <option value="">{tt("All actions", "การกระทำทั้งหมด")}</option>
+              <option value="">{tt("All actions", "ทุกรายการ")}</option>
               {data.actions.map((a) => (
                 <option key={a} value={a}>
                   {a}
@@ -245,7 +244,7 @@ export function AuditScreen({
       {/* --------------------------------------------------------- table */}
       <Card className={cn("mt-5", navigating && "opacity-60")}>
         <TableWrap>
-          <table className="w-full min-w-[900px] border-collapse">
+          <table className="w-full min-w-[900px] xl:min-w-0 border-collapse">
             <thead>
               <tr className="border-b border-line/70 bg-surface/60">
                 <Th className="w-44">{tt("Timestamp", "เวลา")}</Th>

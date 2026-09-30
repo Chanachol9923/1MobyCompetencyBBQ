@@ -198,7 +198,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
-        title={tt("Admin Overview", "ภาพรวมผู้ดูแลระบบ")}
+        title={tt("Admin overview", "ภาพรวมผู้ดูแลระบบ")}
         subtitle={tt(
           "How the assessment cycle is going, and where everyone stands.",
           "ความคืบหน้าของรอบประเมิน และสถานะของพนักงานทุกคน",
@@ -237,7 +237,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
             {cycle ? (
               <div className="text-right">
                 <p className="text-sm font-bold text-ink">
-                  {tt("Time Remaining", "เวลาที่เหลือ")}
+                  {tt("Time remaining", "เวลาที่เหลือ")}
                 </p>
                 <p className="text-xl font-bold text-brand">
                   {tt(`${cycle.daysRemaining} Days`, `${cycle.daysRemaining} วัน`)}
@@ -291,13 +291,13 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
 
         <Card className="p-5">
           <h3 className="text-center text-base font-bold text-ink">
-            {tt("Organization Structure", "โครงสร้างองค์กร")}
+            {tt("Organization structure", "โครงสร้างองค์กร")}
           </h3>
           <div className="mt-3 grid place-items-center">
             <Donut
               data={slices}
               total={counts.headcount}
-              totalLabel={tt("TOTAL STAFF", "พนักงานทั้งหมด")}
+              totalLabel={tt("Total staff", "พนักงานทั้งหมด")}
               size={190}
             />
           </div>
@@ -317,7 +317,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
           }}
         >
           <h3 className="text-base font-bold text-white">
-            {tt("Management Center", "ศูนย์จัดการระบบ")}
+            {tt("Management center", "ศูนย์จัดการระบบ")}
           </h3>
           <p className="mt-1 text-xs text-white/80">
             {tt(
@@ -368,12 +368,12 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
             />
           </div>
           <TableWrap>
-            <table className="w-full min-w-[760px] border-collapse">
+            <table className="w-full min-w-[760px] xl:min-w-0 border-collapse">
               <thead>
                 <tr className="border-y border-line/70 bg-white">
                   <Th>{t("label.employee")}</Th>
-                  <Th className="w-48">{tt("Phase Status", "สถานะความคืบหน้า")}</Th>
-                  <Th>{tt("Skill Index", "ดัชนีสมรรถนะ")}</Th>
+                  <Th className="w-48">{tt("Progress", "ความคืบหน้า")}</Th>
+                  <Th>{tt("Skill index", "ดัชนีสมรรถนะ")}</Th>
                   <Th>{t("label.department")}</Th>
                   <Th className="text-right">{t("label.actions")}</Th>
                 </tr>
@@ -458,7 +458,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
           <div className="flex items-center gap-2">
             <Radio size={16} className="text-brand" />
             <h3 className="text-base font-bold text-ink">
-              {tt("LIVE Activity", "กิจกรรมล่าสุด")}
+              {tt("Live activity", "กิจกรรมล่าสุด")}
             </h3>
           </div>
           <ul className="mt-4 space-y-3">
@@ -502,7 +502,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
         <CardHeader
           title={
             <span className="text-2xl">
-              {tt("Department Details", "รายละเอียดฝ่าย")}
+              {tt("Department details", "รายละเอียดฝ่าย")}
             </span>
           }
           subtitle={tt(
@@ -511,7 +511,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
           )}
         />
         <TableWrap>
-          <table className="w-full min-w-[720px] border-collapse">
+          <table className="w-full min-w-[720px] xl:min-w-0 border-collapse">
             <thead>
               <tr className="border-y border-line/70">
                 <Th>{t("label.department")}</Th>

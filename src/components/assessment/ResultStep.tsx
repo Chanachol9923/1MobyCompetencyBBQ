@@ -196,7 +196,7 @@ export function ResultStep({
                 ) : null}
                 {compare ? (
                   <th className="py-2 text-center font-medium">
-                    {tt("Diff", "ต่างกัน")}
+                    {tt("Difference", "ส่วนต่าง")}
                   </th>
                 ) : null}
                 <th className="py-2 text-center font-medium">
@@ -296,9 +296,8 @@ export function ResultStep({
         {compare ? (
           <p className="break-words px-5 pb-5 text-xs leading-relaxed text-muted">
             {mode === "self"
-              ? tt(
-                  "Diff is your own rating minus your supervisor's — a positive number means you rated yourself higher. The supervisor column comes from the review submitted in this cycle.",
-                  "ช่อง “ต่างกัน” คือคะแนนที่คุณให้ตนเอง ลบด้วยคะแนนจากหัวหน้า ค่าบวกหมายถึงคุณประเมินตนเองสูงกว่า คะแนนหัวหน้ามาจากผลการประเมินที่ส่งในรอบนี้",
+              ? tt("Difference is your own rating minus your supervisor's — a positive number means you rated yourself higher. Supervisor scores come from this cycle's review.",
+                  "ส่วนต่าง คือคะแนนที่คุณให้ตนเอง ลบด้วยคะแนนจากหัวหน้า ค่าบวกหมายถึงคุณประเมินตนเองสูงกว่า คะแนนหัวหน้ามาจากการประเมินในรอบนี้",
                 )
               : tt(
                   "Diff is your rating minus their own — a positive number means you rated them higher than they rated themselves.",

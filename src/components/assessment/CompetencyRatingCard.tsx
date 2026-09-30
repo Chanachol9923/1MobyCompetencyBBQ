@@ -206,7 +206,7 @@ export function CompetencyRatingCard({
           {lang === "en" && competency.indicatorsEn.length ? (
             <>
               <p className="mt-4 text-sm font-medium text-ink">
-                {tt("Behavioral Indicators:", "พฤติกรรมบ่งชี้:")}
+                {tt("Behavioral indicators:", "พฤติกรรมบ่งชี้:")}
               </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm font-light leading-relaxed text-muted">
                 {competency.indicatorsEn.map((ind) => (

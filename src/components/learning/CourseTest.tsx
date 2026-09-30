@@ -250,7 +250,7 @@ export function TestResultPanel({
     <div className="rounded-xl border border-line/70 bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-bold text-ink">
-          {tt("Pre-test and Post-test", "แบบทดสอบก่อนเรียนและหลังเรียน")}
+          {tt("Pre-test and post-test", "แบบทดสอบก่อนเรียนและหลังเรียน")}
         </h3>
         {post !== null ? (
           <Pill tone={post >= PASS_MARK ? "success" : "danger"}>

@@ -226,7 +226,7 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
 
       <Card className="mt-5">
         <TableWrap>
-          <table className="w-full min-w-[920px] border-collapse">
+          <table className="w-full min-w-[920px] xl:min-w-0 border-collapse">
             <thead>
               <tr className="border-b border-line/70 bg-surface/60">
                 <Th>{tt("Account", "บัญชี")}</Th>

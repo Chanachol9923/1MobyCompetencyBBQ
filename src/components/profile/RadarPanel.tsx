@@ -54,7 +54,7 @@ export function RadarPanel({
       )}
     >
       <div className="pointer-events-none absolute left-0 top-0 z-10">
-        <p className="text-sm text-muted">{label ?? tt("Over-all", "ภาพรวม")}</p>
+        <p className="text-sm text-muted">{label ?? tt("Overall", "ภาพรวม")}</p>
         <ul className="mt-2 space-y-1 text-xs text-muted">
           <li className="flex items-center gap-2">
             <span className="size-2 shrink-0 rounded-full bg-line-2" />

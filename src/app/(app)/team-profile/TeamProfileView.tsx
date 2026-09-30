@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -47,6 +47,7 @@ import {
   type GapRow,
 } from "@/components/profile/gap";
 import { useT } from "@/lib/i18n";
+import { useUi } from "@/lib/ui-state";
 import { initials } from "@/lib/utils";
 import {
   deleteGoalAction,
@@ -214,7 +215,7 @@ export function TeamProfileView({
       { name: tt("Good", "ดี"), value: buckets.good, color: "#006bff" },
       { name: tt("Average", "ปานกลาง"), value: buckets.average, color: "#faa21b" },
       {
-        name: tt("Needs Improvement", "ต้องปรับปรุง"),
+        name: tt("Needs improvement", "ต้องปรับปรุง"),
         value: buckets.needs,
         color: "#f05123",
       },
@@ -270,18 +271,33 @@ export function TeamProfileView({
 
   /* -------------------------------------------------------------- actions */
 
-  const run = (fn: () => Promise<{ ok: true } | { ok: false; error: ActionError }>, done?: () => void) => {
+  const { notify } = useUi();
+  const run = (
+    fn: () => Promise<{ ok: true } | { ok: false; error: ActionError }>,
+    done: () => void,
+    success: string,
+  ) => {
     setError(null);
     startTransition(async () => {
       const result = await fn();
       if (result.ok) {
-        done?.();
+        done();
+        notify(success);
         router.refresh();
       } else {
         setError(result.error);
       }
     });
   };
+
+  // an error while no dialog is open goes to the app-wide toast
+  useEffect(() => {
+    if (!error || goalForm) return;
+    notify(errorText(error), "error");
+    setError(null);
+    // errorText is recreated each render; the error value is the trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error, goalForm]);
 
   const saveGoal = (draft: GoalDraft) => {
     if (!selected) return;
@@ -293,6 +309,9 @@ export function TeamProfileView({
           ...draft,
         }),
       () => setGoalForm(null),
+      goalForm?.goal
+        ? tt("Goal updated.", "อัปเดตเป้าหมายแล้ว")
+        : tt(`Goal added to ${selected.name}'s plan.`, `เพิ่มเป้าหมายในแผนของ ${selected.name} แล้ว`),
     );
   };
 
@@ -300,6 +319,7 @@ export function TeamProfileView({
     run(
       () => deleteGoalAction({ goalId: goal.id, employeeId: goal.employeeId }),
       () => setPendingDelete(null),
+      tt("Goal removed.", "ลบเป้าหมายแล้ว"),
     );
   };
 
@@ -309,6 +329,7 @@ export function TeamProfileView({
       () =>
         saveCoachingNoteAction({ employeeId: selected.id, body: noteValue }),
       () => setNote(null),
+      tt("Note saved.", "บันทึกโน้ตแล้ว"),
     );
   };
 
@@ -350,20 +371,11 @@ export function TeamProfileView({
         }
       />
 
-      {error ? (
-        <p
-          role="alert"
-          className="mb-4 rounded-lg bg-accent/10 px-4 py-3 text-sm font-medium text-accent"
-        >
-          {errorText(error)}
-        </p>
-      ) : null}
-
       {/* ------------------------------------------------------- stat cards */}
       <div className="grid items-stretch gap-6 sm:grid-cols-3">
         <Card className="flex flex-col justify-between p-5">
           <p className="text-base font-bold text-ink">
-            {tt("Assessment Completed", "ประเมินเสร็จแล้ว")}
+            {tt("Assessments completed", "ประเมินเสร็จแล้ว")}
           </p>
           <p className="mt-1 text-3xl font-bold text-brand">
             {reviewed}/{members.length}
@@ -371,7 +383,7 @@ export function TeamProfileView({
         </Card>
         <Card className="flex flex-col justify-between p-5">
           <p className="text-base font-bold text-ink">
-            {tt("Team Avg Score", "คะแนนเฉลี่ยของทีม")}
+            {tt("Team average score", "คะแนนเฉลี่ยของทีม")}
           </p>
           <p className="mt-1 text-3xl font-bold text-success">
             {avgScore ?? tt("No scores yet", "ยังไม่มีคะแนน")}
@@ -379,7 +391,7 @@ export function TeamProfileView({
         </Card>
         <Card className="flex flex-col justify-between p-5">
           <p className="text-base font-bold text-ink">
-            {tt("IDP Progress", "ความคืบหน้าแผนพัฒนา")}
+            {tt("IDP progress", "ความคืบหน้าแผนพัฒนา")}
           </p>
           <p className="mt-1 text-3xl font-bold text-amber">
             {avgIdp === null
@@ -412,13 +424,13 @@ export function TeamProfileView({
           <Donut
             data={distribution}
             total={rated}
-            totalLabel={tt("TOTAL", "ทั้งหมด")}
+            totalLabel={tt("Total", "ทั้งหมด")}
             size={175}
             dark
           />
           <div className="w-full max-w-[260px]">
             <p className="mb-3 text-base font-bold text-white">
-              {tt("Performance Dist.", "การกระจายผลงาน")}
+              {tt("Performance distribution", "การกระจายผลงาน")}
             </p>
             <DonutLegend data={distribution} dark />
             <p className="mt-3 text-[11px] text-white/70">
@@ -435,7 +447,7 @@ export function TeamProfileView({
       <section className="mt-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-ink lg:text-[32px]">
-            {tt("Team Competency Heat map", "แผนภาพความร้อนสมรรถนะทีม")}
+            {tt("Team competency heat map", "ฮีตแมปสมรรถนะของทีม")}
           </h2>
           <Pill tone="brand">{groupLabel(activeGroup)}</Pill>
         </div>
@@ -457,9 +469,8 @@ export function TeamProfileView({
             }}
           />
           <p className="mt-3 text-xs text-muted">
-            {tt(
-              "Select a row to load that member into the panel below. Cells marked N/A are competencies that role is not assessed on.",
-              "เลือกแถวเพื่อโหลดสมาชิกคนนั้นในแผงด้านล่าง ช่องที่ระบุว่าไม่ประเมิน คือสมรรถนะที่ตำแหน่งนั้นไม่ถูกประเมิน",
+            {tt("Select someone to see their details below. N/A means their role is not assessed on that competency.",
+              "เลือกสมาชิกเพื่อดูรายละเอียดด้านล่าง ช่อง “ไม่ประเมิน” หมายถึงตำแหน่งของคนนั้นไม่ได้ประเมินสมรรถนะนี้",
             )}
           </p>
         </Card>
@@ -468,7 +479,7 @@ export function TeamProfileView({
       {/* ----------------------------------------------- selected employee */}
       <section className="mt-6">
         <h2 className="mb-4 text-2xl font-bold text-ink lg:text-[32px]">
-          {tt("Selected Employee", "พนักงานที่เลือก")}
+          {tt("Selected employee", "พนักงานที่เลือก")}
         </h2>
 
         <div className="rounded-2xl bg-brand p-4">
@@ -681,9 +692,8 @@ export function TeamProfileView({
               className="mt-4 flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-brand-dark px-4 py-3 text-xl font-bold text-white transition-colors hover:brightness-110"
             >
               <ClipboardCheck size={22} />
-              {tt(
-                `Evaluate ${firstName} Now`,
-                `ประเมิน ${firstName} ตอนนี้`,
+              {tt(`Review ${firstName} now`,
+                `ประเมิน ${firstName} เลย`,
               )}
             </button>
           )}
@@ -695,7 +705,7 @@ export function TeamProfileView({
         <Card className="grid gap-6 bg-brand-tint p-6 lg:grid-cols-[1fr_auto_260px] lg:items-center">
           <div>
             <h2 className="text-2xl font-bold text-ink lg:text-[32px]">
-              {tt("TEAM LEARNING PROGRESS", "ความคืบหน้าการเรียนรู้ของทีม")}
+              {tt("Team learning progress", "ความคืบหน้าการเรียนรู้ของทีม")}
             </h2>
             <p className="mt-1 text-sm text-muted">
               {tt(
@@ -713,12 +723,12 @@ export function TeamProfileView({
               data={learningStages}
               total={members.length}
               size={170}
-              totalLabel={tt("TOTAL", "ทั้งหมด")}
+              totalLabel={tt("Total", "ทั้งหมด")}
             />
           </div>
           <div>
             <p className="mb-3 text-base font-bold text-ink">
-              {tt("Learning Stages", "ระดับการเรียนรู้")}
+              {tt("Learning stages", "สถานะการเรียน")}
             </p>
             <DonutLegend data={learningStages} />
           </div>
@@ -743,16 +753,16 @@ export function TeamProfileView({
                 <tr className="border-b border-line text-left text-xs font-normal text-muted">
                   <th className="px-3 py-3 font-normal">{t("label.member")}</th>
                   <th className="px-3 py-3 font-normal">
-                    {tt("Current Course", "หลักสูตรปัจจุบัน")}
+                    {tt("Current course", "หลักสูตรปัจจุบัน")}
                   </th>
                   <th className="w-[200px] px-3 py-3 font-normal">
                     {t("label.progress")}
                   </th>
                   <th className="px-3 py-3 font-normal">
-                    {tt("Class Hours", "ชั่วโมงเรียน")}
+                    {tt("Class hours", "ชั่วโมงเรียน")}
                   </th>
                   <th className="px-3 py-3 font-normal">
-                    {tt("Latest Activity", "กิจกรรมล่าสุด")}
+                    {tt("Latest activity", "กิจกรรมล่าสุด")}
                   </th>
                 </tr>
               </thead>

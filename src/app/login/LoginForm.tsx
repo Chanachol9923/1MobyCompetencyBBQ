@@ -17,6 +17,9 @@ export type DemoAccount = {
 
 type Bi = { en: string; th: string };
 
+/** What the password field holds after a test account is picked — never a real password. */
+const TEST_PASSWORD_MASK = "test-account";
+
 const ERRORS: Record<string, Bi> = {
   invalid: {
     en: "The login ID or password is not correct.",
@@ -54,7 +57,6 @@ function errorFor(error?: string, code?: string): Bi | null {
 export function LoginForm({
   loginDomain,
   demoAccounts,
-  demoPassword,
   ssoName,
   error,
   code,
@@ -63,8 +65,6 @@ export function LoginForm({
 }: {
   loginDomain: string;
   demoAccounts: DemoAccount[];
-  /** the seeded accounts' shared password, only in test mode */
-  demoPassword: string | null;
   ssoName: string | null;
   error?: string;
   code?: string;
@@ -75,6 +75,8 @@ export function LoginForm({
   const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  // the test account picked from the suggestions, while its fields are untouched
+  const [testPick, setTestPick] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<Bi | null>(() => errorFor(error, code));
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -90,14 +92,14 @@ export function LoginForm({
 
   function pick(a: DemoAccount) {
     setLoginId(a.loginId);
-    if (demoPassword) setPassword(demoPassword);
+    // a stand-in so the field shows as filled; the real password is never sent
+    setPassword(TEST_PASSWORD_MASK);
+    setTestPick(a.loginId);
     setSuggestOpen(false);
     setMessage(null);
     // straight to the button: one more click (or Enter) signs in
     window.setTimeout(() => {
-      const target = demoPassword
-        ? document.querySelector<HTMLButtonElement>("#login-submit")
-        : passwordRef.current?.querySelector("input");
+      const target = document.querySelector<HTMLButtonElement>("#login-submit");
       target?.focus();
     }, 0);
   }
@@ -144,11 +146,10 @@ export function LoginForm({
     setLoginId(id);
     setBusy("company");
     setMessage(null);
-    const res = await signIn("company", {
-      loginId: id,
-      password,
-      redirect: false,
-    });
+    const viaTest = testPick !== null && testPick === id && password === TEST_PASSWORD_MASK;
+    const res = viaTest
+      ? await signIn("test", { account: id, redirect: false })
+      : await signIn("company", { loginId: id, password, redirect: false });
     if (res?.ok && !res.error) {
       router.replace(callbackUrl);
       router.refresh();
@@ -156,6 +157,7 @@ export function LoginForm({
     }
     setBusy(null);
     setPassword("");
+    setTestPick(null);
     setMessage(errorFor(res?.error ?? "default", res?.code));
   }
 
@@ -204,6 +206,7 @@ export function LoginForm({
             value={loginId}
             onChange={(e) => {
               setLoginId(e.target.value);
+              setTestPick(null);
               setSuggestOpen(true);
               setHighlight(0);
             }}
@@ -224,7 +227,7 @@ export function LoginForm({
             <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_32px_rgba(16,24,40,.16)]">
               <p className="flex items-center gap-1.5 border-b border-line bg-surface/70 px-3 py-1.5 text-[11px] font-medium text-muted">
                 <FlaskConical size={12} className="text-brand" />
-                {tt("Test accounts — pick one to fill in", "บัญชีทดสอบ — เลือกเพื่อกรอกให้อัตโนมัติ")}
+                {tt("Test accounts — pick one, then Sign in", "บัญชีทดสอบ — เลือกแล้วกดเข้าสู่ระบบ")}
               </p>
               <ul id="demo-accounts" role="listbox">
                 {suggestions.map((a, i) => (
@@ -269,7 +272,10 @@ export function LoginForm({
             name="password"
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setTestPick(null);
+            }}
             disabled={busy !== null}
           />
         </div>
@@ -320,8 +326,8 @@ export function LoginForm({
           <FlaskConical size={14} className="mt-0.5 shrink-0 text-brand" />
           <span>
             {tt(
-              `Test mode: click the Login ID field and pick one of ${demoAccounts.length} test accounts — the ID and password fill in for you.`,
-              `โหมดทดสอบ: คลิกช่องไอดีเข้าสู่ระบบแล้วเลือกบัญชีทดสอบ ${demoAccounts.length} บัญชี ระบบจะกรอกไอดีและรหัสผ่านให้`,
+              `Test mode: click the Login ID field and pick one of ${demoAccounts.length} test accounts. It signs in even after that account's password was changed. Type a password yourself to test the real sign-in.`,
+              `โหมดทดสอบ: คลิกช่องไอดีแล้วเลือกบัญชีทดสอบ ${demoAccounts.length} บัญชี เข้าได้แม้รหัสผ่านของบัญชีนั้นถูกเปลี่ยนไปแล้ว หากต้องการทดสอบการเข้าสู่ระบบจริง ให้พิมพ์รหัสผ่านเอง`,
             )}
           </span>
         </p>

@@ -5,6 +5,7 @@ import { db } from "./db";
 import { authConfig } from "./auth.config";
 import { isValidLoginId, normaliseLoginId } from "./login-id";
 import { hashPassword, verifyPassword } from "./password";
+import { loadTestAccounts } from "@/server/test-accounts";
 
 /**
  * Single sign-on for the whole system.
@@ -193,6 +194,35 @@ const providers: Provider[] = [
       signInWithPassword(credentials?.loginId, credentials?.password),
   }),
 ];
+
+// Test mode: the three suggested test accounts sign in without their
+// password, so testing keeps working after someone changes or resets one.
+// Only those accounts, only while the flag is on; typing a password still
+// goes through the real check above.
+if (demoLoginEnabled) {
+  providers.push(
+    Credentials({
+      id: "test",
+      name: "Test account",
+      credentials: { account: { label: "Account", type: "text" } },
+      async authorize(credentials) {
+        const loginId = normaliseLoginId(String(credentials?.account ?? ""));
+        const allowed = await loadTestAccounts();
+        if (!allowed.some((a) => a.loginId === loginId)) return null;
+        const user = await db.user.findUnique({
+          where: { email: loginId },
+          select: { id: true, email: true, name: true, image: true, status: true },
+        });
+        if (!user || user.status !== "ACTIVE") return null;
+        await db.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
+        });
+        return { id: user.id, email: user.email, name: user.name, image: user.image };
+      },
+    }),
+  );
+}
 
 // Federation to the company identity provider, when one is configured.
 const ssoEnabled = Boolean(

@@ -106,7 +106,7 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
       {/* ----------------------------------------------------------- banner */}
       <div className="rounded-xl bg-gradient-to-r from-ink to-brand px-6 py-6 text-white shadow-[0_2px_10px_rgba(16,24,40,.12)]">
         <p className="text-xl font-medium sm:text-2xl">
-          {tt("Point Remaining", "คะแนนคงเหลือ")}
+          {tt("Points remaining", "คะแนนคงเหลือ")}
         </p>
         <p className="mt-1 text-4xl font-bold sm:text-5xl">{formatNumber(balance)}</p>
         <p className="mt-2 text-xs text-white/75">
@@ -121,19 +121,19 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
       <div className="mt-5 grid gap-5 sm:grid-cols-3">
         <StatTile
           icon={<Star size={20} />}
-          label={tt("Total Point", "คะแนนสะสมทั้งหมด")}
+          label={tt("Total points", "คะแนนสะสมทั้งหมด")}
           value={formatNumber(totalEarned)}
           hint={tt("Everything you have earned", "คะแนนทั้งหมดที่เคยได้รับ")}
         />
         <StatTile
           icon={<ShoppingCart size={20} />}
-          label={tt("Points Spent", "คะแนนที่ใช้ไป")}
+          label={tt("Points spent", "คะแนนที่ใช้ไป")}
           value={formatNumber(spent)}
           hint={tt("Used on rewards", "ใช้แลกของรางวัลไปแล้ว")}
         />
         <StatTile
           icon={<Gift size={20} />}
-          label={tt("Rewards Redeemed", "ของรางวัลที่แลกแล้ว")}
+          label={tt("Rewards redeemed", "ของรางวัลที่แลกแล้ว")}
           value={String(redeemedCount)}
         />
       </div>
@@ -142,7 +142,7 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
       <div className="mt-5 rounded-xl bg-brand-tint/60 p-5">
         <p className="flex items-center gap-2 text-base font-medium text-ink">
           <Lightbulb size={18} className="shrink-0 text-amber" />
-          {tt("How to get point?", "รับคะแนนได้อย่างไร?")}
+          {tt("How to earn points", "วิธีสะสมคะแนน")}
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {POINT_RULES.map((rule) => {

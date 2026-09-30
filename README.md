@@ -79,10 +79,11 @@ against a live provider.
 ### 4. Test mode
 
 `NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true` turns on test mode: clicking the Login ID field suggests three
-seeded accounts — an individual contributor, a manager with reports and the HROD administrator —
-and picking one fills in the ID and the password from `SEED_DEMO_PASSWORD`. Sign-in still goes
-through the normal password check. The password is sent to the browser in this mode, so anyone
-who can open the site can sign in as those accounts: set the flag to `false` before real use.
+seeded accounts — an individual contributor, a manager with reports and the HROD administrator.
+Picking one and pressing Sign in lets you in without that account's password, so testing keeps
+working after someone changes or resets it; typing a password yourself tests the real sign-in.
+No password is sent to the browser. Anyone who can open the site can use those three accounts, so
+set the flag to `false` before real use.
 
 ## The rules the product is built on
 

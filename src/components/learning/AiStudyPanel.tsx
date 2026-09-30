@@ -143,9 +143,9 @@ export function AiStudyPanel({
   const chSummary = summaryOf(chapter, lang);
   const chBullets = bulletsOf(chapter, lang);
   const labels = {
-    quiz: tt("Quick Quiz!", "ควิซด่วน!"),
-    summarize: tt("Summarize", "สรุปให้หน่อย"),
-    askMe: tt("Ask me!", "ถามฉันสิ!"),
+    quiz: tt("Quick quiz", "แบบทดสอบสั้น"),
+    summarize: tt("Summarize", "สรุปเนื้อหา"),
+    askMe: tt("Ask me", "ถามได้เลย"),
   };
 
   const push = (...msgs: AiMessage[]) =>
@@ -252,9 +252,8 @@ export function AiStudyPanel({
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-ink">{tt("Ask AI", "ถาม AI")}</h2>
           <p className="text-xs text-muted">
-            {tt(
-              "Scripted demo assistant — answers are generated locally from this chapter's content. No network calls.",
-              "ผู้ช่วยสาธิตแบบสคริปต์ — คำตอบถูกสร้างจากเนื้อหาของบทเรียนนี้ในเครื่องของคุณ ไม่มีการเรียกใช้งานผ่านเครือข่าย",
+            {tt("Built-in assistant — answers come from this chapter's own content.",
+              "ผู้ช่วยในตัว — คำตอบมาจากเนื้อหาของบทเรียนนี้",
             )}
           </p>
         </div>

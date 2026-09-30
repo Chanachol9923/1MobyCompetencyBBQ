@@ -190,7 +190,7 @@ export function IdpView({
       {/* ------------------------------------------------------- goal list */}
       <div className="mb-6 mt-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-2xl font-medium text-ink lg:text-[32px]">
-          {tt("On Progress", "กำลังดำเนินการ")}
+          {tt("In progress", "กำลังดำเนินการ")}
         </p>
         {options.length ? (
           <Tabs
@@ -329,9 +329,8 @@ export function IdpView({
                 {showingPlanCourse ? (
                   <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted">
                     <RefreshCw size={12} className="shrink-0" />
-                    {tt(
-                      "Synced with the course — finishing it in the LMS completes this goal",
-                      "ซิงก์กับหลักสูตร — เมื่อเรียนจบในระบบการเรียนรู้ เป้าหมายนี้จะเสร็จสิ้นอัตโนมัติ",
+                    {tt("Linked to the course — finishing it completes this goal",
+                      "ผูกกับหลักสูตร — เรียนจบแล้วเป้าหมายนี้จะเสร็จเอง",
                     )}
                   </p>
                 ) : null}
@@ -351,7 +350,7 @@ export function IdpView({
                   <button
                     type="button"
                     onClick={() => show(index - 1)}
-                    aria-label={tt("Previous course", "คอร์สก่อนหน้า")}
+                    aria-label={tt("Previous course", "หลักสูตรก่อนหน้า")}
                     className="grid size-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink"
                   >
                     <ChevronLeft size={15} />
@@ -393,7 +392,7 @@ export function IdpView({
                   <button
                     type="button"
                     onClick={() => show(index + 1)}
-                    aria-label={tt("Next course", "คอร์สถัดไป")}
+                    aria-label={tt("Next course", "หลักสูตรถัดไป")}
                     className="grid size-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink"
                   >
                     <ChevronRight size={15} />
@@ -442,7 +441,7 @@ export function IdpView({
       {resumeCourse ? (
         <section className="mt-6">
           <h2 className="mb-4 text-2xl font-medium text-ink lg:text-[32px]">
-            {tt("Resume your latest class!", "เรียนต่อจากคลาสล่าสุด!")}
+            {tt("Pick up where you left off", "เรียนต่อจากที่ค้างไว้")}
           </h2>
           <div className="grid gap-6 rounded-2xl bg-ink p-6 lg:grid-cols-[1fr_340px] lg:p-8">
             <div className="grid min-h-[220px] place-items-center">

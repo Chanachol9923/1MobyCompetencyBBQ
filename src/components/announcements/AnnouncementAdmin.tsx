@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui";
 import { IconAction, Note, SearchInput } from "@/components/admin/shared";
 import { useT } from "@/lib/i18n";
+import { useUi } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
 import {
   createAnnouncement,
@@ -126,6 +127,14 @@ export function AnnouncementAdmin({
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [confirm, setConfirm] = useState<AdminAnnouncementRow | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const { notify } = useUi();
+
+  // outside the dialog, results go to the app-wide toast like every other screen
+  useEffect(() => {
+    if (!feedback || open) return;
+    notify(lang === "th" ? feedback.th : feedback.en, feedback.tone === "ok" ? "success" : "error");
+    setFeedback(null);
+  }, [feedback, open, lang, notify]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -293,7 +302,7 @@ export function AnnouncementAdmin({
   const createButton = (
     <Button onClick={openCreate}>
       <Plus size={15} />
-      {tt("Create Announcement", "สร้างประกาศ")}
+      {tt("Create announcement", "สร้างประกาศ")}
     </Button>
   );
 
@@ -303,7 +312,7 @@ export function AnnouncementAdmin({
         <div className="mb-4 flex justify-end max-sm:[&>*]:w-full">{createButton}</div>
       ) : (
         <PageHeading
-          title={tt("Announcement Management", "จัดการประกาศ")}
+          title={tt("Manage announcements", "จัดการประกาศ")}
           subtitle={tt(
             "Published announcements appear in every recipient's feed and raise a notification.",
             "ประกาศที่เผยแพร่จะแสดงในฟีดของผู้รับทุกคนพร้อมส่งการแจ้งเตือน",
@@ -311,25 +320,6 @@ export function AnnouncementAdmin({
           right={createButton}
         />
       )}
-
-      {feedback && !open ? (
-        <div
-          role="status"
-          className={cn(
-            "mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm",
-            feedback.tone === "ok"
-              ? "border-success/40 bg-success/10 text-success"
-              : "border-accent/40 bg-accent/10 text-accent",
-          )}
-        >
-          {feedback.tone === "ok" ? (
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-          ) : (
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          )}
-          <span>{lang === "th" ? feedback.th : feedback.en}</span>
-        </div>
-      ) : null}
 
       <Card className="p-5">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -345,7 +335,7 @@ export function AnnouncementAdmin({
           </div>
           <Field label={t("label.status")}>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">{tt("All Status", "ทุกสถานะ")}</option>
+              <option value="all">{tt("All statuses", "ทุกสถานะ")}</option>
               <option value="PUBLISHED">{t("status.published")}</option>
               <option value="SCHEDULED">{t("status.scheduled")}</option>
               <option value="DRAFT">{t("status.draft")}</option>
@@ -353,7 +343,7 @@ export function AnnouncementAdmin({
           </Field>
           <Field label={t("label.channel")}>
             <Select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)}>
-              <option value="all">{tt("All Type", "ทุกช่องทาง")}</option>
+              <option value="all">{tt("All channels", "ทุกช่องทาง")}</option>
               {CHANNELS.map((c) => (
                 <option key={c} value={c}>
                   {channelLabel(c, lang)}
@@ -438,7 +428,7 @@ export function AnnouncementAdmin({
                       }
                     >
                       <Undo2 size={13} className="text-muted" />
-                      {tt("Unpublish", "ยกเลิกเผยแพร่")}
+                      {tt("Unpublish", "ยกเลิกการเผยแพร่")}
                     </Button>
                   ) : (
                     <Button
@@ -552,8 +542,8 @@ export function AnnouncementAdmin({
         onClose={() => setOpen(false)}
         title={
           draft.id
-            ? tt("Edit Announcement", "แก้ไขประกาศ")
-            : tt("Create New Announcement", "สร้างประกาศใหม่")
+            ? tt("Edit announcement", "แก้ไขประกาศ")
+            : tt("New announcement", "ประกาศใหม่")
         }
         subtitle={
           step === 1

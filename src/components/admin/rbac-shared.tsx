@@ -1,17 +1,18 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Clock3, X } from "lucide-react";
+import { useEffect } from "react";
+import { Clock3 } from "lucide-react";
+import { useUi } from "@/lib/ui-state";
 import { Pill } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 import type { ActionResult, UserStatusValue } from "@/components/admin/admin-types";
 
 /**
- * The strip an admin screen uses to answer "did that work?".
- *
- * Server actions return their message in both languages, so the banner only has
- * to pick one — a refusal keeps the exact sentence the action produced, because
- * "you cannot suspend your own account" is more useful than "failed".
+ * How an admin screen answers "did that work?". Every server action returns
+ * its message in both languages; this hands it to the app-wide toast — the
+ * same place, the same look, on every screen — instead of a strip at the top
+ * of a page the administrator may have scrolled away from.
  */
 export function ResultBanner({
   result,
@@ -21,34 +22,18 @@ export function ResultBanner({
   onDismiss: () => void;
 }) {
   const { tt } = useT();
-  if (!result) return null;
-  const ok = result.ok;
-  const text = ok ? tt(result.message.en, result.message.th) : tt(result.error.en, result.error.th);
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={cn(
-        "animate-enter mb-5 flex items-start gap-3 rounded-xl border p-4 text-sm",
-        ok
-          ? "border-success/40 bg-success/10 text-ink"
-          : "border-accent/40 bg-accent/10 text-ink",
-      )}
-    >
-      <span className={cn("mt-0.5 shrink-0", ok ? "text-success" : "text-accent")}>
-        {ok ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-      </span>
-      <p className="min-w-0 flex-1 leading-relaxed">{text}</p>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label={tt("Dismiss", "ปิดข้อความ")}
-        className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-white/60 hover:text-ink max-lg:grid max-lg:size-11 max-lg:place-items-center"
-      >
-        <X size={16} />
-      </button>
-    </div>
-  );
+  const { notify } = useUi();
+  useEffect(() => {
+    if (!result) return;
+    notify(
+      result.ok ? tt(result.message.en, result.message.th) : tt(result.error.en, result.error.th),
+      result.ok ? "success" : "error",
+    );
+    onDismiss();
+    // a new result object is the trigger; the language at that moment is used
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+  return null;
 }
 
 export function StatusPill({ status }: { status: UserStatusValue }) {

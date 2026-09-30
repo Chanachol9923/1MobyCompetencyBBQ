@@ -2322,8 +2322,8 @@ export async function deleteJobRole(
     });
     revalidateContent();
     return done(
-      `"${role.name}" deleted, along with its expected-level column.`,
-      `ลบบทบาท "${role.name}" พร้อมคอลัมน์ระดับที่คาดหวังแล้ว`,
+      `"${role.name}" deleted, along with its expected levels.`,
+      `ลบบทบาท "${role.name}" พร้อมระดับที่คาดหวังแล้ว`,
     );
   });
 }

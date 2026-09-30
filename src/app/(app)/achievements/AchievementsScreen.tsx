@@ -235,7 +235,7 @@ export function AchievementsScreen({ data }: { data: AchievementsScreenData }) {
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-ink">
-              {tt("Badge Collection", "คลังเหรียญตรา")}
+              {tt("Badge collection", "คลังเหรียญตรา")}
             </h2>
             <p className="text-xs text-muted">
               {tt(
@@ -312,7 +312,7 @@ function BadgeTile({ badge: b }: { badge: BadgeCard }) {
         ) : null}
         {b.source !== "manual" ? (
           <span className="absolute left-2 top-2 rounded-full bg-white/85 px-1.5 py-0.5 text-[9px] font-bold text-brand">
-            {tt("LIVE", "เรียลไทม์")}
+            {tt("Live", "ล่าสุด")}
           </span>
         ) : null}
       </div>

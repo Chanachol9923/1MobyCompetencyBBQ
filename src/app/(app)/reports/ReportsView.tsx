@@ -162,7 +162,7 @@ export function ReportsView({
       return;
     }
     const data: (string | number)[][] = [
-      [tt("Gap Analysis Report", "รายงานวิเคราะห์ช่องว่างสมรรถนะ")],
+      [tt("Gap analysis report", "รายงานวิเคราะห์ช่องว่างสมรรถนะ")],
       [tt("Scope", "ขอบเขต"), scopeCaption],
       [tt("Headcount", "จำนวนพนักงาน"), headcount],
       [tt("Generated", "สร้างเมื่อ"), new Date().toISOString().slice(0, 10)],
@@ -170,8 +170,8 @@ export function ReportsView({
       [
         tt("Competency", "สมรรถนะ"),
         tt("Group", "กลุ่ม"),
-        tt("Avg self", "คะแนนประเมินตนเองเฉลี่ย"),
-        tt("Avg manager score", "คะแนนหัวหน้าประเมินเฉลี่ย"),
+        tt("Average self score", "คะแนนประเมินตนเองเฉลี่ย"),
+        tt("Average manager score", "คะแนนหัวหน้าประเมินเฉลี่ย"),
         t("label.expected"),
         t("label.gap"),
         tt("Verdict", "ผลการวิเคราะห์"),
@@ -204,9 +204,9 @@ export function ReportsView({
       data.push([
         tt("Employee", "พนักงาน"),
         t("label.position"),
-        tt("Job role", "ระดับตำแหน่ง"),
+        tt("Career role", "บทบาทสายอาชีพ"),
         t("label.department"),
-        tt("Avg gap", "ส่วนต่างเฉลี่ย"),
+        tt("Average gap", "ส่วนต่างเฉลี่ย"),
         tt("Critical competencies", "สมรรถนะที่ต้องพัฒนาเร่งด่วน"),
         tt("Weakest", "จุดอ่อนที่สุด"),
       ]);
@@ -238,7 +238,7 @@ export function ReportsView({
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
-        title={tt("Gap Analysis Report", "รายงานวิเคราะห์ช่องว่างสมรรถนะ")}
+        title={tt("Gap analysis report", "รายงานวิเคราะห์ช่องว่างสมรรถนะ")}
         subtitle={tt(
           "Manager score against the expected level from the competency map",
           "คะแนนจากหัวหน้าเทียบกับระดับที่คาดหวังตามผังสมรรถนะ",
@@ -393,7 +393,7 @@ export function ReportsView({
             <div className="scroll-thin min-w-0 overflow-x-auto px-2 pb-5">
               <GapBarChart
                 data={toBarData(byGapDesc, lang)}
-                actualLabel={tt("Avg manager score", "คะแนนหัวหน้าประเมินเฉลี่ย")}
+                actualLabel={tt("Average manager score", "คะแนนหัวหน้าประเมินเฉลี่ย")}
                 expectedLabel={t("label.expected")}
                 verdictKeyLabel={tt("Score bar colour:", "สีของหลอดคะแนน:")}
               />
@@ -502,7 +502,7 @@ export function ReportsView({
               )}
             />
             <ResponsiveTable className="px-4 pb-5" cardClassName="border-line">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[820px] xl:min-w-0 text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-muted">
                     <SortTh
@@ -512,7 +512,7 @@ export function ReportsView({
                       onClick={() => toggleSort("competency")}
                     />
                     <SortTh
-                      label={tt("Avg score", "คะแนนเฉลี่ย")}
+                      label={tt("Average score", "คะแนนเฉลี่ย")}
                       active={sortKey === "avgScore"}
                       asc={sortAsc}
                       align="center"

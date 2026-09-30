@@ -223,7 +223,7 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
-        title={tt("Achievements Management", "จัดการความสำเร็จ")}
+        title={tt("Manage achievements", "จัดการความสำเร็จ")}
         subtitle={tt(
           "Badges, what earns them, and who holds each one.",
           "เหรียญตรา เงื่อนไขการได้รับ และรายชื่อผู้ถือครอง",
@@ -256,7 +256,7 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
         <div className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div>
             <h3 className="text-2xl font-bold text-ink">
-              {tt("All Achievements", "ความสำเร็จทั้งหมด")}
+              {tt("All achievements", "ความสำเร็จทั้งหมด")}
             </h3>
             <p className="mt-0.5 text-xs text-muted">
               {tt(
@@ -274,7 +274,7 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
             />
             <Button size="sm" onClick={openAdd}>
               <Plus size={15} />
-              {tt("Add Achievement", "เพิ่มความสำเร็จ")}
+              {tt("Add achievement", "เพิ่มความสำเร็จ")}
             </Button>
           </div>
         </div>
@@ -386,8 +386,8 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
         onClose={() => setOpen(false)}
         title={
           editing
-            ? tt("Edit Achievement", "แก้ไขความสำเร็จ")
-            : tt("Add New Achievement", "เพิ่มความสำเร็จใหม่")
+            ? tt("Edit achievement", "แก้ไขความสำเร็จ")
+            : tt("Add achievement", "เพิ่มความสำเร็จ")
         }
         width="max-w-2xl"
         footer={
@@ -413,7 +413,7 @@ export function BadgeAdminScreen({ data }: { data: BadgeAdminData }) {
           <Field label={`${tt("Title (English)", "ชื่อ (อังกฤษ)")} *`}>
             <Input
               value={draft.nameEn}
-              placeholder={tt("Enter Achievement Title", "กรอกชื่อความสำเร็จ")}
+              placeholder={tt("Achievement name", "ชื่อความสำเร็จ")}
               onChange={(e) => set("nameEn", e.target.value)}
             />
           </Field>

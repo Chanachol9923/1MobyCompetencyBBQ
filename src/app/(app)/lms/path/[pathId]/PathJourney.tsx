@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -30,6 +30,7 @@ import {
   type Lang,
 } from "@/components/learning/model";
 import { useT } from "@/lib/i18n";
+import { useUi } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
 import type { PathStepView, PathView, StepState } from "@/server/learning";
 import { submitPathProjectAction, type LmsError } from "../../actions";
@@ -109,6 +110,21 @@ export function PathJourney({ path }: { path: PathView }) {
   const steps = path.steps;
   const lastIndex = steps.length; // the project sits after every course step
 
+  // progress and problems go to the app-wide toast, like everywhere else
+  const { notify } = useUi();
+  useEffect(() => {
+    if (error === null) return;
+    notify(errorText(error), "error");
+    setError(null);
+    // errorText is recreated each render; the error value is the trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+  useEffect(() => {
+    if (!message) return;
+    notify(message);
+    setMessage(null);
+  }, [message, notify]);
+
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <Link
@@ -137,16 +153,6 @@ export function PathJourney({ path }: { path: PathView }) {
           </div>
         }
       />
-
-      {error ? (
-        <p className="mb-4 rounded-lg border border-accent/40 bg-accent/5 px-4 py-2.5 text-sm text-accent">
-          {errorText(error)}
-        </p>
-      ) : message ? (
-        <p className="mb-4 rounded-lg border border-brand/30 bg-brand-tint px-4 py-2.5 text-sm text-brand">
-          {message}
-        </p>
-      ) : null}
 
       <Card className="mb-8 overflow-hidden">
         <div
