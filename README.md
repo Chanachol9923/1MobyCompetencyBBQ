@@ -74,12 +74,13 @@ The provider proves who the person is; the account must still have been provisio
 the administrator keeps control of ids and roles. This path is wired but has not been tested
 against a live provider.
 
-### 4. Demo accounts
+### 4. Test mode
 
-`NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true` adds one-click sign-in for seeded personas — an individual
-contributor, a manager with reports, and the HROD administrator — so the system can be walked
-through in a meeting. The seed also gives every seeded account the password in
-`SEED_DEMO_PASSWORD`. Set the flag to `false` for a real deployment and the door is gone.
+`NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true` turns on test mode: clicking the Login ID field suggests three
+seeded accounts — an individual contributor, a manager with reports and the HROD administrator —
+and picking one fills in the ID and the password from `SEED_DEMO_PASSWORD`. Sign-in still goes
+through the normal password check. The password is sent to the browser in this mode, so anyone
+who can open the site can sign in as those accounts: set the flag to `false` before real use.
 
 ## The rules the product is built on
 

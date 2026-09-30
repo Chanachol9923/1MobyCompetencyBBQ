@@ -177,6 +177,8 @@ async function signInWithPassword(loginIdRaw: unknown, passwordRaw: unknown) {
 
 /* --------------------------------------------------------------- providers */
 
+// test mode: the login screen suggests the seeded accounts and fills in their
+// password. Every sign-in still goes through the password check below.
 const demoLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
 
 const providers: Provider[] = [
@@ -191,30 +193,6 @@ const providers: Provider[] = [
       signInWithPassword(credentials?.loginId, credentials?.password),
   }),
 ];
-
-// Walk-through switch for demos: signs in as an existing ACTIVE seeded account
-// without its password. Off unless the env flag is set, and even then it can
-// only reach accounts an administrator already provisioned.
-if (demoLoginEnabled) {
-  providers.push(
-    Credentials({
-      id: "demo",
-      name: "Demo account",
-      credentials: { account: { label: "Account", type: "text" } },
-      async authorize(credentials) {
-        const loginId = normaliseLoginId(String(credentials?.account ?? ""));
-        if (!isValidLoginId(loginId)) return null;
-        const user = await db.user.findUnique({
-          where: { email: loginId },
-          select: { id: true, email: true, name: true, image: true, status: true },
-        });
-        if (!user || user.status !== "ACTIVE") return null;
-        await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-        return { id: user.id, email: user.email, name: user.name, image: user.image };
-      },
-    }),
-  );
-}
 
 // Federation to the company identity provider, when one is configured.
 const ssoEnabled = Boolean(

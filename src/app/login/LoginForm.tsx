@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { KeyRound, LogIn, ShieldCheck } from "lucide-react";
+import { FlaskConical, KeyRound, LogIn, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 import { AuthFrame, AuthInput, AuthNotice, PasswordInput } from "@/components/auth/AuthFrame";
@@ -54,6 +54,7 @@ function errorFor(error?: string, code?: string): Bi | null {
 export function LoginForm({
   loginDomain,
   demoAccounts,
+  demoPassword,
   ssoName,
   error,
   code,
@@ -62,6 +63,8 @@ export function LoginForm({
 }: {
   loginDomain: string;
   demoAccounts: DemoAccount[];
+  /** the seeded accounts' shared password, only in test mode */
+  demoPassword: string | null;
   ssoName: string | null;
   error?: string;
   code?: string;
@@ -74,6 +77,50 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<Bi | null>(() => errorFor(error, code));
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const passwordRef = useRef<HTMLDivElement>(null);
+
+  // test mode: the seeded accounts, filtered by what has been typed so far
+  const q = loginId.trim().toLowerCase();
+  const suggestions = demoAccounts.filter(
+    (a) => !q || a.loginId.includes(q) || a.name.toLowerCase().includes(q),
+  );
+  const showSuggestions = suggestOpen && suggestions.length > 0 && busy === null;
+
+  function pick(a: DemoAccount) {
+    setLoginId(a.loginId);
+    if (demoPassword) setPassword(demoPassword);
+    setSuggestOpen(false);
+    setMessage(null);
+    // straight to the button: one more click (or Enter) signs in
+    window.setTimeout(() => {
+      const target = demoPassword
+        ? document.querySelector<HTMLButtonElement>("#login-submit")
+        : passwordRef.current?.querySelector("input");
+      target?.focus();
+    }, 0);
+  }
+
+  function onIdKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions) {
+      if (e.key === "ArrowDown" && suggestions.length) setSuggestOpen(true);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => (h + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => (h - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const a = suggestions[Math.min(highlight, suggestions.length - 1)];
+      if (a) pick(a);
+    } else if (e.key === "Escape") {
+      setSuggestOpen(false);
+    }
+  }
 
   const callbackUrl = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
 
@@ -112,11 +159,6 @@ export function LoginForm({
     setMessage(errorFor(res?.error ?? "default", res?.code));
   }
 
-  const demo = (id: string) => {
-    setBusy(id);
-    void signIn("demo", { account: id, callbackUrl });
-  };
-
   return (
     <AuthFrame>
       <h1 className="text-center text-3xl font-medium text-ink">
@@ -148,31 +190,91 @@ export function LoginForm({
       {message ? <AuthNotice>{tt(message.en, message.th)}</AuthNotice> : null}
 
       <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-        <AuthInput
-          label={tt("Login ID", "ไอดีเข้าสู่ระบบ")}
-          name="username"
-          type="text"
-          inputMode="email"
-          autoComplete="username"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder={`name.sur@${loginDomain}`}
-          value={loginId}
-          onChange={(e) => setLoginId(e.target.value)}
-          onBlur={() => setLoginId((v) => completeId(v))}
-          disabled={busy !== null}
-          autoFocus
-        />
-        <PasswordInput
-          label={tt("Password", "รหัสผ่าน")}
-          name="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={busy !== null}
-        />
+        <div className="relative">
+          <AuthInput
+            label={tt("Login ID", "ไอดีเข้าสู่ระบบ")}
+            name="username"
+            type="text"
+            inputMode="email"
+            autoComplete={demoAccounts.length ? "off" : "username"}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder={`name.sur@${loginDomain}`}
+            value={loginId}
+            onChange={(e) => {
+              setLoginId(e.target.value);
+              setSuggestOpen(true);
+              setHighlight(0);
+            }}
+            onClick={() => setSuggestOpen(true)}
+            onBlur={() => {
+              setSuggestOpen(false);
+              setLoginId((v) => completeId(v));
+            }}
+            onKeyDown={onIdKey}
+            disabled={busy !== null}
+            autoFocus
+            role={demoAccounts.length ? "combobox" : undefined}
+            aria-expanded={demoAccounts.length ? showSuggestions : undefined}
+            aria-controls={demoAccounts.length ? "demo-accounts" : undefined}
+            aria-autocomplete={demoAccounts.length ? "list" : undefined}
+          />
+          {showSuggestions ? (
+            <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_32px_rgba(16,24,40,.16)]">
+              <p className="flex items-center gap-1.5 border-b border-line bg-surface/70 px-3 py-1.5 text-[11px] font-medium text-muted">
+                <FlaskConical size={12} className="text-brand" />
+                {tt("Test accounts — pick one to fill in", "บัญชีทดสอบ — เลือกเพื่อกรอกให้อัตโนมัติ")}
+              </p>
+              <ul id="demo-accounts" role="listbox">
+                {suggestions.map((a, i) => (
+                  <li
+                    key={a.loginId}
+                    role="option"
+                    aria-selected={i === highlight}
+                    // mousedown, not click: it fires before the input's blur closes the list
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pick(a);
+                    }}
+                    onMouseEnter={() => setHighlight(i)}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors max-lg:min-h-12",
+                      i === highlight ? "bg-brand-tint/70" : "hover:bg-surface",
+                    )}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white">
+                      {a.name.slice(0, 1)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-ink">
+                        {a.name}
+                        <span className="ml-2 rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-muted">
+                          {a.roleLabel}
+                        </span>
+                      </span>
+                      <span className="block truncate text-xs text-muted">
+                        {a.loginId} · {a.detail}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+        <div ref={passwordRef}>
+          <PasswordInput
+            label={tt("Password", "รหัสผ่าน")}
+            name="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={busy !== null}
+          />
+        </div>
         <button
+          id="login-submit"
           type="submit"
           disabled={busy !== null}
           className={cn(
@@ -214,41 +316,15 @@ export function LoginForm({
       ) : null}
 
       {demoAccounts.length > 0 ? (
-        <>
-          <Divider label={tt("demo accounts", "บัญชีสาธิต")} />
-          <div className="space-y-2">
-            {demoAccounts.map((a) => (
-              <button
-                key={a.loginId}
-                type="button"
-                onClick={() => demo(a.loginId)}
-                disabled={busy !== null}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg border border-line px-4 py-2.5 text-left",
-                  "transition-all hover:border-brand/40 hover:bg-brand-tint/40",
-                  "active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50",
-                )}
-              >
-                <LogIn size={15} className="shrink-0 text-brand" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-ink">
-                    {a.name}
-                    <span className="ml-2 font-normal text-muted">{a.roleLabel}</span>
-                  </span>
-                  <span className="block truncate text-xs text-muted">
-                    {a.loginId} · {a.detail}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="mt-3 text-center text-[11px] text-muted">
+        <p className="mt-6 flex items-start gap-2 rounded-lg border border-dashed border-brand/30 bg-brand-tint/30 px-3 py-2 text-xs leading-relaxed text-muted">
+          <FlaskConical size={14} className="mt-0.5 shrink-0 text-brand" />
+          <span>
             {tt(
-              "Demo sign-in skips the password. Switch it off with NEXT_PUBLIC_ENABLE_DEMO_LOGIN before real use.",
-              "บัญชีสาธิตเข้าได้โดยไม่ต้องใช้รหัสผ่าน ปิดได้ด้วย NEXT_PUBLIC_ENABLE_DEMO_LOGIN ก่อนใช้งานจริง",
+              `Test mode: click the Login ID field and pick one of ${demoAccounts.length} test accounts — the ID and password fill in for you.`,
+              `โหมดทดสอบ: คลิกช่องไอดีเข้าสู่ระบบแล้วเลือกบัญชีทดสอบ ${demoAccounts.length} บัญชี ระบบจะกรอกไอดีและรหัสผ่านให้`,
             )}
-          </p>
-        </>
+          </span>
+        </p>
       ) : null}
     </AuthFrame>
   );

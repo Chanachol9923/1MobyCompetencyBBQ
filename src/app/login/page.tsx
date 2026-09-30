@@ -9,9 +9,9 @@ import { LoginForm, type DemoAccount } from "./LoginForm";
 export const dynamic = "force-dynamic";
 
 /**
- * Demo personas are read from the database rather than hard-coded, so the login
- * screen only ever offers accounts that actually exist: one individual
- * contributor, one manager with reports, and the administrator.
+ * Test-mode suggestions under the Login ID field. Read from the database rather
+ * than hard-coded, so they are always accounts that actually exist: one
+ * individual contributor, one manager with reports, and the administrator.
  */
 async function loadDemoAccounts(): Promise<DemoAccount[]> {
   if (!signInOptions.demo) return [];
@@ -89,6 +89,11 @@ export default async function LoginPage({
     <LoginForm
       loginDomain={LOGIN_DOMAIN}
       demoAccounts={demoAccounts}
+      // test mode only: the seeded accounts' shared password, so picking a
+      // suggestion fills both fields. Never sent when the flag is off.
+      demoPassword={
+        demoAccounts.length ? (process.env.SEED_DEMO_PASSWORD ?? null) : null
+      }
       ssoName={signInOptions.sso}
       error={viewer?.status === "SUSPENDED" ? "suspended" : params.error}
       code={params.code}
