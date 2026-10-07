@@ -208,9 +208,8 @@ export function OrgTab({
             {visible.length === 0 ? (
               <tr>
                 <Td colSpan={4} className="py-10 text-center text-muted">
-                  {tt(
-                    `Nothing here yet — use "Create New ${noun.en}".`,
-                    `ยังไม่มีข้อมูล — กด "สร้าง${noun.th}ใหม่" เพื่อเพิ่มรายการ`,
+                  {tt(`Nothing here yet — use "New ${noun.en.toLowerCase()}".`,
+                    `ยังไม่มีข้อมูล — กด "${noun.th}ใหม่" เพื่อเพิ่ม`,
                   )}
                 </Td>
               </tr>
@@ -313,13 +312,11 @@ export function OrgTab({
           {tt("Remove", "ลบ")}{" "}
           <span className="font-medium text-ink">{confirm?.name}</span>?{" "}
           {confirm && confirm.employeeCount > 0
-            ? tt(
-                `${confirm.employeeCount} people are filed under it, so this will be refused until they are moved.`,
-                `มีพนักงาน ${confirm.employeeCount} คนอยู่ภายใต้รายการนี้ ระบบจะปฏิเสธจนกว่าจะย้ายออกก่อน`,
+            ? tt(`${confirm.employeeCount} people are assigned to it, so it can't be deleted until they are moved.`,
+                `มีพนักงาน ${confirm.employeeCount} คนอยู่ในรายการนี้ จึงลบไม่ได้จนกว่าจะย้ายออกก่อน`,
               )
-            : tt(
-                "Nothing is filed under it, so this is safe.",
-                "ไม่มีข้อมูลใดอยู่ภายใต้รายการนี้ จึงลบได้อย่างปลอดภัย",
+            : tt("Nobody is assigned to it, so it is safe to delete.",
+                "ไม่มีใครอยู่ในรายการนี้ จึงลบได้อย่างปลอดภัย",
               )}
         </p>
       </Modal>

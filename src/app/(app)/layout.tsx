@@ -29,6 +29,7 @@ export default async function AppLayout({
     status: viewer.status,
     roleKey: viewer.roleKey,
     roleName: viewer.roleName,
+    roleNameTh: viewer.roleNameTh,
     permissions: viewer.permissions,
     employeeId: viewer.employeeId,
     employeeName: viewer.employeeName,

@@ -18,6 +18,7 @@ export type ClientViewer = {
   status: "PENDING" | "ACTIVE" | "SUSPENDED";
   roleKey: string | null;
   roleName: string | null;
+  roleNameTh: string | null;
   permissions: string[];
   employeeId: string | null;
   employeeName: string | null;

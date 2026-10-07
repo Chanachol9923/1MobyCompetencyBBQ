@@ -211,9 +211,8 @@ export function KpiStep({
       <Card>
         <EmptyState
           title={tt("No KPI set for this cycle", "ยังไม่มี KPI สำหรับรอบนี้")}
-          hint={tt(
-            "The results half of the score has not been written down yet. Add the indicators for this cycle, or continue with the competency steps.",
-            "ยังไม่ได้กำหนดส่วนของผลลัพธ์การทำงานสำหรับรอบนี้ เพิ่มตัวชี้วัด หรือทำขั้นตอนสมรรถนะต่อไปได้",
+          hint={tt("The KPI (results) part of the score has not been set for this cycle yet. Add the indicators, or continue with the competency steps.",
+            "ยังไม่ได้กำหนด KPI (ผลลัพธ์งาน) สำหรับรอบนี้ เพิ่มตัวชี้วัด หรือทำขั้นตอนสมรรถนะต่อไปได้",
           )}
         />
         {!readOnly ? (
@@ -235,9 +234,8 @@ export function KpiStep({
       <Card>
         <CardHeader
           title={tt("Key Performance Indicators", "ตัวชี้วัดผลงานหลัก (KPI)")}
-          subtitle={tt(
-            "The results half of the score. Rate each KPI 1–4 against its target.",
-            "ส่วนของผลลัพธ์การทำงาน ให้คะแนนแต่ละ KPI 1–4 เทียบกับเป้าหมาย",
+          subtitle={tt("The KPI (results) part of the score. Rate each KPI 1–4 against its target.",
+            "ส่วน KPI (ผลลัพธ์งาน) ของคะแนน ให้คะแนนแต่ละ KPI 1–4 เทียบกับเป้าหมาย",
           )}
           right={
             <div className="flex items-center gap-2">

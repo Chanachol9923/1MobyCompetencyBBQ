@@ -16,9 +16,9 @@ export const ACTIVITIES: ActivityKey[] = [
 ];
 
 export const ACTIVITY_LABEL: Record<ActivityKey, { en: string; th: string }> = {
-  ONLINE_COURSE: { en: "Online Course", th: "เรียนออนไลน์" },
+  ONLINE_COURSE: { en: "Online course", th: "เรียนออนไลน์" },
   COACHING: { en: "Coaching", th: "โค้ชชิ่ง" },
-  ON_THE_JOB: { en: "On-the-job Training", th: "ฝึกจากงานจริง" },
+  ON_THE_JOB: { en: "On-the-job training", th: "ฝึกจากงานจริง" },
 };
 
 export const isoIn = (days: number) =>
@@ -194,8 +194,7 @@ export function GoalFormModal({
           ? tt(`Edit goal for ${memberName}`, `แก้ไขเป้าหมายของ ${memberName}`)
           : tt(`Add a goal for ${memberName}`, `เพิ่มเป้าหมายให้ ${memberName}`)
       }
-      subtitle={tt(
-        "Online Course, Coaching or On-the-job Training, with a level move and a timeline.",
+      subtitle={tt("Choose online course, coaching or on-the-job training, the target level and the timeline.",
         "เลือกวิธีพัฒนา เรียนออนไลน์ โค้ชชิ่ง หรือฝึกจากงานจริง พร้อมระดับเป้าหมายและกรอบเวลา",
       )}
       footer={

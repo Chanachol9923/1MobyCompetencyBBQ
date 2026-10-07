@@ -252,9 +252,8 @@ export function AchievementsScreen({ data }: { data: AchievementsScreenData }) {
 
         <Card className="p-5">
           <p className="mb-4 text-xs text-muted">
-            {tt(
-              `Live counters: ${counters.coursesCompleted} courses completed · ${counters.certificatesEarned} certificates · ${counters.assessmentsSubmitted} self assessment submitted · ${counters.pathsFinished} of ${counters.pathsAvailable} learning paths finished.`,
-              `ตัวเลขจริงจากระบบ: เรียนจบ ${counters.coursesCompleted} หลักสูตร · ใบรับรอง ${counters.certificatesEarned} ใบ · ส่งแบบประเมินตนเอง ${counters.assessmentsSubmitted} ครั้ง · จบเส้นทางการเรียนรู้ ${counters.pathsFinished} จาก ${counters.pathsAvailable} เส้นทาง`,
+            {tt(`Your progress: ${counters.coursesCompleted} courses completed · ${counters.certificatesEarned} certificates · ${counters.assessmentsSubmitted} self-assessments submitted · ${counters.pathsFinished} of ${counters.pathsAvailable} learning paths finished.`,
+              `ความคืบหน้าของคุณ: เรียนจบ ${counters.coursesCompleted} หลักสูตร · ใบรับรอง ${counters.certificatesEarned} ใบ · ส่งแบบประเมินตนเอง ${counters.assessmentsSubmitted} ครั้ง · จบเส้นทางการเรียนรู้ ${counters.pathsFinished} จาก ${counters.pathsAvailable} เส้นทาง`,
             )}
           </p>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

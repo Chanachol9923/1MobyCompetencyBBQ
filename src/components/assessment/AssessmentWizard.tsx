@@ -507,13 +507,11 @@ function GroupStep({
 
   const intro =
     mode === "self"
-      ? tt(
-          "Rate yourself against the description of each level. The expected level for your career role is marked on the scale.",
-          "ให้คะแนนตนเองตามคำอธิบายของแต่ละระดับ ระดับที่คาดหวังของตำแหน่งคุณถูกทำเครื่องหมายไว้บนสเกล",
+      ? tt("Rate yourself against the description of each level. The expected level for your career role is marked on the scale.",
+          "ให้คะแนนตนเองตามคำอธิบายของแต่ละระดับ ระดับที่คาดหวังของบทบาทสายอาชีพของคุณมีเครื่องหมายไว้บนสเกล",
         )
-      : tt(
-          `Rate ${subjectName} against the expected level for their career role. This review is the official record.`,
-          `ให้คะแนน ${subjectName} เทียบกับระดับที่คาดหวังของตำแหน่ง ผลนี้จะเป็นผลอย่างเป็นทางการ`,
+      : tt(`Rate ${subjectName} against the expected level for their career role. This review is the official record.`,
+          `ให้คะแนน ${subjectName} เทียบกับระดับที่คาดหวังของบทบาทสายอาชีพ ผลนี้คือผลอย่างเป็นทางการ`,
         );
 
   return (

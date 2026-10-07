@@ -496,9 +496,8 @@ export function ReportsView({
           <Card className="mt-6">
             <CardHeader
               title={tt("Gap table", "ตารางวิเคราะห์ช่องว่าง")}
-              subtitle={tt(
-                "Click a column header to sort — biggest gap first by default",
-                "คลิกหัวตารางเพื่อจัดเรียง — ค่าเริ่มต้นคือช่องว่างมากที่สุดก่อน",
+              subtitle={tt("Click a column heading to sort — largest gap first by default",
+                "คลิกหัวตารางเพื่อจัดเรียง — ค่าเริ่มต้นเรียงส่วนต่างมากที่สุดก่อน",
               )}
             />
             <ResponsiveTable className="px-4 pb-5" cardClassName="border-line">

@@ -220,7 +220,9 @@ export function Topbar() {
             {viewer.name}
           </span>
           <span className="block leading-tight text-muted">
-            {[viewer.roleName, viewer.jobRoleName].filter(Boolean).join(" · ")}
+            {[lang === "th" ? (viewer.roleNameTh ?? viewer.roleName) : viewer.roleName, viewer.jobRoleName]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </span>
       </div>

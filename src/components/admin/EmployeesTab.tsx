@@ -85,7 +85,7 @@ export function EmployeesTab({
   data: EmployeeAdminData;
   onResult: (result: ActionResult) => void;
 }) {
-  const { t, tt } = useT();
+  const { t, tt, lv } = useT();
   const { employees, departments, divisions, positions, jobRoles, counts } = data;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -316,7 +316,7 @@ export function EmployeesTab({
                     {p.positionName ?? p.jobRoleName}
                   </span>
                   <span className="block text-[11px] text-muted">
-                    {p.jobRoleName} · {p.level}
+                    {p.jobRoleName} · {lv(p.level)}
                   </span>
                 </Td>
                 <Td>

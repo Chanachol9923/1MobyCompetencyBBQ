@@ -284,6 +284,7 @@ export type AdminCourseRow = {
   category: CompetencyGroupValue;
   competencyId: string | null;
   competencyName: string | null;
+  competencyNameTh: string | null;
   hours: number;
   cover: string | null;
   status: PublishStatusValue;

@@ -647,14 +647,14 @@ export async function createAccount(
   return guardedLink(PERMISSIONS.MANAGE_USERS, async (viewer) => {
     const parsed = createSchema.safeParse(input);
     if (!parsed.success) {
-      return fail("Fill in the login id and pick a role.", "กรุณากรอกไอดีเข้าสู่ระบบและเลือกบทบาท");
+      return fail("Fill in the login ID and pick a role.", "กรุณากรอกไอดีเข้าสู่ระบบและเลือกบทบาท");
     }
     const loginId = normaliseLoginId(parsed.data.loginId);
     const { employeeId, displayName, roleId } = parsed.data;
 
     if (!isValidLoginId(loginId)) {
       return fail(
-        `The login id must look like name.sur@${LOGIN_DOMAIN} — lower-case letters, one dot, optionally a number.`,
+        `The login ID must look like name.sur@${LOGIN_DOMAIN} — lower-case letters, one dot, optionally a number.`,
         `ไอดีเข้าสู่ระบบต้องอยู่ในรูปแบบ name.sur@${LOGIN_DOMAIN} (ตัวอักษรภาษาอังกฤษพิมพ์เล็ก จุดหนึ่งตัว และตัวเลขต่อท้ายได้)`,
       );
     }
@@ -834,11 +834,11 @@ export async function changeLoginId(
 ): Promise<ActionResult> {
   return guarded(PERMISSIONS.MANAGE_USERS, async (viewer) => {
     const parsed = renameSchema.safeParse(input);
-    if (!parsed.success) return fail("Enter the new login id.", "กรุณากรอกไอดีเข้าสู่ระบบใหม่");
+    if (!parsed.success) return fail("Enter the new login ID.", "กรุณากรอกไอดีเข้าสู่ระบบใหม่");
     const loginId = normaliseLoginId(parsed.data.loginId);
     if (!isValidLoginId(loginId)) {
       return fail(
-        `The login id must look like name.sur@${LOGIN_DOMAIN}.`,
+        `The login ID must look like name.sur@${LOGIN_DOMAIN}.`,
         `ไอดีเข้าสู่ระบบต้องอยู่ในรูปแบบ name.sur@${LOGIN_DOMAIN}`,
       );
     }
@@ -847,7 +847,7 @@ export async function changeLoginId(
       select: { id: true, email: true, employee: { select: { id: true } } },
     });
     if (!user) return fail("That account no longer exists.", "ไม่พบบัญชีผู้ใช้นี้แล้ว");
-    if (user.email === loginId) return done("That is already the login ID.", "ไอดีนี้ถูกใช้อยู่แล้ว");
+    if (user.email === loginId) return done("That is already the login ID.", "บัญชีนี้ใช้ไอดีนี้อยู่แล้ว");
     if (await loginIdClash(loginId, user.id, user.employee?.id)) {
       return fail(`${loginId} is already in use.`, `${loginId} ถูกใช้แล้ว`);
     }
@@ -868,7 +868,7 @@ export async function changeLoginId(
     });
     revalidateAdmin();
     return done(
-      `The login id is now ${loginId}. Let the person know.`,
+      `The login ID is now ${loginId}. Let the person know.`,
       `เปลี่ยนไอดีเข้าสู่ระบบเป็น ${loginId} แล้ว กรุณาแจ้งเจ้าของบัญชี`,
     );
   });
@@ -1258,7 +1258,7 @@ export async function setRolePermission(
       // the very role their own session is standing on
       if (critical.includes(permission.key) && viewerUser?.roleId === role.id) {
         return fail(
-          `"${permission.nameEn}" is what your own role uses to be on this screen. Removing it from "${role.nameEn}" would lock you out.`,
+          `"${permission.nameEn}" is what lets your role use this screen. Removing it from "${role.nameEn}" would lock you out.`,
           `สิทธิ์ "${permission.nameTh}" คือสิทธิ์ที่บทบาทของคุณใช้เข้าถึงหน้านี้ การถอดออกจาก "${role.nameTh}" จะทำให้คุณเข้าใช้งานไม่ได้อีก`,
         );
       }

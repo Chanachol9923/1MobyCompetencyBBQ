@@ -33,6 +33,26 @@ import { cn } from "@/lib/utils";
  */
 export function RolesScreen({ data }: { data: RolesScreenData }) {
   const { t, tt } = useT();
+  // the built-in roles get their description in the reader's language; a
+  // custom role shows whatever the administrator wrote
+  const SYSTEM_DESC: Record<string, [string, string]> = {
+    employee: [
+      "Sees and works on their own results, development plan and learning.",
+      "ดูและทำงานกับผลการประเมิน แผนพัฒนา และการเรียนของตนเอง",
+    ],
+    manager: [
+      "Everything an employee can do, plus their team's results, reviews and plans.",
+      "ทำได้ทุกอย่างเหมือนพนักงาน และดูผล ประเมิน และวางแผนพัฒนาให้ทีมของตน",
+    ],
+    admin: [
+      "HROD. Runs the system and the competency framework; is not assessed.",
+      "ฝ่าย HROD ดูแลระบบและกรอบสมรรถนะ ไม่ถูกประเมิน",
+    ],
+  };
+  const roleDescription = (r: { key: string; isSystem: boolean; description: string | null }) => {
+    const pair = r.isSystem ? SYSTEM_DESC[r.key] : undefined;
+    return pair ? tt(pair[0], pair[1]) : r.description;
+  };
   const [result, setResult] = useState<ActionResult | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<RoleSummary | null>(null);
@@ -67,7 +87,6 @@ export function RolesScreen({ data }: { data: RolesScreenData }) {
                 <p className="truncate text-sm font-bold text-ink">
                   {tt(r.nameEn, r.nameTh)}
                 </p>
-                <p className="mt-0.5 font-mono text-[10px] text-muted">{r.key}</p>
               </div>
               {r.isSystem ? (
                 <Pill tone="neutral">{tt("System", "ของระบบ")}</Pill>
@@ -77,7 +96,7 @@ export function RolesScreen({ data }: { data: RolesScreenData }) {
             </div>
 
             <p className="min-h-8 text-xs leading-relaxed text-muted">
-              {r.description ?? tt("No description.", "ไม่มีคำอธิบาย")}
+              {roleDescription(r) ?? tt("No description.", "ไม่มีคำอธิบาย")}
             </p>
 
             <div className="flex items-end justify-between gap-3 border-t border-line/60 pt-3">
@@ -235,9 +254,8 @@ function CreateRoleModal({
       <div className="grid gap-4">
         <Field
           label={tt("Key", "คีย์")}
-          hint={tt(
-            "Lower case letters, digits, - or _. This is what code refers to and it cannot be changed later.",
-            "ตัวพิมพ์เล็ก ตัวเลข - หรือ _ เท่านั้น คีย์นี้คือสิ่งที่โค้ดอ้างอิงและแก้ไขภายหลังไม่ได้",
+          hint={tt("Lower-case letters, digits, - or _. The system uses it to identify the role, so it can't be changed later.",
+            "ตัวพิมพ์เล็ก ตัวเลข - หรือ _ เท่านั้น ระบบใช้คีย์นี้ระบุบทบาท จึงแก้ไขภายหลังไม่ได้",
           )}
         >
           <Input

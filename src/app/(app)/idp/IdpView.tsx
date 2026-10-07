@@ -37,9 +37,9 @@ const ACTIVITY_LABEL: Record<
   IdpGoalView["activity"],
   { en: string; th: string }
 > = {
-  ONLINE_COURSE: { en: "Online Course", th: "เรียนออนไลน์" },
+  ONLINE_COURSE: { en: "Online course", th: "เรียนออนไลน์" },
   COACHING: { en: "Coaching", th: "โค้ชชิ่ง" },
-  ON_THE_JOB: { en: "On-the-job Training", th: "ฝึกจากงานจริง" },
+  ON_THE_JOB: { en: "On-the-job training", th: "ฝึกจากงานจริง" },
 };
 
 /**
@@ -64,6 +64,14 @@ export function IdpView({
   assessedGroups: CourseCategory[];
 }) {
   const { t, tt, lang } = useT();
+  // the stored stamp is "Assigned by NAME — note"; show the stamp in the
+  // reader's language and the manager's own words as written
+  const remarkText = (remark: string) => {
+    const m = /^Assigned by (.+?)(?: — ([\s\S]*))?$/.exec(remark);
+    if (!m) return remark;
+    const stamp = tt(`Assigned by ${m[1]}`, `มอบหมายโดย ${m[1]}`);
+    return m[2] ? `${stamp} — ${m[2]}` : stamp;
+  };
   const router = useRouter();
   /** which course of the competency each goal card is showing */
   const [shownCourse, setShownCourse] = useState<Record<string, string>>({});
@@ -177,8 +185,7 @@ export function IdpView({
       <Card className="mt-6">
         <CardHeader
           title={tt("Development timeline", "ไทม์ไลน์การพัฒนา")}
-          subtitle={tt(
-            "Each bar is a goal window; the fill is its progress",
+          subtitle={tt("Each bar is a goal's time frame; the filled part is its progress",
             "แต่ละแท่งคือช่วงเวลาของเป้าหมาย ส่วนที่ทึบคือความคืบหน้า",
           )}
         />
@@ -274,7 +281,7 @@ export function IdpView({
                 {g.remark ? (
                   <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-muted">
                     <MessageSquare size={13} className="mt-0.5 shrink-0" />
-                    {g.remark}
+                    <span>{remarkText(g.remark)}</span>
                   </p>
                 ) : null}
 
@@ -447,9 +454,8 @@ export function IdpView({
             <div className="grid min-h-[220px] place-items-center">
               <button
                 type="button"
-                aria-label={tt(
-                  `Play ${pick(lang, resumeCourse.titleEn, resumeCourse.titleTh)}`,
-                  `เล่น ${pick(lang, resumeCourse.titleEn, resumeCourse.titleTh)}`,
+                aria-label={tt(`Open ${pick(lang, resumeCourse.titleEn, resumeCourse.titleTh)}`,
+                  `เปิด ${pick(lang, resumeCourse.titleEn, resumeCourse.titleTh)}`,
                 )}
                 onClick={() => router.push(`/lms/${resumeCourse.slug}`)}
                 className="grid size-20 place-items-center rounded-full bg-accent text-white transition-transform hover:scale-105 active:scale-95"

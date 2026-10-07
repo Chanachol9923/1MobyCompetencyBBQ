@@ -13,7 +13,7 @@ import { useT } from "@/lib/i18n";
  * actually on that rung right now.
  */
 export function CareerPathCard({ jobRoles }: { jobRoles: JobRoleRow[] }) {
-  const { t, tt } = useT();
+  const { t, tt, lv } = useT();
 
   const ladder = useMemo(() => {
     const byLevel = new Map<string, JobRoleRow[]>();
@@ -42,9 +42,8 @@ export function CareerPathCard({ jobRoles }: { jobRoles: JobRoleRow[] }) {
             {t("label.careerPath")}
           </span>
         }
-        subtitle={tt(
-          "1Moby Careers — level, roles and grade codes, with live headcount.",
-          "เส้นทางอาชีพ 1Moby — ระดับ บทบาท และรหัสเกรด พร้อมจำนวนพนักงานจริง",
+        subtitle={tt("Career levels at 1Moby — roles, grade codes and current headcount.",
+          "ระดับอาชีพของ 1Moby — บทบาท รหัสเกรด และจำนวนพนักงานปัจจุบัน",
         )}
       />
       <TableWrap>
@@ -60,7 +59,7 @@ export function CareerPathCard({ jobRoles }: { jobRoles: JobRoleRow[] }) {
           <tbody>
             {ladder.map((rung) => (
               <tr key={rung.level} className="border-b border-line/60 last:border-0">
-                <Td className="whitespace-nowrap font-bold">{rung.level}</Td>
+                <Td className="whitespace-nowrap font-bold">{lv(rung.level)}</Td>
                 <Td>
                   <div className="flex flex-wrap gap-1">
                     {rung.roles.map((r) => (

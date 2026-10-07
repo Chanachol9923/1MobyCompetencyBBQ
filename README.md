@@ -85,6 +85,14 @@ working after someone changes or resets it; typing a password yourself tests the
 No password is sent to the browser. Anyone who can open the site can use those three accounts, so
 set the flag to `false` before real use.
 
+### 5. Keeping Supabase awake
+
+A free Supabase project pauses after a week without activity, which takes the whole site down.
+Vercel Cron calls `/api/keepalive` once a day (`vercel.json`): one read through the pooler and,
+when `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are set, one Supabase API request. The route
+answers only calls signed with `CRON_SECRET`. If the project is paused anyway, restore it from the
+Supabase dashboard (Project → Restore), then run `npm run db:migrate` for any pending migrations.
+
 ## The rules the product is built on
 
 Both come from the client's workbook and are enforced in `src/server/competency.ts` so no screen

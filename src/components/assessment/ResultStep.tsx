@@ -145,9 +145,8 @@ export function ResultStep({
             </div>
             {redistributed ? (
               <p className="mt-2 break-words text-xs leading-relaxed text-muted">
-                {tt(
-                  `Configured weights are KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}%. Parts this career role is not assessed on are removed and their weight is shared out proportionally.`,
-                  `น้ำหนักที่ตั้งไว้คือ KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}% ส่วนที่ตำแหน่งนี้ไม่ถูกประเมินจะถูกตัดออก และเฉลี่ยน้ำหนักไปยังส่วนที่เหลือตามสัดส่วน`,
+                {tt(`Weights for this cycle: KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}%. Parts this career role is not assessed on are left out and their weight is shared among the rest.`,
+                  `น้ำหนักของรอบนี้: KPI ${weights.kpi}% / สมรรถนะหลัก ${weights.core}% / สมรรถนะตามสายงาน ${weights.functional}% / สมรรถนะการบริหาร ${weights.managerial}% ส่วนที่บทบาทนี้ไม่ได้ประเมินจะถูกตัดออก และแบ่งน้ำหนักให้ส่วนที่เหลือตามสัดส่วน`,
                 )}
               </p>
             ) : null}
@@ -173,9 +172,8 @@ export function ResultStep({
       <Card>
         <CardHeader
           title={tt("Competency detail", "รายละเอียดสมรรถนะ")}
-          subtitle={tt(
-            "Gap = score − expected level for this career role. Only competencies this role is assessed on are shown.",
-            "ส่วนต่าง = คะแนน − ระดับที่คาดหวังของตำแหน่งนี้ แสดงเฉพาะสมรรถนะที่ตำแหน่งนี้ถูกประเมิน",
+          subtitle={tt("Gap = score − expected level for this career role. Only competencies this role is assessed on are shown.",
+            "ส่วนต่าง = คะแนน − ระดับที่คาดหวังของบทบาทนี้ แสดงเฉพาะสมรรถนะที่บทบาทนี้ต้องประเมิน",
           )}
         />
         <ResponsiveTable className="px-5 pb-5">
@@ -299,9 +297,8 @@ export function ResultStep({
               ? tt("Difference is your own rating minus your supervisor's — a positive number means you rated yourself higher. Supervisor scores come from this cycle's review.",
                   "ส่วนต่าง คือคะแนนที่คุณให้ตนเอง ลบด้วยคะแนนจากหัวหน้า ค่าบวกหมายถึงคุณประเมินตนเองสูงกว่า คะแนนหัวหน้ามาจากการประเมินในรอบนี้",
                 )
-              : tt(
-                  "Diff is your rating minus their own — a positive number means you rated them higher than they rated themselves.",
-                  "ช่อง “ต่างกัน” คือคะแนนที่คุณให้ ลบด้วยคะแนนที่เจ้าตัวประเมินตนเอง ค่าบวกหมายถึงคุณให้คะแนนสูงกว่าที่เจ้าตัวให้ตนเอง",
+              : tt("Difference is your rating minus their own — a positive number means you rated them higher than they rated themselves.",
+                  "ส่วนต่าง คือคะแนนที่คุณให้ ลบด้วยคะแนนที่เจ้าตัวให้ตนเอง ค่าบวกหมายถึงคุณให้คะแนนสูงกว่าที่เจ้าตัวให้ตนเอง",
                 )}
           </p>
         ) : null}

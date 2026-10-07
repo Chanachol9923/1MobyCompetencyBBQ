@@ -46,7 +46,7 @@ export function JobRolesTab({
   rows: JobRoleRow[];
   onResult: (result: ActionResult) => void;
 }) {
-  const { t, tt } = useT();
+  const { t, tt, lv } = useT();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<JobRoleRow | null>(null);
@@ -176,7 +176,7 @@ export function JobRolesTab({
             {visible.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0">
                 <Td className="font-bold">{r.name}</Td>
-                <Td className="whitespace-nowrap text-muted">{r.level}</Td>
+                <Td className="whitespace-nowrap text-muted">{lv(r.level)}</Td>
                 <Td className="text-muted">
                   {r.gradeFrom === r.gradeTo ? r.gradeFrom : `${r.gradeFrom}–${r.gradeTo}`}
                 </Td>
@@ -327,12 +327,10 @@ export function JobRolesTab({
           {tt("Delete", "ลบ")}{" "}
           <span className="font-medium text-ink">{confirm?.name}</span>?{" "}
           {confirm && confirm.employeeCount > 0
-            ? tt(
-                `${confirm.employeeCount} people hold it, so this will be refused until they are moved to another role.`,
-                `มีพนักงาน ${confirm.employeeCount} คนอยู่ในบทบาทนี้ ระบบจะปฏิเสธจนกว่าจะย้ายไปบทบาทอื่นก่อน`,
+            ? tt(`${confirm.employeeCount} people hold it, so it can't be deleted until they move to another role.`,
+                `มีพนักงาน ${confirm.employeeCount} คนอยู่ในบทบาทนี้ จึงลบไม่ได้จนกว่าจะย้ายไปบทบาทอื่นก่อน`,
               )
-            : tt(
-                `Its ${confirm?.assessedCount ?? 0} expected-level cells go with it.`,
+            : tt(`Its ${confirm?.assessedCount ?? 0} expected levels are deleted with it.`,
                 `ระดับที่คาดหวัง ${confirm?.assessedCount ?? 0} ช่องของบทบาทนี้จะถูกลบไปด้วย`,
               )}
         </p>

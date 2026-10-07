@@ -95,9 +95,8 @@ export function StrengthsPanel({
           "Your strengths and what to develop",
           "จุดแข็งของคุณและสิ่งที่ควรพัฒนา",
         )}
-        subtitle={tt(
-          "Generated from your manager score against the expected level for your role",
-          "สรุปจากคะแนนที่หัวหน้าประเมินเทียบกับระดับที่คาดหวังของตำแหน่งคุณ",
+        subtitle={tt("Based on your manager's scores against the expected level for your role",
+          "สรุปจากคะแนนที่หัวหน้าประเมินเทียบกับระดับที่คาดหวังของบทบาทคุณ",
         )}
       />
       <div className="px-5 pb-5">

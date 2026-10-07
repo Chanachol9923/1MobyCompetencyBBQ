@@ -38,6 +38,7 @@ import type {
 } from "@/components/admin/admin-types";
 import { exportActivityCsv } from "@/server/admin-users";
 import { useT } from "@/lib/i18n";
+import { actionLabel, actorLabel, targetTypeLabel } from "@/lib/activity-labels";
 import { cn } from "@/lib/utils";
 
 /**
@@ -55,7 +56,7 @@ export function AuditScreen({
   data: AuditPage;
   filters: AuditFilters;
 }) {
-  const { t, tt } = useT();
+  const { t, tt, lang } = useT();
   const router = useRouter();
   const pathname = usePathname();
   const [navigating, startNavigation] = useTransition();
@@ -200,7 +201,7 @@ export function AuditScreen({
               <option value="">{tt("All actions", "ทุกรายการ")}</option>
               {data.actions.map((a) => (
                 <option key={a} value={a}>
-                  {a}
+                  {actionLabel(a, lang)}
                 </option>
               ))}
             </Select>
@@ -261,18 +262,17 @@ export function AuditScreen({
                     {formatDateTime(e.createdAt)}
                   </Td>
                   <Td>
-                    <span className="block font-bold">{e.actorLabel}</span>
-                    <span className="block text-[10px] text-muted">
-                      {e.actorId ?? tt("system", "ระบบ")}
-                    </span>
+                    <span className="block font-bold">{actorLabel(e.actorLabel, lang)}</span>
                   </Td>
                   <Td>
-                    <Pill tone="brand">{e.action}</Pill>
+                    <Pill tone="brand">{actionLabel(e.action, lang)}</Pill>
                   </Td>
                   <Td>
                     <span className="block font-bold">{e.targetLabel ?? "—"}</span>
                     {e.targetType ? (
-                      <span className="block text-[10px] text-muted">{e.targetType}</span>
+                      <span className="block text-[10px] text-muted">
+                        {targetTypeLabel(e.targetType, lang)}
+                      </span>
                     ) : null}
                   </Td>
                   <Td className="max-w-[280px] text-muted">{e.detail ?? "—"}</Td>

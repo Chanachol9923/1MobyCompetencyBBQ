@@ -152,16 +152,6 @@ export function RolesTab({
                       <span className="block text-[10px] text-muted">
                         {tt(p.descEn ?? "", p.descTh ?? "")}
                       </span>
-                      <span className="mt-1 inline-flex flex-wrap items-center gap-1.5">
-                        <span className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-muted">
-                          {p.key}
-                        </span>
-                        {p.source ? (
-                          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] text-muted">
-                            {tt("Requirement", "ข้อกำหนด")} {p.source}
-                          </span>
-                        ) : null}
-                      </span>
                     </Td>
                     {roles.map((r) => {
                       const on = optimistic.has(`${r.id}:${p.id}`);

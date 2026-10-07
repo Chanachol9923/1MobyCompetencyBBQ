@@ -24,9 +24,8 @@ export function MissingCard({ kind }: { kind: "course" | "path" }) {
           }
           hint={
             kind === "course"
-              ? tt(
-                  "It may have been removed from the catalogue.",
-                  "หลักสูตรนี้อาจถูกนำออกจากแคตตาล็อกแล้ว",
+              ? tt("It may have been removed from the course list.",
+                  "หลักสูตรนี้อาจถูกนำออกจากรายการแล้ว",
                 )
               : tt(
                   "Pick a path from the training journey tab.",

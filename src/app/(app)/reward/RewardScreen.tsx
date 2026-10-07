@@ -173,7 +173,7 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
           value={tab}
           onChange={setTab}
           options={[
-            { value: "stock", label: tt("Stock", "รายการของรางวัล") },
+            { value: "stock", label: tt("Rewards", "รายการของรางวัล") },
             { value: "history", label: tt("History", "ประวัติการแลก") },
           ]}
         />
@@ -201,8 +201,7 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
                     <div className="min-w-0">
                       <p className="text-base font-medium text-ink">{points(r.points)}</p>
                       <p className="text-xs text-muted">
-                        {tt(
-                          `${r.stock} ${r.stock === 1 ? "item" : "items"} in Stock`,
+                        {tt(`${r.stock} ${r.stock === 1 ? "item" : "items"} in stock`,
                           `คงเหลือ ${r.stock} ชิ้น`,
                         )}
                       </p>
@@ -315,8 +314,7 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
           ) : (
             <EmptyState
               title={tt("No redemptions yet", "ยังไม่มีการแลกของรางวัล")}
-              hint={tt(
-                "Redeem something from the Stock tab and it will show up here.",
+              hint={tt("Redeem something from the Rewards tab and it will show up here.",
                 "เลือกแลกของรางวัลจากแท็บรายการของรางวัล แล้วรายการจะแสดงที่นี่",
               )}
             />

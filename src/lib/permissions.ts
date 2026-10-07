@@ -222,7 +222,7 @@ export const DEFAULT_ROLES: {
     key: "employee",
     nameEn: "Employee",
     nameTh: "พนักงาน",
-    description: "Individual contributor. Sees only their own result.",
+    description: "Sees and works on their own results, development plan and learning.",
     sortOrder: 1,
     permissions: [
       PERMISSIONS.SEE_OWN_RESULT,
@@ -236,7 +236,7 @@ export const DEFAULT_ROLES: {
     key: "manager",
     nameEn: "Manager",
     nameTh: "หัวหน้างาน",
-    description: "Has direct reports. Adds the team half of the product.",
+    description: "Everything an employee can do, plus their team's results, reviews and plans.",
     sortOrder: 2,
     permissions: [
       PERMISSIONS.SEE_OWN_RESULT,
@@ -254,7 +254,7 @@ export const DEFAULT_ROLES: {
     key: "admin",
     nameEn: "Administrator",
     nameTh: "ผู้ดูแลระบบ",
-    description: "HROD. Runs the framework; is not assessed.",
+    description: "HROD. Runs the system and the competency framework; is not assessed.",
     sortOrder: 3,
     permissions: [
       PERMISSIONS.SEE_TEAM_RESULT,

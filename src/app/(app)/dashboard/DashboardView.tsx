@@ -90,7 +90,7 @@ export function DashboardView({
   team: TeamHeatRow[];
   teamCompetencies: GroupedCompetency[];
 }) {
-  const { t, tt, lang } = useT();
+  const { t, tt, lang, lv } = useT();
   const router = useRouter();
   const [group, setGroup] = useState<CompetencyGroup | null>(null);
 
@@ -145,7 +145,7 @@ export function DashboardView({
             </h1>
             <p className="mt-0.5 truncate text-sm font-light text-white/90 lg:text-lg">
               {position}
-              {level ? ` (${level})` : ""}
+              {level ? ` (${lv(level)})` : ""}
             </p>
           </div>
         </div>
@@ -192,9 +192,8 @@ export function DashboardView({
               />
             ) : (
               <p className="text-sm text-muted">
-                {tt(
-                  "Your career role has no competencies mapped yet.",
-                  "ตำแหน่งของคุณยังไม่มีสมรรถนะที่ผูกไว้",
+                {tt("No competencies are set for your career role yet.",
+                  "บทบาทสายอาชีพของคุณยังไม่มีสมรรถนะที่กำหนดไว้",
                 )}
               </p>
             )}
@@ -225,9 +224,8 @@ export function DashboardView({
           </div>
 
           <p className="mt-5 text-xs text-muted">
-            {tt(
-              "Manager score is the official result; the self column is the employee's own rating. Competencies this role is not assessed on are not shown.",
-              "คะแนนจากหัวหน้าคือผลการประเมินอย่างเป็นทางการ ส่วนคอลัมน์ประเมินตนเองคือคะแนนที่พนักงานให้ตนเอง สมรรถนะที่ตำแหน่งนี้ไม่ถูกประเมินจะไม่แสดง",
+            {tt("The manager's score is the official result; Self is your own rating. Competencies your role is not assessed on are hidden.",
+              "คะแนนจากหัวหน้าคือผลอย่างเป็นทางการ ส่วน “ตนเอง” คือคะแนนที่คุณให้ตัวเอง สมรรถนะที่บทบาทของคุณไม่ได้ประเมินจะไม่แสดง",
             )}
           </p>
         </Card>

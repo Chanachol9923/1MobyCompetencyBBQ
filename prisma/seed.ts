@@ -17,7 +17,6 @@ import { RAW_PEOPLE } from "../src/data/people.generated";
 import { COMPETENCIES } from "../src/data/competencies";
 import { JOB_ROLES } from "../src/data/people";
 import {
-  ANNOUNCEMENTS,
   BADGES,
   COURSES,
   LEARNING_PATHS,
@@ -111,6 +110,23 @@ async function seedRbac() {
 async function seedFramework() {
   const enById = new Map(COMPETENCIES.map((c) => [c.id, c]));
 
+  // the workbook names competencies in English only; these are the Thai names
+  const NAME_TH: Record<string, string> = {
+  "create-impact": "สร้างผลลัพธ์ที่มีคุณค่า",
+  "take-ownership": "รับผิดชอบงานเสมือนเจ้าของ",
+  "adaptive": "การปรับตัว",
+  "collaboration": "การทำงานร่วมกัน",
+  "process": "การบริหารกระบวนการ",
+  "purpose": "การกำหนดทิศทางและเป้าหมาย",
+  "people": "การบริหารและพัฒนาคน",
+  "result": "การบริหารผลลัพธ์",
+  "programming": "การเขียนโปรแกรมและคุณภาพโค้ด",
+  "architecture": "สถาปัตยกรรมและการออกแบบซอฟต์แวร์",
+  "databases": "ฐานข้อมูลและการจัดการข้อมูล",
+  "version-control": "การจัดการเวอร์ชันของโค้ด",
+  "analytical": "การคิดวิเคราะห์และการบริหารเวลา",
+  };
+
   for (const [i, f] of FRAMEWORK.entries()) {
     const en = enById.get(f.id);
     const competency = await db.competency.upsert({
@@ -128,6 +144,7 @@ async function seedFramework() {
         key: f.id,
         group: GROUP[f.group]!,
         nameEn: f.name,
+        nameTh: NAME_TH[f.id] ?? null,
         definitionEn: en?.definition ?? null,
         definitionTh: f.definitionTh || null,
         subTh: f.subTh || null,
@@ -581,20 +598,58 @@ async function seedEngagement() {
 }
 
 async function seedComms() {
-  for (const a of ANNOUNCEMENTS) {
+  // Written for the cycle that is open, in both languages, so the feed reads
+  // as current on whatever day the system is set up.
+  const cycle = await db.assessmentCycle.findFirst({
+    where: { status: "OPEN" },
+    orderBy: { startsAt: "desc" },
+  });
+  const DAY = 86_400_000;
+  const now = Date.now();
+  const fmt = (d: Date, locale: string) =>
+    d.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const closes = cycle?.endsAt ?? new Date(now + 60 * DAY);
+  const seeded = [
+    {
+      id: "an1",
+      titleEn: cycle ? `${cycle.nameEn} assessment cycle is open` : "The assessment cycle is open",
+      titleTh: cycle ? `เปิดรอบการประเมิน ${cycle.nameTh} แล้ว` : "เปิดรอบการประเมินแล้ว",
+      bodyEn: `Please complete your self assessment before ${fmt(closes, "en-GB")}. Managers review their teams before the cycle closes. Start with Core and Functional.`,
+      bodyTh: `กรุณาทำแบบประเมินตนเองให้เสร็จก่อน ${fmt(closes, "th-TH")} หัวหน้าจะประเมินทีมก่อนปิดรอบ แนะนำให้เริ่มจากสมรรถนะหลักและสมรรถนะตามสายงาน`,
+      channel: "BOTH" as const,
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(cycle?.startsAt ?? now),
+      publishAt: null,
+    },
+    {
+      id: "an2",
+      titleEn: "New course: Advanced AWS",
+      titleTh: "หลักสูตรใหม่: Advanced AWS",
+      bodyEn: "8 lessons, 18 hours. It counts toward the Software Architecture and Design competency.",
+      bodyTh: "8 บทเรียน 18 ชั่วโมง นับเป็นการพัฒนาสมรรถนะสถาปัตยกรรมและการออกแบบซอฟต์แวร์",
+      channel: "IN_APP" as const,
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(now - 2 * DAY),
+      publishAt: null,
+    },
+    {
+      id: "an3",
+      titleEn: "Reward catalogue refresh",
+      titleTh: "อัปเดตรายการของรางวัล",
+      bodyEn: "New tumblers and gift vouchers are coming. Points you have already earned still count.",
+      bodyTh: "เตรียมพบแก้วน้ำและบัตรของขวัญใหม่ คะแนนที่สะสมไว้แล้วยังใช้ได้ตามเดิม",
+      channel: "EMAIL" as const,
+      // scheduled, so the manage screen shows how scheduling looks
+      status: "DRAFT" as const,
+      publishedAt: null,
+      publishAt: new Date(now + 14 * DAY),
+    },
+  ];
+  for (const a of seeded) {
     await db.announcement.upsert({
       where: { id: a.id },
       update: {},
-      create: {
-        id: a.id,
-        titleEn: a.title,
-        bodyEn: a.body,
-        audience: "ALL",
-        channel: a.channel === "Email" ? "EMAIL" : a.channel === "Both" ? "BOTH" : "IN_APP",
-        status: a.status === "Published" ? "PUBLISHED" : "DRAFT",
-        publishedAt: a.status === "Published" ? new Date(a.publishedAt) : null,
-        publishAt: new Date(a.publishedAt),
-      },
+      create: { ...a, audience: "ALL" },
     });
   }
 
@@ -611,7 +666,7 @@ async function seedComms() {
       create: { ...r, channel: "BOTH", enabled: true },
     });
   }
-  console.log(`  announcements ${ANNOUNCEMENTS.length}, notification rules ${rules.length}`);
+  console.log(`  announcements ${seeded.length}, notification rules ${rules.length}`);
 }
 
 async function seedAccounts() {
@@ -733,7 +788,7 @@ async function seedDevelopmentPlans() {
           activity: courseId ? "ONLINE_COURSE" : "COACHING",
           startDate,
           dueDate,
-          remark: `Assigned by ${p.manager?.name ?? "your manager"} — one of the widest gaps from this cycle's review`,
+          remark: `Assigned by ${p.manager?.name ?? "your manager"}`,
           createdById: p.managerId,
         },
       });

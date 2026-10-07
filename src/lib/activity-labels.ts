@@ -1,0 +1,140 @@
+import type { Lang } from "@/lib/ui-state";
+
+/**
+ * The activity log stores each action in English — it is a record, and its
+ * wording must not change after the fact. These are the Thai labels the
+ * screens show for it; an action not listed here is shown as stored.
+ */
+const ACTION_TH: Record<string, string> = {
+  "Activated account": "เปิดใช้งานบัญชี",
+  "Activated badge": "เปิดใช้งานเหรียญตรา",
+  "Added employee": "เพิ่มพนักงาน",
+  "Adjusted reward stock": "ปรับจำนวนของรางวัล",
+  "Assigned IDP goal": "มอบหมายเป้าหมายในแผนพัฒนา",
+  "Assigned role": "กำหนดบทบาท",
+  "Attached learning evidence": "แนบหลักฐานการเรียนรู้",
+  "Cancelled redemption": "ยกเลิกการแลกของรางวัล",
+  "Certificate issued": "ออกใบรับรอง",
+  "Changed login id": "เปลี่ยนไอดีเข้าสู่ระบบ",
+  "Changed password": "เปลี่ยนรหัสผ่าน",
+  "Cleared coaching note": "ล้างบันทึกการโค้ช",
+  "Completed chapter": "เรียนจบบทเรียน",
+  "Completed course": "เรียนจบหลักสูตร",
+  "Completed post-test": "ทำแบบทดสอบหลังเรียน",
+  "Completed pre-test": "ทำแบบทดสอบก่อนเรียน",
+  "Created account": "สร้างบัญชี",
+  "Created accounts in bulk": "สร้างบัญชีหลายรายการ",
+  "Created announcement draft": "สร้างฉบับร่างประกาศ",
+  "Created assessment cycle": "สร้างรอบการประเมิน",
+  "Created badge": "สร้างเหรียญตรา",
+  "Created career role": "สร้างบทบาทสายอาชีพ",
+  "Created course": "สร้างหลักสูตร",
+  "Created department": "สร้างฝ่าย",
+  "Created division": "สร้างแผนก",
+  "Created position": "สร้างตำแหน่ง",
+  "Created reward": "เพิ่มของรางวัล",
+  "Created role": "สร้างบทบาท",
+  "Deactivated badge": "ปิดใช้งานเหรียญตรา",
+  "Deactivated employee": "ปิดใช้งานพนักงาน",
+  "Deleted announcement": "ลบประกาศ",
+  "Deleted badge": "ลบเหรียญตรา",
+  "Deleted career role": "ลบบทบาทสายอาชีพ",
+  "Deleted course": "ลบหลักสูตร",
+  "Deleted department": "ลบฝ่าย",
+  "Deleted division": "ลบแผนก",
+  "Deleted position": "ลบตำแหน่ง",
+  "Deleted reward": "ลบของรางวัล",
+  "Deleted role": "ลบบทบาท",
+  "Delisted reward": "ซ่อนของรางวัล",
+  "Edited IDP goal": "แก้ไขเป้าหมายในแผนพัฒนา",
+  "Edited badge": "แก้ไขเหรียญตรา",
+  "Edited reward": "แก้ไขของรางวัล",
+  "Edited role": "แก้ไขบทบาท",
+  "Exported gap analysis report": "ส่งออกรายงานวิเคราะห์ช่องว่าง",
+  "Exported org skills report": "ส่งออกรายงานสมรรถนะองค์กร",
+  "Granted badge": "มอบเหรียญตรา",
+  "Granted permission": "เพิ่มสิทธิ์",
+  "Issued activation link": "ออกลิงก์เปิดใช้งาน",
+  "Issued password reset link": "ออกลิงก์ตั้งรหัสผ่านใหม่",
+  "Linked employee": "เชื่อมข้อมูลพนักงาน",
+  "Listed reward": "แสดงของรางวัล",
+  "Marked redemption delivered": "บันทึกการส่งมอบของรางวัล",
+  "Pinned announcement": "ปักหมุดประกาศ",
+  "Published announcement": "เผยแพร่ประกาศ",
+  "Published course": "เผยแพร่หลักสูตร",
+  "Re-opened self assessment": "เปิดแบบประเมินตนเองอีกครั้ง",
+  "Re-opened supervisor review": "เปิดการประเมินโดยหัวหน้าอีกครั้ง",
+  "Reactivated account": "เปิดใช้งานบัญชีอีกครั้ง",
+  "Reactivated employee": "เปิดใช้งานพนักงานอีกครั้ง",
+  "Redeemed reward": "แลกของรางวัล",
+  "Removed IDP goal": "ลบเป้าหมายในแผนพัฒนา",
+  "Removed competency from career role": "เลิกประเมินสมรรถนะในบทบาท",
+  "Removed learning evidence": "ลบหลักฐานการเรียนรู้",
+  "Renamed department": "เปลี่ยนชื่อฝ่าย",
+  "Requested password reset": "ขอให้ตั้งรหัสผ่านใหม่",
+  "Reset password": "ตั้งรหัสผ่านใหม่",
+  "Revoked badge": "ถอนเหรียญตรา",
+  "Revoked permission": "ถอดสิทธิ์",
+  "Saved coaching note": "บันทึกการโค้ช",
+  "Sent assessment reminder": "ส่งการเตือนให้ประเมิน",
+  "Sent bulk assessment reminder": "ส่งการเตือนให้ประเมินหลายคน",
+  "Set expected level": "กำหนดระดับที่คาดหวัง",
+  "Skipped pre-test": "ข้ามแบบทดสอบก่อนเรียน",
+  "Submitted learning path project": "ส่งโปรเจกต์เส้นทางการเรียนรู้",
+  "Submitted self assessment": "ส่งแบบประเมินตนเอง",
+  "Submitted supervisor review": "ส่งผลการประเมินโดยหัวหน้า",
+  "Suspended account": "ระงับบัญชี",
+  "Unlinked employee": "ยกเลิกการเชื่อมข้อมูลพนักงาน",
+  "Unlocked account": "ปลดล็อกบัญชี",
+  "Unpinned announcement": "เลิกปักหมุดประกาศ",
+  "Unpublished announcement": "ยกเลิกการเผยแพร่ประกาศ",
+  "Updated KPI items": "อัปเดตรายการ KPI",
+  "Updated announcement": "แก้ไขประกาศ",
+  "Updated assessment cycle": "แก้ไขรอบการประเมิน",
+  "Updated career role": "แก้ไขบทบาทสายอาชีพ",
+  "Updated course": "แก้ไขหลักสูตร",
+  "Updated division": "แก้ไขแผนก",
+  "Updated employee": "แก้ไขข้อมูลพนักงาน",
+  "Updated learning path project": "แก้ไขโปรเจกต์เส้นทางการเรียนรู้",
+  "Updated position": "แก้ไขตำแหน่ง",
+  "Updated score weighting": "แก้ไขการถ่วงน้ำหนักคะแนน",
+};
+
+export function actionLabel(action: string, lang: Lang): string {
+  return lang === "th" ? (ACTION_TH[action] ?? action) : action;
+}
+
+/** The actor recorded for things the system did on its own. */
+export function actorLabel(label: string, lang: Lang): string {
+  return label === "system" ? (lang === "th" ? "ระบบ" : "System") : label;
+}
+
+const TARGET: Record<string, [string, string]> = {
+  user: ["Account", "บัญชีผู้ใช้"],
+  employee: ["Employee", "พนักงาน"],
+  announcement: ["Announcement", "ประกาศ"],
+  role: ["Role", "บทบาท"],
+  jobRole: ["Career role", "บทบาทสายอาชีพ"],
+  course: ["Course", "หลักสูตร"],
+  reward: ["Reward", "ของรางวัล"],
+  redemption: ["Redemption", "การแลกของรางวัล"],
+  badge: ["Badge", "เหรียญตรา"],
+  cycle: ["Assessment cycle", "รอบการประเมิน"],
+  department: ["Department", "ฝ่าย"],
+  division: ["Division", "แผนก"],
+  position: ["Position", "ตำแหน่ง"],
+  expectedLevel: ["Expected level", "ระดับที่คาดหวัง"],
+  report: ["Report", "รายงาน"],
+  assessment: ["Assessment", "การประเมิน"],
+  certificate: ["Certificate", "ใบรับรอง"],
+  coachingnote: ["Coaching note", "บันทึกการโค้ช"],
+  idpgoal: ["Development goal", "เป้าหมายพัฒนา"],
+  kpiitem: ["KPI", "KPI"],
+  learningpath: ["Learning path", "เส้นทางการเรียนรู้"],
+};
+
+/** What kind of record an entry is about, in words rather than a table name. */
+export function targetTypeLabel(type: string, lang: Lang): string {
+  const pair = TARGET[type] ?? TARGET[type.toLowerCase()];
+  return pair ? (lang === "th" ? pair[1] : pair[0]) : type;
+}

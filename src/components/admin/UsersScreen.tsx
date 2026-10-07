@@ -505,9 +505,8 @@ export function UsersScreen({ data }: { data: UsersScreenData }) {
           }
         >
           <p className="text-sm leading-relaxed text-muted">
-            {tt(
-              `Each person gets the login ID the naming rule gives (name.sur@${loginDomain}) and the Employee or Manager role their position implies. You get a list of activation links to send out, valid for 72 hours. IDs and roles can be changed afterwards.`,
-              `แต่ละคนจะได้ไอดีตามกฎการตั้งชื่อ (name.sur@${loginDomain}) และบทบาทพนักงานหรือหัวหน้างานตามตำแหน่ง คุณจะได้รายการลิงก์เปิดใช้งานเพื่อส่งต่อ ใช้ได้ 72 ชั่วโมง และแก้ไขไอดีหรือบทบาทได้ภายหลัง`,
+            {tt(`Each person gets a login ID from the naming rule (name.sur@${loginDomain}) and the Manager role if they have direct reports, otherwise Employee. You get a list of activation links to send out, valid for 72 hours. IDs and roles can be changed afterwards.`,
+              `แต่ละคนจะได้ไอดีตามกฎการตั้งชื่อ (name.sur@${loginDomain}) และบทบาทหัวหน้างานหากมีลูกทีม หรือพนักงานหากไม่มี คุณจะได้รายการลิงก์เปิดใช้งานเพื่อส่งต่อ ใช้ได้ 72 ชั่วโมง และแก้ไขไอดีหรือบทบาทได้ภายหลัง`,
             )}
           </p>
         </Modal>
@@ -614,9 +613,8 @@ function EmployeePicker({
         ) : options.length === 0 ? (
           <EmptyState
             title={tt("Everyone matching already has an account", "ทุกคนที่ตรงกับคำค้นหามีบัญชีแล้ว")}
-            hint={tt(
-              "Add the person under Employee → Staff records first, or widen the search.",
-              "เพิ่มพนักงานที่ Employee → ข้อมูลพนักงาน ก่อน หรือลองค้นหาให้กว้างขึ้น",
+            hint={tt("Add the person under Employee → Staff records first, or widen the search.",
+              "เพิ่มพนักงานที่เมนูพนักงาน → ข้อมูลพนักงาน ก่อน หรือลองค้นหาให้กว้างขึ้น",
             )}
           />
         ) : (

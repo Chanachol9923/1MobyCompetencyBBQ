@@ -124,9 +124,8 @@ export function HeatMapTable({
                       <span
                         key={c.id}
                         role="cell"
-                        title={tt(
-                          `${m.name} is not assessed on ${name}`,
-                          `${m.name} ไม่ได้ถูกประเมินใน ${name}`,
+                        title={tt(`${m.name} is not assessed on ${name}`,
+                          `${m.name} ไม่ได้ประเมิน ${name}`,
                         )}
                         className="grid h-9 place-items-center rounded-md bg-surface text-[10px] text-muted"
                       >

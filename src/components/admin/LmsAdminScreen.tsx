@@ -371,20 +371,19 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                       />
                       <span className="min-w-0">
                         <span className="block font-bold">{title(c)}</span>
-                        <span className="block truncate text-[10px] text-muted">
-                          {c.slug}
-                          {c.pathStepCount
-                            ? tt(
-                                ` · in ${c.pathStepCount} path(s)`,
-                                ` · อยู่ใน ${c.pathStepCount} เส้นทาง`,
-                              )
-                            : ""}
-                        </span>
+                        {c.pathStepCount ? (
+                          <span className="block truncate text-[10px] text-muted">
+                            {tt(
+                              `In ${c.pathStepCount} learning path(s)`,
+                              `อยู่ใน ${c.pathStepCount} เส้นทางการเรียนรู้`,
+                            )}
+                          </span>
+                        ) : null}
                       </span>
                     </div>
                   </Td>
                   <Td className="text-muted">{t(CATEGORY_LABEL[c.category].key)}</Td>
-                  <Td className="text-muted">{c.competencyName ?? "—"}</Td>
+                  <Td className="text-muted">{(lang === "th" ? (c.competencyNameTh ?? c.competencyName) : c.competencyName) ?? "—"}</Td>
                   <Td className="text-muted">{c.chapters.length}</Td>
                   <Td className="text-muted">
                     {tt(`${c.hours} hours`, `${c.hours} ชม.`)}
@@ -544,9 +543,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
             </Field>
             <Field
               label={tt("Linked competency", "สมรรถนะที่เชื่อมโยง")}
-              hint={tt(
-                "This is what makes the course show up against a development gap.",
-                "ใช้เชื่อมหลักสูตรกับช่องว่างสมรรถนะที่ต้องพัฒนา",
+              hint={tt("This is how the course is suggested for a development gap.",
+                "ใช้แนะนำหลักสูตรนี้ให้กับผู้ที่มีส่วนต่างในสมรรถนะนี้",
               )}
             >
               <Select
@@ -732,9 +730,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                     "No chapters yet — a course with no syllabus cannot be published.",
                     "ยังไม่มีบทเรียน — หลักสูตรที่ไม่มีเนื้อหาจะเผยแพร่ไม่ได้",
                   )
-                : tt(
-                    "Chapters keep their identity through a save, so re-ordering does not reset anybody's completed lessons. Removing one does delete the progress recorded against it.",
-                    "บทเรียนจะคงรหัสเดิมไว้เมื่อบันทึก การสลับลำดับจึงไม่ล้างความคืบหน้าของผู้เรียน แต่การลบบทเรียนจะลบความคืบหน้าของบทนั้นไปด้วย",
+                : tt("Saving keeps each chapter's progress, so re-ordering never resets anyone's completed lessons. Removing a chapter deletes the progress recorded for it.",
+                    "การบันทึกจะคงความคืบหน้าของแต่ละบทไว้ การสลับลำดับจึงไม่ล้างบทที่ผู้เรียนเรียนจบแล้ว แต่การลบบทเรียนจะลบความคืบหน้าของบทนั้นไปด้วย",
                   )}
             </p>
           </div>
@@ -776,9 +773,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           )}{" "}
           {confirm &&
           (confirm.enrolledCount || confirm.certificateCount || confirm.pathStepCount)
-            ? tt(
-                "People are enrolled on it, so this will be refused — archive it instead.",
-                "มีผู้ลงทะเบียนเรียนอยู่ ระบบจะปฏิเสธการลบ กรุณาเก็บเข้าคลังแทน",
+            ? tt("People are enrolled on it, so it can't be deleted — archive it instead.",
+                "มีผู้ลงทะเบียนเรียนอยู่ จึงลบไม่ได้ กรุณาเก็บเข้าคลังแทน",
               )
             : tt(
                 "Nothing is attached to it, so this is safe.",

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { KeyRound, LogOut, Smile, User, X } from "lucide-react";
+import { KeyRound, LogOut, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 import { useViewer } from "@/lib/viewer";
@@ -16,7 +16,7 @@ import { ChangePasswordModal } from "@/components/auth/ChangePasswordModal";
 
 export function Sidebar() {
   const viewer = useViewer();
-  const { t, tt } = useT();
+  const { t, tt, lang, lv } = useT();
   const pathname = usePathname();
   const router = useRouter();
   const { open, setOpen } = useMobileNav();
@@ -60,29 +60,13 @@ export function Sidebar() {
             {viewer.name}
           </span>
           <span className="block truncate text-[10px] leading-tight text-white/85">
-            {viewer.jobRoleName ?? viewer.roleName ?? viewer.email}
+            {viewer.jobRoleName ?? (lang === "th" ? (viewer.roleNameTh ?? viewer.roleName) : viewer.roleName) ?? viewer.email}
           </span>
           {viewer.level ? (
             <span className="block truncate text-[10px] leading-tight text-white/85">
-              ({viewer.level})
+              ({lv(viewer.level)})
             </span>
           ) : null}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Smile size={15} className="text-amber" />
-          <button
-            type="button"
-            aria-label={t("action.logout")}
-            onClick={() => {
-              void signOut({ redirectTo: "/login" });
-            }}
-            className={cn(
-              "rounded p-0.5 transition-colors hover:bg-white/20 focus-visible:outline-white",
-              drawer && "grid size-11 place-items-center",
-            )}
-          >
-            <LogOut size={15} />
-          </button>
         </span>
       </div>
 
@@ -154,20 +138,33 @@ export function Sidebar() {
         <p className="truncate text-[11px] text-white/70" title={viewer.email}>
           {viewer.email}
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            setChangingPassword(true);
-          }}
-          className={cn(
-            "mt-1 inline-flex items-center gap-1.5 rounded text-xs font-medium text-white/90 transition-colors hover:text-white focus-visible:outline-white",
-            drawer && "min-h-11",
-          )}
-        >
-          <KeyRound size={13} />
-          {tt("Change password", "เปลี่ยนรหัสผ่าน")}
-        </button>
+        <div className="mt-2 grid gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setChangingPassword(true);
+            }}
+            className={cn(
+              "flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white",
+              drawer && "h-11",
+            )}
+          >
+            <KeyRound size={15} />
+            {tt("Change password", "เปลี่ยนรหัสผ่าน")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void signOut({ redirectTo: "/login" })}
+            className={cn(
+              "flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white",
+              drawer && "h-11",
+            )}
+          >
+            <LogOut size={15} />
+            {t("action.logout")}
+          </button>
+        </div>
       </div>
     </div>
   );

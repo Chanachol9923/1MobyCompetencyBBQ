@@ -30,15 +30,20 @@ export default function AppError({
           {tt("This screen hit an error", "หน้านี้เกิดข้อผิดพลาด")}
         </h1>
         <p className="mt-1 text-sm text-muted">
-          {tt(
-            "The rest of the system is still fine. Try again, or go back to your home page.",
-            "ส่วนอื่นของระบบยังใช้งานได้ตามปกติ ลองใหม่อีกครั้ง หรือกลับไปหน้าแดชบอร์ด",
+          {tt("The rest of the system is still fine. Try again, or go back to your home page.",
+            "ส่วนอื่นของระบบยังใช้งานได้ตามปกติ ลองใหม่อีกครั้ง หรือกลับไปหน้าแรก",
           )}
         </p>
-        {error.message ? (
+        {/* the raw message helps a developer; in production people get a
+            reference code to quote to HROD instead */}
+        {process.env.NODE_ENV === "development" && error.message ? (
           <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-surface p-3 text-left text-[11px] leading-relaxed text-muted">
             {error.message}
           </pre>
+        ) : error.digest ? (
+          <p className="mt-3 text-xs text-muted">
+            {tt("Reference", "รหัสอ้างอิง")}: <span className="font-mono">{error.digest}</span>
+          </p>
         ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button

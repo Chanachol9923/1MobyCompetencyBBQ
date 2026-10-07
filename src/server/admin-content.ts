@@ -276,7 +276,7 @@ export async function createReward(
     });
     revalidateContent();
     return done(
-      `"${d.nameEn}" is in the catalogue — ${d.points} points, ${d.stock} in stock.`,
+      `"${d.nameEn}" added to the rewards — ${d.points} points, ${d.stock} in stock.`,
       `เพิ่ม "${d.nameTh || d.nameEn}" เข้ารายการแล้ว — ${d.points} คะแนน คงเหลือ ${d.stock} ชิ้น`,
     );
   });
@@ -1641,8 +1641,8 @@ const BAD_EMPLOYEE = fail(
   "ต้องระบุชื่อ รหัสพนักงาน อีเมลที่ถูกต้อง และบทบาทสายอาชีพ",
 );
 const BAD_CODE = fail(
-  "The employee ID must be 3 to 4 letters or digits, as in the HR data set.",
-  "รหัสพนักงานต้องเป็นตัวอักษรหรือตัวเลข 3–4 ตัว ตามชุดข้อมูลของฝ่ายบุคคล",
+  "The employee ID must be 3 to 4 letters or digits.",
+  "รหัสพนักงานต้องเป็นตัวอักษรหรือตัวเลข 3–4 ตัว",
 );
 
 function badEmployee(error: z.ZodError) {
@@ -1771,8 +1771,8 @@ export async function createEmployee(
     });
     revalidateContent();
     return done(
-      `${d.name} added. They are assessed on whatever "${employee.jobRole.name}" expects.`,
-      `เพิ่ม ${d.name} แล้ว จะถูกประเมินตามที่บทบาท "${employee.jobRole.name}" กำหนด`,
+      `${d.name} added and will be assessed as "${employee.jobRole.name}".`,
+      `เพิ่ม ${d.name} แล้ว จะถูกประเมินตามบทบาท "${employee.jobRole.name}"`,
     );
   });
 }
@@ -2095,7 +2095,7 @@ export async function deleteOrgUnit(
       }
       if (employeeCount > 0) {
         return fail(
-          `${employeeCount} employee(s) are filed under this ${noun.en.toLowerCase()}. Move them first.`,
+          `${employeeCount} employee(s) are assigned to this ${noun.en.toLowerCase()}. Move them first.`,
           `มีพนักงาน ${employeeCount} คนอยู่ภายใต้${noun.th}นี้ กรุณาย้ายออกก่อน`,
         );
       }
@@ -2354,7 +2354,7 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
         hours: true,
         cover: true,
         status: true,
-        competency: { select: { nameEn: true } },
+        competency: { select: { nameEn: true, nameTh: true } },
         chapters: {
           orderBy: { sortOrder: "asc" },
           select: {
@@ -2398,6 +2398,7 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
     category: c.category,
     competencyId: c.competencyId,
     competencyName: c.competency?.nameEn ?? null,
+    competencyNameTh: c.competency?.nameTh ?? null,
     hours: c.hours,
     cover: c.cover,
     status: c.status,
@@ -2604,8 +2605,8 @@ export async function setCourseStatus(
 
     if (status === "PUBLISHED" && course._count.chapters === 0) {
       return fail(
-        `"${course.titleEn}" has no chapters yet. Publishing an empty course puts a dead end in somebody's learning path.`,
-        `"${course.titleTh ?? course.titleEn}" ยังไม่มีบทเรียน การเผยแพร่หลักสูตรเปล่าจะทำให้เส้นทางการเรียนรู้ของพนักงานตัน`,
+        `"${course.titleEn}" has no chapters yet. Add at least one before publishing.`,
+        `"${course.titleTh ?? course.titleEn}" ยังไม่มีบทเรียน กรุณาเพิ่มอย่างน้อยหนึ่งบทก่อนเผยแพร่`,
       );
     }
 
@@ -2627,7 +2628,7 @@ export async function setCourseStatus(
 
     if (status === "PUBLISHED") {
       return done(
-        `"${course.titleEn}" is live in the library.`,
+        `"${course.titleEn}" is published.`,
         `"${course.titleTh ?? course.titleEn}" เผยแพร่ในคลังหลักสูตรแล้ว`,
       );
     }
@@ -2998,7 +2999,7 @@ export async function updateCycleWeights(
     revalidateContent("/assessment");
     return done(
       `Weighting saved — KPI ${kpi}%, Core ${core}%, Functional ${functional}%, Managerial ${managerial}%.`,
-      `บันทึกการถ่วงน้ำหนักแล้ว — KPI ${kpi}% Core ${core}% Functional ${functional}% Managerial ${managerial}%`,
+      `บันทึกการถ่วงน้ำหนักแล้ว — KPI ${kpi}% สมรรถนะหลัก ${core}% สมรรถนะตามสายงาน ${functional}% สมรรถนะการบริหาร ${managerial}%`,
     );
   });
 }
@@ -3066,8 +3067,8 @@ export async function setExpectedLevel(
   const from = current?.level ?? null;
   if (from === level) {
     return fail(
-      "That cell already says exactly this.",
-      "ช่องนี้มีค่าดังกล่าวอยู่แล้ว",
+      "Nothing changed — that level is already set.",
+      "ไม่มีการเปลี่ยนแปลง ระดับนี้ตั้งไว้แล้ว",
     );
   }
 

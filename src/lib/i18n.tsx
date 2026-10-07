@@ -130,7 +130,7 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "label.all": { en: "All", th: "ทั้งหมด" },
   "label.total": { en: "Total", th: "รวม" },
   "label.everyone": { en: "All employees", th: "พนักงานทั้งหมด" },
-  "label.notAssessed": { en: "Not assessed", th: "ไม่ได้ประเมิน" },
+  "label.notAssessed": { en: "Not assessed", th: "ไม่ประเมิน" },
   "label.careerPath": { en: "Career path", th: "เส้นทางความก้าวหน้า" },
 
   // extra actions used across the admin screens
@@ -180,7 +180,30 @@ export function useT() {
   /** Inline pair for page-specific copy: tt("Assessment", "การประเมิน") */
   const tt = useCallback((en: string, th: string) => (lang === "th" ? th : en), [lang]);
 
-  return useMemo(() => ({ t, tt, lang, setLang }), [t, tt, lang, setLang]);
+  /** A career level ("Level 3: Supervise") in the active language. */
+  const lv = useCallback((level: string) => levelText(level, lang), [lang]);
+
+  return useMemo(() => ({ t, tt, lv, lang, setLang }), [t, tt, lv, lang, setLang]);
+}
+
+/**
+ * Career levels come from the client's framework in English ("Level 3:
+ * Supervise"). The Thai interface shows them in Thai; an unknown level is
+ * shown as stored rather than guessed at.
+ */
+const LEVEL_TH: Record<string, string> = {
+  Operation: "ปฏิบัติการ",
+  "Senior Operation": "ปฏิบัติการอาวุโส",
+  Supervise: "กำกับดูแล",
+  Management: "บริหารจัดการ",
+  Strategy: "กลยุทธ์",
+};
+
+export function levelText(level: string, lang: Lang): string {
+  if (lang !== "th") return level;
+  const m = /^Level (\d+):\s*(.+)$/.exec(level.trim());
+  if (!m) return level;
+  return `ระดับ ${m[1]}: ${LEVEL_TH[m[2]!] ?? m[2]}`;
 }
 
 /** Rating label helper that follows the active language. */

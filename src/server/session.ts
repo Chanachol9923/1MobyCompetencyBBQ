@@ -19,6 +19,7 @@ export type Viewer = {
   status: "PENDING" | "ACTIVE" | "SUSPENDED";
   roleKey: string | null;
   roleName: string | null;
+  roleNameTh: string | null;
   permissions: string[];
   /** null for an account with no staff record, such as the HROD administrator */
   employeeId: string | null;
@@ -56,6 +57,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
         select: {
           key: true,
           nameEn: true,
+          nameTh: true,
           permissions: { select: { permission: { select: { key: true } } } },
         },
       },
@@ -89,6 +91,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     status: user.status,
     roleKey: user.role?.key ?? null,
     roleName: user.role?.nameEn ?? null,
+    roleNameTh: user.role?.nameTh ?? null,
     permissions: user.role?.permissions.map((p) => p.permission.key) ?? [],
     employeeId: user.employee?.id ?? null,
     employeeName: user.employee?.name ?? null,

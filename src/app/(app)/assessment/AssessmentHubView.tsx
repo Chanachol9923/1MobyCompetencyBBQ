@@ -87,9 +87,8 @@ export function AssessmentHubView({
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
         title={t("nav.assessment")}
-        subtitle={tt(
-          "180° assessment — self and supervisor, scored on KPI plus competency.",
-          "การประเมินแบบ 180 องศา — ประเมินตนเองและประเมินโดยหัวหน้า คิดคะแนนจาก KPI ร่วมกับสมรรถนะ",
+        subtitle={tt("180° assessment — by yourself and your supervisor, scored on KPIs and competencies.",
+          "การประเมินแบบ 180 องศา — ประเมินตนเองและประเมินโดยหัวหน้า คิดคะแนนจาก KPI และสมรรถนะ",
         )}
       />
 
@@ -108,9 +107,8 @@ export function AssessmentHubView({
                   `Closes ${closes}. ${viewerName} is assessed as ${jobRoleName ?? ""} on ${groupsLabel} plus KPI.`,
                   `ปิดรอบ ${closes} — ${viewerName} ถูกประเมินในฐานะ ${jobRoleName ?? ""} ในกลุ่ม ${groupsLabel} และ KPI`,
                 )
-              : tt(
-                  `Closes ${closes}. No competency has an expected level for this career role yet.`,
-                  `ปิดรอบ ${closes} — ยังไม่มีสมรรถนะใดกำหนดระดับที่คาดหวังสำหรับตำแหน่งนี้`,
+              : tt(`Closes ${closes}. No competency has an expected level for this career role yet.`,
+                  `ปิดรอบ ${closes} — บทบาทสายอาชีพนี้ยังไม่มีสมรรถนะที่กำหนดระดับที่คาดหวัง`,
                 )}
           </p>
         </div>
@@ -132,9 +130,8 @@ export function AssessmentHubView({
                 {tt("Self assessment", "ประเมินตนเอง")}
               </span>
             }
-            subtitle={tt(
-              "Rate yourself against the expected level for your career role.",
-              "ให้คะแนนตนเองเทียบกับระดับที่คาดหวังของตำแหน่ง",
+            subtitle={tt("Rate yourself against the expected level for your career role.",
+              "ให้คะแนนตนเองเทียบกับระดับที่คาดหวังของบทบาทสายอาชีพของคุณ",
             )}
             right={<StatusPill status={self.status} />}
           />
@@ -182,9 +179,8 @@ export function AssessmentHubView({
                 {tt("Supervisor review", "ประเมินโดยหัวหน้า")}
               </span>
             }
-            subtitle={tt(
-              "Your direct reports. This review is the official result and drives the gap analysis.",
-              "ผู้ใต้บังคับบัญชาโดยตรงของคุณ ผลนี้ถือเป็นผลอย่างเป็นทางการและใช้วิเคราะห์ส่วนต่าง",
+            subtitle={tt("Your direct reports. This review is the official result and is used for the gap analysis.",
+              "ผู้ใต้บังคับบัญชาโดยตรงของคุณ ผลนี้คือผลอย่างเป็นทางการและใช้วิเคราะห์ส่วนต่าง",
             )}
             right={
               <Pill tone={doneReviews === reports.length ? "success" : "neutral"}>

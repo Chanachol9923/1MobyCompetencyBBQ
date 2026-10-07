@@ -108,9 +108,8 @@ export function CatalogueView({
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
         title={t("nav.lms")}
-        subtitle={tt(
-          "Course catalogue, content library and your learning path",
-          "แคตตาล็อกหลักสูตร คลังเนื้อหา และเส้นทางการเรียนรู้ของคุณ",
+        subtitle={tt("Course catalogue, content library and your learning path",
+          "รายการหลักสูตร คลังเนื้อหา และเส้นทางการเรียนรู้ของคุณ",
         )}
       />
 

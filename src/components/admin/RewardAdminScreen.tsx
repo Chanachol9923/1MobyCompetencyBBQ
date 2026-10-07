@@ -309,7 +309,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
                 <tr className="border-y border-line/70 bg-surface/60">
                   <Th>{tt("Reward", "ของรางวัล")}</Th>
                   <Th>{t("label.points")}</Th>
-                  <Th className="w-44">{tt("Stock", "คงเหลือ")}</Th>
+                  <Th className="w-44">{tt("Rewards", "คงเหลือ")}</Th>
                   <Th>{tt("Redeemed", "แลกไปแล้ว")}</Th>
                   <Th>{t("label.status")}</Th>
                   <Th className="text-right">{t("label.actions")}</Th>
@@ -328,9 +328,6 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
                           />
                           <span className="min-w-0">
                             <span className="block font-bold">{name(r)}</span>
-                            <span className="block truncate text-[10px] text-muted">
-                              {r.key}
-                            </span>
                           </span>
                         </div>
                       </Td>
@@ -566,9 +563,8 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
             ? tt("Edit reward", "แก้ไขของรางวัล")
             : tt("Add reward", "เพิ่มของรางวัล")
         }
-        subtitle={tt(
-          "Both names are shown to staff — Thai first for a Thai reader.",
-          "ชื่อทั้งสองภาษาจะแสดงให้พนักงานเห็น ผู้ใช้ภาษาไทยจะเห็นชื่อภาษาไทยก่อน",
+        subtitle={tt("Staff see the name in the language they use.",
+          "พนักงานจะเห็นชื่อตามภาษาที่ใช้งาน",
         )}
         footer={
           <>
@@ -613,7 +609,7 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
                 onChange={(e) => set("points", e.target.value)}
               />
             </Field>
-            <Field label={tt("Stock", "คงเหลือ")}>
+            <Field label={tt("Rewards", "คงเหลือ")}>
               <Input
                 type="number"
                 min={0}

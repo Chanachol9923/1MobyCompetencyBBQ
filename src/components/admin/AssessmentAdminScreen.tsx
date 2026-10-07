@@ -120,7 +120,7 @@ type PendingCell = {
  * scores stop counting — and confirmed before it is written.
  */
 export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
-  const { t, tt, lang } = useT();
+  const { t, tt, lang, lv } = useT();
   const { can } = usePermission();
   const { cycle, jobRoles, competencies, matrix, scored, employees, counts } = data;
 
@@ -254,9 +254,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
       <Card>
         <CardHeader
           title={tt("Assessment cycle", "รอบการประเมิน")}
-          subtitle={tt(
-            "Name, window and status. Everything on every other screen is scoped to the open cycle.",
-            "ชื่อรอบ ช่วงเวลา และสถานะ ทุกหน้าจอในระบบอ้างอิงกับรอบที่เปิดอยู่",
+          subtitle={tt("Name, dates and status. Every screen works with the cycle that is open.",
+            "ชื่อรอบ ช่วงวันที่ และสถานะ ทุกหน้าจอใช้ข้อมูลของรอบที่เปิดอยู่",
           )}
           right={
             <span className="text-sm font-bold text-ink">
@@ -430,9 +429,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
       <Card className="mt-5">
         <CardHeader
           title={tt("Expected level matrix", "ตารางระดับที่คาดหวัง")}
-          subtitle={tt(
-            "Competency × career role. A dash is a saved decision, not a blank: that role is not assessed on that competency and it never appears in their gap report.",
-            "สมรรถนะ × บทบาทสายอาชีพ เครื่องหมายขีดคือค่าที่บันทึกไว้ ไม่ใช่ช่องว่าง หมายถึงบทบาทนั้นไม่ถูกประเมินสมรรถนะนั้น และจะไม่ปรากฏในรายงานช่องว่างเลย",
+          subtitle={tt("Competency × career role. A dash means that role is deliberately not assessed on that competency, so it never appears in their gap report.",
+            "สมรรถนะ × บทบาทสายอาชีพ เครื่องหมาย – หมายถึงตั้งใจไม่ประเมินสมรรถนะนั้นในบทบาทนี้ และจะไม่ปรากฏในรายงานส่วนต่าง",
           )}
           right={
             <div className="flex flex-wrap items-center gap-2">
@@ -678,7 +676,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                       {p.departmentName ? ` · ${p.departmentName}` : ""}
                     </span>
                   </Td>
-                  <Td className="whitespace-nowrap text-muted">{p.level}</Td>
+                  <Td className="whitespace-nowrap text-muted">{lv(p.level)}</Td>
                   <Td>
                     <Pill tone={p.selfSubmitted ? "success" : "danger"}>
                       {p.selfSubmitted ? t("status.completed") : t("status.incomplete")}
@@ -724,9 +722,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
         </TableWrap>
         <div className="border-t border-line/70 p-5">
           <Note>
-            {tt(
-              "“Progress” is scored competencies over the competencies that person's career role is assessed on — which is exactly what the matrix above decides. Sending a reminder raises a real in-app notification for that person.",
-              "“ความคืบหน้า” คือจำนวนสมรรถนะที่มีคะแนน หารด้วยจำนวนสมรรถนะที่บทบาทของพนักงานคนนั้นถูกประเมิน ซึ่งกำหนดโดยตารางด้านบนนี้เอง การกดแจ้งเตือนจะส่งการแจ้งเตือนจริงถึงพนักงานคนนั้น",
+            {tt("Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app.",
+              "ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ",
             )}
           </Note>
         </div>
@@ -778,9 +775,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber" />
               <div className="min-w-0 space-y-1.5 leading-relaxed text-ink">
                 <p>
-                  {tt(
-                    `${pending.employeeCount} ${pending.employeeCount === 1 ? "person holds" : "people hold"} this career role. Their gap report, skill index and assessment progress are all recalculated from this cell.`,
-                    `มีพนักงาน ${pending.employeeCount} คนอยู่ในบทบาทนี้ รายงานช่องว่าง ดัชนีสมรรถนะ และความคืบหน้าการประเมินของพวกเขาจะถูกคำนวณใหม่จากช่องนี้`,
+                  {tt(`${pending.employeeCount} ${pending.employeeCount === 1 ? "person holds" : "people hold"} this career role. Their gap report, skill index and assessment progress are all recalculated from this cell.`,
+                    `มีพนักงาน ${pending.employeeCount} คนอยู่ในบทบาทนี้ รายงานส่วนต่าง ดัชนีสมรรถนะ และความคืบหน้าการประเมินของพวกเขาจะถูกคำนวณใหม่จากช่องนี้`,
                   )}
                 </p>
                 {pending.to === null ? (
@@ -804,9 +800,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                   </p>
                 ) : (
                   <p>
-                    {tt(
-                      "Gap is supervisor score minus expected level, so raising the bar can turn a “Competency Fit” into a “Development”.",
-                      "ช่องว่างคำนวณจากคะแนนของหัวหน้าลบด้วยระดับที่คาดหวัง การยกระดับที่คาดหวังขึ้นอาจทำให้ผลเปลี่ยนจาก “ตรงตามมาตรฐาน” เป็น “ควรพัฒนา”",
+                    {tt("Gap is the supervisor's score minus the expected level, so raising the bar can turn a “Competency Fit” into a “Development”.",
+                      "ส่วนต่างคำนวณจากคะแนนของหัวหน้าลบด้วยระดับที่คาดหวัง การยกระดับที่คาดหวังขึ้นอาจทำให้ผลเปลี่ยนจาก “ตรงตามมาตรฐาน” เป็น “ควรพัฒนา”",
                     )}
                   </p>
                 )}

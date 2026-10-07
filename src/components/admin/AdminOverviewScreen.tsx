@@ -40,6 +40,7 @@ import { exportOrgSkillsCsv, remindEmployee } from "@/server/admin-content";
 import { PERMISSIONS } from "@/lib/permissions";
 import { usePermission } from "@/lib/viewer";
 import { useT } from "@/lib/i18n";
+import { actionLabel, actorLabel } from "@/lib/activity-labels";
 import { cn, formatNumber } from "@/lib/utils";
 
 const DONUT_COLORS = ["#faa21b", "#006bff", "#f05123", "#00b916", "#7a5af8", "#0b1b3f"];
@@ -55,7 +56,7 @@ const DONUT_COLORS = ["#faa21b", "#006bff", "#f05123", "#00b916", "#7a5af8", "#0
  * reads 67%, not "6".
  */
 export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
-  const { t, tt, lang } = useT();
+  const { t, tt, lang, lv } = useT();
   const { can } = usePermission();
   const [query, setQuery] = useState("");
   const [detail, setDetail] = useState<OverviewEmployeeRow | null>(null);
@@ -445,9 +446,8 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
                 className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-xs font-bold text-ink transition-colors hover:bg-surface disabled:opacity-45 max-lg:min-h-11"
               >
                 <Download size={14} className="text-brand" />
-                {tt(
-                  "Comprehensive ORG Skills Export (.CSV)",
-                  "ส่งออกข้อมูลสมรรถนะทั้งองค์กร (.CSV)",
+                {tt("Export organisation skills (CSV)",
+                  "ส่งออกข้อมูลสมรรถนะทั้งองค์กร (CSV)",
                 )}
               </button>
             </div>
@@ -469,10 +469,10 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs font-bold text-ink">
-                    {entry.actorLabel}
+                    {actorLabel(entry.actorLabel, lang)}
                   </span>
                   <span className="block truncate text-[10px] text-muted">
-                    {entry.action}
+                    {actionLabel(entry.action, lang)}
                     {entry.targetLabel ? ` · ${entry.targetLabel}` : ""}
                   </span>
                 </span>
@@ -572,7 +572,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
         title={detail?.name ?? ""}
         subtitle={
           detail
-            ? `${detail.positionName ?? detail.jobRoleName} · ${detail.level}`
+            ? `${detail.positionName ?? detail.jobRoleName} · ${lv(detail.level)}`
             : undefined
         }
       >

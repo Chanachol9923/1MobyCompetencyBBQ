@@ -802,8 +802,7 @@ export function AnnouncementAdmin({
 
             <Note>
               {draft.publishNow
-                ? tt(
-                    "Publishing writes one notification for every person in the audience, deep-linked to the announcement, and records the action in the activity log.",
+                ? tt("Publishing notifies everyone in the audience with a link to the announcement, and is recorded in the activity log.",
                     "การเผยแพร่จะสร้างการแจ้งเตือนให้ผู้รับทุกคนพร้อมลิงก์ไปยังประกาศ และบันทึกลงบันทึกกิจกรรม",
                   )
                 : tt(
@@ -850,9 +849,8 @@ export function AnnouncementAdmin({
             {confirm ? pick(lang, confirm.titleEn, confirm.titleTh) : ""}
           </span>
           ?{" "}
-          {tt(
-            "It disappears from every employee feed. Notifications that were already delivered stay, because they really were sent.",
-            "ประกาศจะหายไปจากฟีดของพนักงานทุกคน ส่วนการแจ้งเตือนที่ส่งไปแล้วจะยังคงอยู่ เพราะเป็นสิ่งที่เกิดขึ้นจริง",
+          {tt("It disappears from every employee's feed. Notifications already delivered stay as they are.",
+            "ประกาศจะหายไปจากฟีดของพนักงานทุกคน ส่วนการแจ้งเตือนที่ส่งไปแล้วจะยังคงอยู่",
           )}
         </p>
       </Modal>

@@ -127,7 +127,7 @@ export function TeamProfileView({
   goalsByMember: Record<string, TeamGoal[]>;
   courses: CourseChoice[];
 }) {
-  const { t, tt, lang } = useT();
+  const { t, tt, lang, lv } = useT();
   const router = useRouter();
 
   const [group, setGroup] = useState<CompetencyGroup | null>(null);
@@ -148,9 +148,8 @@ export function TeamProfileView({
         "เฉพาะหัวหน้าโดยตรงของพนักงานคนนี้เท่านั้นที่ทำรายการนี้ได้",
       ),
       invalid: tt("Check the form and try again.", "ตรวจสอบข้อมูลแล้วลองใหม่"),
-      unknown_competency: tt(
-        "This role is not assessed on that competency.",
-        "ตำแหน่งนี้ไม่ได้ถูกประเมินในสมรรถนะดังกล่าว",
+      unknown_competency: tt("This role is not assessed on that competency.",
+        "บทบาทนี้ไม่ได้ประเมินสมรรถนะดังกล่าว",
       ),
       unknown_course: tt("That course no longer exists.", "ไม่พบหลักสูตรนี้แล้ว"),
       bad_dates: tt(
@@ -343,9 +342,8 @@ export function TeamProfileView({
         <Card>
           <EmptyState
             title={tt("No direct reports", "ยังไม่มีผู้ใต้บังคับบัญชาโดยตรง")}
-            hint={tt(
-              "Team Profile follows the org chart. This account has nobody reporting to it yet.",
-              "หน้าโปรไฟล์ทีมอ้างอิงตามผังองค์กร บัญชีนี้ยังไม่มีผู้ใต้บังคับบัญชาโดยตรง",
+            hint={tt("Team Profile shows the people who report to you. Nobody reports to you yet.",
+              "หน้านี้แสดงผู้ที่รายงานต่อคุณ ขณะนี้ยังไม่มีผู้ใต้บังคับบัญชาโดยตรง",
             )}
           />
         </Card>
@@ -470,7 +468,7 @@ export function TeamProfileView({
           />
           <p className="mt-3 text-xs text-muted">
             {tt("Select someone to see their details below. N/A means their role is not assessed on that competency.",
-              "เลือกสมาชิกเพื่อดูรายละเอียดด้านล่าง ช่อง “ไม่ประเมิน” หมายถึงตำแหน่งของคนนั้นไม่ได้ประเมินสมรรถนะนี้",
+              "เลือกสมาชิกเพื่อดูรายละเอียดด้านล่าง “ไม่ประเมิน” หมายถึงบทบาทของคนนั้นไม่ได้ประเมินสมรรถนะนี้",
             )}
           </p>
         </Card>
@@ -493,7 +491,7 @@ export function TeamProfileView({
                 {selected.name}
               </p>
               <p className="truncate text-sm font-light text-muted">
-                {selected.position ?? selected.jobRole} ({selected.level})
+                {selected.position ?? selected.jobRole} ({lv(selected.level)})
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -708,9 +706,8 @@ export function TeamProfileView({
               {tt("Team learning progress", "ความคืบหน้าการเรียนรู้ของทีม")}
             </h2>
             <p className="mt-1 text-sm text-muted">
-              {tt(
-                `LMS activities summary (${members.length} members)`,
-                `สรุปกิจกรรมการเรียนรู้ (${members.length} คน)`,
+              {tt(`Learning summary (${members.length} people)`,
+                `สรุปการเรียนรู้ (${members.length} คน)`,
               )}
             </p>
             <p className="mt-6 text-right text-2xl font-bold text-brand lg:text-[32px]">

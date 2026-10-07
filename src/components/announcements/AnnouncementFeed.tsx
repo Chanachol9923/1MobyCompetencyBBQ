@@ -165,9 +165,8 @@ export function AnnouncementFeed({
               }
               hint={
                 nothingAtAll
-                  ? tt(
-                      "Announcements addressed to you will appear here as soon as HR publishes one.",
-                      "ประกาศที่ส่งถึงคุณจะแสดงที่นี่ทันทีที่ฝ่ายบุคคลเผยแพร่",
+                  ? tt("Announcements addressed to you will appear here as soon as they are published.",
+                      "ประกาศที่ส่งถึงคุณจะแสดงที่นี่ทันทีที่มีการเผยแพร่",
                     )
                   : undefined
               }
