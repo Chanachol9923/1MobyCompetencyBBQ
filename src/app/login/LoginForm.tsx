@@ -62,6 +62,7 @@ export function LoginForm({
   code,
   next,
   notice,
+  unavailable = false,
 }: {
   loginDomain: string;
   demoAccounts: DemoAccount[];
@@ -70,6 +71,8 @@ export function LoginForm({
   code?: string;
   next?: string;
   notice?: "activated" | "password_changed" | "signed_out";
+  /** the database could not be reached while rendering this page */
+  unavailable?: boolean;
 }) {
   const { tt } = useT();
   const router = useRouter();
@@ -185,6 +188,15 @@ export function LoginForm({
           {tt(
             "Password changed. Sign in again with the new one.",
             "เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบอีกครั้งด้วยรหัสผ่านใหม่",
+          )}
+        </AuthNotice>
+      ) : null}
+
+      {unavailable ? (
+        <AuthNotice>
+          {tt(
+            "The system cannot reach its database right now, so signing in will not work. Please try again in a few minutes, or let HROD know.",
+            "ขณะนี้ระบบเชื่อมต่อฐานข้อมูลไม่ได้ จึงยังเข้าสู่ระบบไม่ได้ กรุณาลองใหม่ในอีกสักครู่ หรือแจ้งฝ่าย HROD",
           )}
         </AuthNotice>
       ) : null}

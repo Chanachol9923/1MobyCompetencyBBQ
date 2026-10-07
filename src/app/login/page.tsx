@@ -13,13 +13,24 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; code?: string; next?: string; notice?: string }>;
 }) {
-  const viewer = await getViewer();
+  // if the database cannot be reached, still show the sign-in screen and say
+  // so, rather than a bare server error
+  let unavailable = false;
+  const viewer = await getViewer().catch(() => {
+    unavailable = true;
+    return null;
+  });
   if (viewer && viewer.status === "ACTIVE") {
     redirect(homeFor(viewer));
   }
 
   const params = await searchParams;
-  const demoAccounts = await loadTestAccounts();
+  const demoAccounts = unavailable
+    ? []
+    : await loadTestAccounts().catch(() => {
+        unavailable = true;
+        return [];
+      });
   const notice =
     params.notice === "activated" || params.notice === "password_changed"
       ? params.notice
@@ -34,6 +45,7 @@ export default async function LoginPage({
       code={params.code}
       next={params.next}
       notice={notice}
+      unavailable={unavailable}
     />
   );
 }
