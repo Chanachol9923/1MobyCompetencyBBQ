@@ -245,6 +245,8 @@ export type PlayerChapter = {
   bodyTh: string | null;
   minutes: number;
   pages: number | null;
+  /** the uploaded video or PDF; without one the chapter plays its built-in preview */
+  mediaUrl: string | null;
   done: boolean;
 };
 
@@ -346,6 +348,7 @@ export async function getPlayerView(
           bodyTh: true,
           minutes: true,
           pages: true,
+          mediaUrl: true,
         },
       },
     },

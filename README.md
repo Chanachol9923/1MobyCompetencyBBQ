@@ -93,6 +93,15 @@ when `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are set, one Supabase API req
 answers only calls signed with `CRON_SECRET`. If the project is paused anyway, restore it from the
 Supabase dashboard (Project → Restore), then run `npm run db:migrate` for any pending migrations.
 
+### 6. Storage for videos and PDFs
+
+Shorts, documents and chapter files live in a public Vercel Blob store. Create one in Vercel →
+Storage → Blob and connect it to the project, which adds `BLOB_READ_WRITE_TOKEN`; locally,
+`vercel env pull .env.local` brings it down. Files go straight from the administrator's browser to
+Blob: `/api/upload` only signs each upload after checking the `manage_lms` permission, the file
+type and its size (video 200 MB, PDF 50 MB, cover image 5 MB). Records accept only URLs from that
+store, and replacing or deleting a record deletes its old files.
+
 ## The rules the product is built on
 
 Both come from the client's workbook and are enforced in `src/server/competency.ts` so no screen
@@ -154,15 +163,21 @@ per-member radar, coaching notes, goal authoring and the review action.
 the company with department and division filters. Bar chart against expected level, sortable gap
 table, generated strengths and shortfalls, CSV export.
 
-**LMS** — 39 courses across Video / PDF / Article chapters, learning paths of five courses plus a
-project, pre- and post-tests that issue a certificate automatically at 70%, and a scripted local
-study assistant (clearly labelled — no model calls).
+**Learning** — three formats in one section. *Courses*: 39 courses across Video / PDF / Article
+chapters (a chapter can carry an uploaded video or PDF, or fall back to a built-in preview),
+learning paths of five courses plus a project, pre- and post-tests that issue a certificate
+automatically at 70%, and a scripted local study assistant (clearly labelled — no model calls).
+*Shorts*: vertical videos of up to three minutes in a Reels-style feed — scroll or swipe, autoplay
+muted with one-tap sound, likes, a link to the full course, and 5 points for watching one through.
+*Documents*: a PDF library with first-page covers and an in-app reader that remembers your page;
+reaching the last page is worth 20 points. Administrators upload all three from one screen, which
+reads a video's length, grabs its cover frame and counts a PDF's pages for them.
 
 **Announcements** — a feed everyone can read, addressed to everyone or narrowed to a department,
 division, career role or one person, with read receipts. Publishing fans out notifications.
 
 **Administration** — account provisioning and activation links, roles and permissions, the competency framework and
-expected-level matrix, assessment cycles and weighting, the course library, rewards and
+expected-level matrix, assessment cycles and weighting, courses, shorts and documents, rewards and
 achievements, announcements, and the activity log.
 
 **Bilingual** Thai/English throughout, switchable before and after sign-in. Responsive to phones,
@@ -182,8 +197,10 @@ component-for-component without redoing the layouts.
 
 1. Push to a Git repository and import it in Vercel, framework preset **Next.js**.
 2. Set `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET` and `NEXT_PUBLIC_ENABLE_DEMO_LOGIN=false`
-   (optionally `APP_URL`, the origin written into activation links, and `DATABASE_CA_CERT`).
+   (optionally `APP_URL`, the origin written into activation links, and `DATABASE_CA_CERT`), and
+   connect a Blob store for `BLOB_READ_WRITE_TOKEN`.
 3. `npm run db:migrate` against the production database, then `npm run db:seed` once.
+   `SEED_ONLY=media npm run db:seed` adds just the sample shorts and documents to an existing database.
 
 `postinstall` runs `prisma generate`, so the client is built during deployment.
 

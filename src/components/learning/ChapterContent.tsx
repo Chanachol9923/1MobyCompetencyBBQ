@@ -21,6 +21,7 @@ import {
   type ChapterKind,
 } from "./model";
 import type { PlayerChapter } from "@/server/learning";
+import { PdfReader } from "./PdfReader";
 
 /* ------------------------------------------------------------ kind badges */
 
@@ -81,9 +82,70 @@ type PanelProps = {
  * writes the `ChapterProgress` row. The panel itself never records anything.
  */
 export function ChapterContent(props: PanelProps) {
-  if (props.chapter.kind === "PDF") return <PdfPanel {...props} />;
+  const uploaded = Boolean(props.chapter.mediaUrl);
+  if (props.chapter.kind === "PDF")
+    return uploaded ? <UploadedPdfPanel {...props} /> : <PdfPanel {...props} />;
   if (props.chapter.kind === "ARTICLE") return <ArticlePanel {...props} />;
-  return <VideoPanel {...props} />;
+  return uploaded ? <UploadedVideoPanel {...props} /> : <VideoPanel {...props} />;
+}
+
+/* ------------------------------------------------------ uploaded media */
+
+/** How much of a video counts as watched: the closing credits are optional. */
+const WATCHED = 0.9;
+
+function UploadedVideoPanel({ course, chapter, index, complete, onComplete }: PanelProps) {
+  const { tt, lang } = useT();
+  const finished = useRef(complete);
+  const finish = () => {
+    if (finished.current) return;
+    finished.current = true;
+    onComplete();
+  };
+
+  return (
+    <div className="relative w-full overflow-hidden rounded-xl bg-ink">
+      <video
+        src={chapter.mediaUrl ?? undefined}
+        controls
+        playsInline
+        preload="metadata"
+        className="aspect-video w-full bg-black"
+        onTimeUpdate={(e) => {
+          const v = e.currentTarget;
+          if (v.duration && v.currentTime / v.duration >= WATCHED) finish();
+        }}
+        onEnded={finish}
+      >
+        {tt("Your browser cannot play this video.", "เบราว์เซอร์ของคุณเล่นวิดีโอนี้ไม่ได้")}
+      </video>
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-white">
+        <p className="min-w-0 truncate text-xs text-white/75">
+          {pick(lang, course.titleEn, course.titleTh)} · {tt("Chapter", "บทที่")} {index + 1}
+        </p>
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-white/70">
+          <Clock size={12} /> {chapter.minutes} {tt("min", "นาที")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function UploadedPdfPanel({ chapter, complete, onComplete }: PanelProps) {
+  const { lang } = useT();
+  const finished = useRef(complete);
+  return (
+    <PdfReader
+      url={chapter.mediaUrl ?? ""}
+      title={pick(lang, chapter.titleEn, chapter.titleTh)}
+      onPage={(page, pages) => {
+        if (page >= pages && !finished.current) {
+          finished.current = true;
+          onComplete();
+        }
+      }}
+    />
+  );
 }
 
 /* ---------------------------------------------------------------- overlay */

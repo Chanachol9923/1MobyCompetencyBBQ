@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireEmployee } from "@/server/session";
 import { getCatalogue, listPathViews } from "@/server/learning";
+import { getShortsFeed, listDocuments } from "@/server/learning-media";
 import {
   CHAPTER_KINDS,
   COURSE_CATEGORIES,
@@ -10,6 +11,8 @@ import {
 import { CatalogueView, type CatalogueQuery } from "./CatalogueView";
 
 export const metadata: Metadata = { title: "LMS · 1Moby" };
+
+const VIEWS = ["courses", "shorts", "documents", "journey"] as const;
 
 /** Anything the URL cannot be trusted to hold turns back into "everything". */
 function readQuery(params: Record<string, string | string[] | undefined>) {
@@ -27,7 +30,9 @@ function readQuery(params: Record<string, string | string[] | undefined>) {
     kind: CHAPTER_KINDS.includes(kind as ChapterKind)
       ? (kind as ChapterKind)
       : "ALL",
-    view: one("view") === "journey" ? "journey" : "courses",
+    view: (VIEWS as readonly string[]).includes(one("view"))
+      ? (one("view") as CatalogueQuery["view"])
+      : "courses",
   };
   return query;
 }
@@ -48,13 +53,19 @@ export default async function LmsPage({
   const viewer = await requireEmployee();
   const query = readQuery(await searchParams);
 
-  const [{ courses, stats }, paths] = await Promise.all([
-    getCatalogue(viewer.employeeId, {
-      q: query.q,
-      category: query.category,
-      kind: query.kind,
-    }),
-    listPathViews(viewer.employeeId),
+  // each tab loads only what it shows
+  const courseTab = query.view === "courses" || query.view === "journey";
+  const [{ courses, stats }, paths, shorts, documents] = await Promise.all([
+    courseTab
+      ? getCatalogue(viewer.employeeId, {
+          q: query.q,
+          category: query.category,
+          kind: query.kind,
+        })
+      : { courses: [], stats: { total: 0, completed: 0, inProgress: 0, overall: 0 } },
+    query.view === "journey" ? listPathViews(viewer.employeeId) : [],
+    query.view === "shorts" ? getShortsFeed().then((r) => r.shorts) : [],
+    query.view === "documents" ? listDocuments().then((r) => r.documents) : [],
   ]);
 
   return (
@@ -62,6 +73,8 @@ export default async function LmsPage({
       courses={courses}
       stats={stats}
       paths={paths}
+      shorts={shorts}
+      documents={documents}
       query={query}
     />
   );

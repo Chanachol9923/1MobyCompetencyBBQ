@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Archive,
   ArrowDown,
@@ -23,7 +23,6 @@ import {
   Field,
   Input,
   Modal,
-  PageHeading,
   Pill,
   Select,
   Textarea,
@@ -46,6 +45,9 @@ import type {
   LmsAdminData,
 } from "@/components/admin/content-types";
 import { deleteCourse, saveCourse, setCourseStatus } from "@/server/admin-content";
+import { discardUpload } from "@/server/learning-media";
+import { FileField, readVideo, type PickedFile } from "@/components/admin/media-upload";
+import { countPdfPages } from "@/components/learning/PdfReader";
 import { useT } from "@/lib/i18n";
 
 const CATEGORIES: CompetencyGroupValue[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
@@ -82,6 +84,8 @@ type ChapterDraft = {
   summaryTh: string;
   minutes: string;
   pages: string;
+  /** the uploaded video or PDF; none means the built-in preview */
+  media: PickedFile | null;
 };
 
 type Draft = {
@@ -109,6 +113,7 @@ const newChapter = (): ChapterDraft => ({
   summaryTh: "",
   minutes: "10",
   pages: "",
+  media: null,
 });
 
 const emptyDraft = (coverIndex: number): Draft => ({
@@ -142,6 +147,13 @@ const fromCourse = (c: AdminCourseRow): Draft => ({
     summaryTh: ch.summaryTh ?? "",
     minutes: String(ch.minutes),
     pages: ch.pages === null ? "" : String(ch.pages),
+    media: ch.mediaUrl
+      ? {
+          url: ch.mediaUrl,
+          bytes: ch.mediaBytes ?? 0,
+          name: decodeURIComponent(ch.mediaUrl.split("/").pop() ?? "file"),
+        }
+      : null,
   })),
 });
 
@@ -165,6 +177,16 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(0));
   const [confirm, setConfirm] = useState<AdminCourseRow | null>(null);
   const [busy, startTransition] = useTransition();
+  // files uploaded in the open editor and not yet saved against anything
+  const fresh = useRef(new Set<string>());
+  const forget = (url: string | undefined) => {
+    if (url && fresh.current.delete(url)) void discardUpload({ url }).catch(() => {});
+  };
+  function closeEditor() {
+    for (const url of fresh.current) void discardUpload({ url }).catch(() => {});
+    fresh.current.clear();
+    setOpen(false);
+  }
 
   const title = (c: { titleEn: string; titleTh: string | null }) =>
     lang === "th" ? (c.titleTh ?? c.titleEn) : c.titleEn;
@@ -201,6 +223,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
     startTransition(async () => {
       const res = await fn();
       if (res.ok) {
+        fresh.current.clear();
         setOpen(false);
         setResult(res);
       } else {
@@ -266,6 +289,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           summaryTh: ch.summaryTh,
           minutes: ch.minutes,
           pages: ch.pages || undefined,
+          mediaUrl: ch.kind === "ARTICLE" ? "" : (ch.media?.url ?? ""),
+          mediaBytes: ch.kind === "ARTICLE" ? 0 : (ch.media?.bytes ?? 0),
         })),
     };
     runForm(() => saveCourse(payload));
@@ -281,15 +306,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
     );
 
   return (
-    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
-      <PageHeading
-        title={tt("Manage courses", "จัดการหลักสูตร")}
-        subtitle={tt(
-          "The course library employees learn from — courses, chapters and what each one is tagged against.",
-          "คลังหลักสูตรที่พนักงานใช้เรียน — หลักสูตร บทเรียน และสมรรถนะที่เชื่อมโยง",
-        )}
-      />
-
+    <div>
       <ResultBanner result={result} onDismiss={() => setResult(null)} />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -465,7 +482,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       {/* ---------------------------------------------- create / edit ---- */}
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeEditor}
         title={
           editing ? tt("Edit course", "แก้ไขหลักสูตร") : tt("Create course", "สร้างหลักสูตร")
         }
@@ -478,7 +495,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
         footer={
           step === 1 ? (
             <>
-              <Button variant="outline" onClick={() => setOpen(false)}>
+              <Button variant="outline" onClick={closeEditor}>
                 {t("action.cancel")}
               </Button>
               <Button onClick={() => setStep(2)}>
@@ -629,12 +646,13 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                       <IconAction
                         tone="danger"
                         aria-label={tt(`Remove chapter ${i + 1}`, `ลบบทที่ ${i + 1}`)}
-                        onClick={() =>
+                        onClick={() => {
+                          forget(ch.media?.url);
                           setDraft((d) => ({
                             ...d,
                             chapters: d.chapters.filter((c) => c.uid !== ch.uid),
-                          }))
-                        }
+                          }));
+                        }}
                       >
                         <Trash2 size={14} />
                       </IconAction>
@@ -658,11 +676,14 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                     <Field label={tt("Content type", "ประเภทเนื้อหา")}>
                       <Select
                         value={ch.kind}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          // a video file is no use to a PDF chapter, and vice versa
+                          forget(ch.media?.url);
                           setChapter(ch.uid, {
                             kind: e.target.value as ChapterKindValue,
-                          })
-                        }
+                            media: null,
+                          });
+                        }}
                       >
                         <option value="VIDEO">{tt("Video", "วิดีโอ")}</option>
                         <option value="PDF">{tt("PDF", "เอกสาร PDF")}</option>
@@ -690,6 +711,51 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                         />
                       </Field>
                     </div>
+                    {ch.kind !== "ARTICLE" ? (
+                      <Field
+                        className="sm:col-span-2"
+                        label={
+                          ch.kind === "VIDEO"
+                            ? tt("Video file", "ไฟล์วิดีโอ")
+                            : tt("PDF file", "ไฟล์ PDF")
+                        }
+                        hint={
+                          ch.kind === "VIDEO"
+                            ? tt(
+                                "Optional. The minutes fill in from the video's length. Without a file, learners see a preview built from the summary.",
+                                "ไม่บังคับ ระบบจะใส่จำนวนนาทีตามความยาววิดีโอให้ ถ้าไม่มีไฟล์ ผู้เรียนจะเห็นตัวอย่างจากสรุปเนื้อหา",
+                              )
+                            : tt(
+                                "Optional. The page count fills in for you. Without a file, learners see a preview built from the summary.",
+                                "ไม่บังคับ ระบบจะใส่จำนวนหน้าให้อัตโนมัติ ถ้าไม่มีไฟล์ ผู้เรียนจะเห็นตัวอย่างจากสรุปเนื้อหา",
+                              )
+                        }
+                      >
+                        <FileField
+                          compact
+                          kind={ch.kind === "VIDEO" ? "video" : "pdf"}
+                          folder="chapters"
+                          value={ch.media}
+                          prepare={async (file) => {
+                            if (ch.kind === "VIDEO") {
+                              const meta = await readVideo(file);
+                              setChapter(ch.uid, {
+                                minutes: String(Math.max(1, Math.round(meta.durationSec / 60))),
+                              });
+                            } else {
+                              const pages = await countPdfPages(file);
+                              setChapter(ch.uid, { pages: String(pages) });
+                            }
+                            return null;
+                          }}
+                          onChange={(media) => {
+                            forget(ch.media?.url);
+                            if (media) fresh.current.add(media.url);
+                            setChapter(ch.uid, { media });
+                          }}
+                        />
+                      </Field>
+                    ) : null}
                     <Field label={tt("Summary (English)", "สรุปเนื้อหา (อังกฤษ)")}>
                       <Textarea
                         value={ch.summaryEn}

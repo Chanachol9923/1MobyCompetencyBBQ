@@ -23,6 +23,11 @@ import {
   REWARDS,
   chapterKind,
 } from "../src/data/learning";
+import {
+  SAMPLE_DOCUMENTS,
+  SAMPLE_SHORTS,
+  SAMPLE_SHORT_SECONDS,
+} from "../src/data/learning-media";
 import { DEFAULT_ROLES, PERMISSION_CATALOGUE } from "../src/lib/permissions";
 import { currentCycle } from "../src/data/cycle";
 import { hashPassword } from "../src/lib/password";
@@ -532,6 +537,58 @@ async function seedLearning() {
   console.log(`  courses ${COURSES.length}, learning paths ${LEARNING_PATHS.length}`);
 }
 
+/** Sample shorts and PDFs; the files themselves are already in Blob storage. */
+async function seedLearningMedia() {
+  const comps = new Map(
+    (await db.competency.findMany({ select: { id: true, key: true } })).map((c) => [c.key, c.id]),
+  );
+  const courses = new Map(
+    (await db.course.findMany({ select: { id: true, slug: true } })).map((c) => [c.slug, c.id]),
+  );
+  const now = Date.now();
+  let added = 0;
+  for (const [i, s] of SAMPLE_SHORTS.entries()) {
+    if (await db.shortVideo.findFirst({ where: { videoUrl: s.videoUrl }, select: { id: true } })) continue;
+    await db.shortVideo.create({
+      data: {
+        titleEn: s.titleEn,
+        titleTh: s.titleTh,
+        captionEn: s.captionEn,
+        captionTh: s.captionTh,
+        videoUrl: s.videoUrl,
+        posterUrl: s.posterUrl,
+        videoBytes: s.videoBytes,
+        durationSec: SAMPLE_SHORT_SECONDS,
+        competencyId: comps.get(s.competency) ?? null,
+        courseId: courses.get(s.course) ?? null,
+        status: "PUBLISHED",
+        publishedAt: new Date(now - i * 3_600_000),
+      },
+    });
+    added++;
+  }
+  for (const [i, d] of SAMPLE_DOCUMENTS.entries()) {
+    if (await db.learningDocument.findFirst({ where: { fileUrl: d.fileUrl }, select: { id: true } })) continue;
+    await db.learningDocument.create({
+      data: {
+        titleEn: d.titleEn,
+        titleTh: d.titleTh,
+        descriptionEn: d.descriptionEn,
+        descriptionTh: d.descriptionTh,
+        fileUrl: d.fileUrl,
+        fileBytes: d.fileBytes,
+        pages: d.pages,
+        competencyId: d.competency ? (comps.get(d.competency) ?? null) : null,
+        courseId: d.course ? (courses.get(d.course) ?? null) : null,
+        status: "PUBLISHED",
+        publishedAt: new Date(now - i * 3_600_000),
+      },
+    });
+    added++;
+  }
+  console.log(`  shorts ${SAMPLE_SHORTS.length}, documents ${SAMPLE_DOCUMENTS.length} (${added} new)`);
+}
+
 async function seedEngagement() {
   for (const b of BADGES) {
     await db.badge.upsert({
@@ -804,12 +861,18 @@ async function main() {
     await seedDevelopmentPlans();
     return;
   }
+  // SEED_ONLY=media adds the sample shorts and documents to an existing database
+  if (process.env.SEED_ONLY === "media") {
+    await seedLearningMedia();
+    return;
+  }
   console.log("seeding 1Moby…");
   await seedRbac();
   await seedFramework();
   await seedOrg();
   await seedAssessments();
   await seedLearning();
+  await seedLearningMedia();
   await seedDevelopmentPlans();
   await seedEngagement();
   await seedComms();

@@ -236,6 +236,8 @@ model Employee {
   announcementReads   AnnouncementRead[]
   coachingNotes       CoachingNote[]   @relation("NoteSubject")
   coachingNotesByMe   CoachingNote[]   @relation("NoteAuthor")
+  shortViews          ShortView[]
+  documentReads       DocumentRead[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,6 +273,8 @@ model Competency {
   scores         AssessmentScore[]
   idpGoals       IdpGoal[]
   courses        Course[]
+  shorts         ShortVideo[]
+  documents      LearningDocument[]
 
   @@index([group])
 }
@@ -504,6 +508,8 @@ model Course {
   certificates Certificate[]
   idpGoals    IdpGoal[]
   pathSteps   LearningPathStep[]
+  shorts      ShortVideo[]
+  documents   LearningDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -527,6 +533,9 @@ model Chapter {
   bodyTh    String?
   minutes   Int         @default(0)
   pages     Int?
+  /// the uploaded video or PDF for this chapter; null keeps the built-in preview
+  mediaUrl  String?
+  mediaBytes Int?
 
   course   Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
   progress ChapterProgress[]
@@ -842,4 +851,94 @@ model ActivityLog {
   @@index([createdAt])
   @@index([actorId])
   @@index([action])
+}
+
+/* ------------------------------------------------------------ short videos */
+
+/// A short vertical clip in the Shorts feed — one idea in under a few minutes,
+/// optionally pointing to the course that goes deeper.
+model ShortVideo {
+  id           String        @id @default(cuid())
+  titleEn      String
+  titleTh      String?
+  captionEn    String?
+  captionTh    String?
+  videoUrl     String
+  posterUrl    String?
+  videoBytes   Int           @default(0)
+  durationSec  Int
+  competencyId String?
+  courseId     String?
+  status       PublishStatus @default(DRAFT)
+  publishedAt  DateTime?
+  createdById  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  competency Competency? @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  course     Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  views      ShortView[]
+
+  @@index([status, publishedAt])
+  @@index([competencyId])
+}
+
+/// One person's relationship with one short: watched, finished, liked.
+model ShortView {
+  id          String    @id @default(cuid())
+  shortId     String
+  employeeId  String
+  firstSeenAt DateTime  @default(now())
+  completedAt DateTime?
+  liked       Boolean   @default(false)
+
+  short    ShortVideo @relation(fields: [shortId], references: [id], onDelete: Cascade)
+  employee Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([shortId, employeeId])
+  @@index([employeeId])
+}
+
+/* ---------------------------------------------------------------- documents */
+
+/// A PDF in the learning library — a guide, handbook or reading.
+model LearningDocument {
+  id            String        @id @default(cuid())
+  titleEn       String
+  titleTh       String?
+  descriptionEn String?
+  descriptionTh String?
+  fileUrl       String
+  fileBytes     Int           @default(0)
+  pages         Int
+  competencyId  String?
+  courseId      String?
+  status        PublishStatus @default(DRAFT)
+  publishedAt   DateTime?
+  createdById   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  competency Competency?    @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  course     Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  reads      DocumentRead[]
+
+  @@index([status, publishedAt])
+  @@index([competencyId])
+}
+
+/// Where someone is in a document, so the reader opens on that page.
+model DocumentRead {
+  id          String    @id @default(cuid())
+  documentId  String
+  employeeId  String
+  lastPage    Int       @default(1)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  document LearningDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  employee Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, employeeId])
+  @@index([employeeId])
 }

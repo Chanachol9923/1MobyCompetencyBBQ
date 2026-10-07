@@ -10,7 +10,7 @@ import { useT } from "@/lib/i18n";
  * A server component cannot call `useT()`, so the empty state for a missing row
  * lives here rather than being hard-coded in one language on the page.
  */
-export function MissingCard({ kind }: { kind: "course" | "path" }) {
+export function MissingCard({ kind }: { kind: "course" | "path" | "document" }) {
   const { t, tt } = useT();
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
@@ -18,12 +18,16 @@ export function MissingCard({ kind }: { kind: "course" | "path" }) {
       <Card>
         <EmptyState
           title={
-            kind === "course"
+            kind === "document"
+              ? tt("Document not found", "ไม่พบเอกสารนี้")
+              : kind === "course"
               ? tt("Course not found", "ไม่พบหลักสูตรนี้")
               : tt("Learning path not found", "ไม่พบเส้นทางการเรียนรู้นี้")
           }
           hint={
-            kind === "course"
+            kind === "document"
+              ? tt("It may have been unpublished or removed.", "เอกสารนี้อาจถูกซ่อนหรือลบไปแล้ว")
+              : kind === "course"
               ? tt("It may have been removed from the course list.",
                   "หลักสูตรนี้อาจถูกนำออกจากรายการแล้ว",
                 )
@@ -34,9 +38,11 @@ export function MissingCard({ kind }: { kind: "course" | "path" }) {
           }
         />
         <div className="grid place-items-center pb-8">
-          <Link href="/lms">
+          <Link href={kind === "document" ? "/lms?view=documents" : "/lms"}>
             <Button variant="outline">
-              {tt("Back to courses", "กลับไปหน้าหลักสูตร")}
+              {kind === "document"
+                ? tt("Back to documents", "กลับไปหน้าเอกสาร")
+                : tt("Back to courses", "กลับไปหน้าหลักสูตร")}
             </Button>
           </Link>
         </div>

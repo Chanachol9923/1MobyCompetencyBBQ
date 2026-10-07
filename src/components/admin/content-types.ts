@@ -272,6 +272,9 @@ export type AdminChapterRow = {
   summaryTh: string | null;
   minutes: number;
   pages: number | null;
+  /** the uploaded video or PDF, when there is one */
+  mediaUrl: string | null;
+  mediaBytes: number | null;
 };
 
 export type AdminCourseRow = {

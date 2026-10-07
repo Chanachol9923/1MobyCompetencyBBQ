@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Route, Search } from "lucide-react";
+import { ArrowRight, BookOpen, Clapperboard, FileText, Route, Search } from "lucide-react";
+import { DocumentsGrid, ShortsGrid } from "./MediaViews";
 import {
   Button,
   Card,
@@ -25,6 +26,7 @@ import {
   type ChapterKind,
   type CourseCategory,
 } from "@/components/learning/model";
+import type { DocumentCard, ShortCard } from "@/components/learning/media-types";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type {
@@ -37,7 +39,7 @@ export type CatalogueQuery = {
   q: string;
   category: CourseCategory | "ALL";
   kind: ChapterKind | "ALL";
-  view: "courses" | "journey";
+  view: "courses" | "shorts" | "documents" | "journey";
 };
 
 /**
@@ -52,11 +54,15 @@ export function CatalogueView({
   courses,
   stats,
   paths,
+  shorts,
+  documents,
   query,
 }: {
   courses: CatalogueCourse[];
   stats: CatalogueStats;
   paths: PathView[];
+  shorts: ShortCard[];
+  documents: DocumentCard[];
   query: CatalogueQuery;
 }) {
   const { t, tt, lang } = useT();
@@ -108,11 +114,13 @@ export function CatalogueView({
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
         title={t("nav.lms")}
-        subtitle={tt("Course catalogue, content library and your learning path",
-          "รายการหลักสูตร คลังเนื้อหา และเส้นทางการเรียนรู้ของคุณ",
+        subtitle={tt(
+          "Courses, one-minute shorts, documents and your learning path — all in one place",
+          "หลักสูตร คลิปสั้น เอกสาร และเส้นทางการเรียนรู้ของคุณ รวมไว้ในที่เดียว",
         )}
       />
 
+      {query.view === "courses" || query.view === "journey" ? (
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs text-muted">
@@ -138,9 +146,10 @@ export function CatalogueView({
           <Progress className="mt-2" value={stats.overall} tone="amber" />
         </Card>
       </div>
+      ) : null}
 
       <Tabs
-        className="mb-6"
+        className="mb-6 gap-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] sm:gap-6"
         variant="underline"
         value={query.view}
         onChange={(view) => {
@@ -148,15 +157,42 @@ export function CatalogueView({
           go({ view });
         }}
         options={[
-          { value: "courses" as const, label: tt("Course library", "คลังหลักสูตร") },
+          {
+            value: "courses" as const,
+            label: (
+              <TabLabel icon={BookOpen}>{tt("Courses", "หลักสูตร")}</TabLabel>
+            ),
+          },
+          {
+            value: "shorts" as const,
+            label: <TabLabel icon={Clapperboard}>Shorts</TabLabel>,
+          },
+          {
+            value: "documents" as const,
+            label: (
+              <TabLabel icon={FileText}>{tt("Documents", "เอกสาร")}</TabLabel>
+            ),
+          },
           {
             value: "journey" as const,
-            label: tt("Training journey", "เส้นทางการฝึกอบรม"),
+            label: (
+              <TabLabel icon={Route}>
+                {/* the full name does not fit four tabs on a phone */}
+                <span className="sm:hidden">{tt("Journeys", "เส้นทาง")}</span>
+                <span className="max-sm:hidden">
+                  {tt("Training journey", "เส้นทางการฝึกอบรม")}
+                </span>
+              </TabLabel>
+            ),
           },
         ]}
       />
 
-      {query.view === "courses" ? (
+      {query.view === "shorts" ? (
+        <ShortsGrid shorts={shorts} />
+      ) : query.view === "documents" ? (
+        <DocumentsGrid documents={documents} />
+      ) : query.view === "courses" ? (
         <>
           <div className="mb-6 flex flex-wrap items-center gap-3">
             <div className="relative min-w-[220px] flex-1">
@@ -234,6 +270,21 @@ export function CatalogueView({
         <JourneyList paths={paths} />
       )}
     </div>
+  );
+}
+
+function TabLabel({
+  icon: Icon,
+  children,
+}: {
+  icon: typeof BookOpen;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon size={15} className="shrink-0 max-sm:hidden" />
+      {children}
+    </span>
   );
 }
 

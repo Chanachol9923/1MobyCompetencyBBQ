@@ -26,6 +26,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { BLOB_URL, removeBlobs } from "@/server/blob";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   NotAuthorised,
@@ -2367,6 +2368,8 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
             summaryTh: true,
             minutes: true,
             pages: true,
+            mediaUrl: true,
+            mediaBytes: true,
           },
         },
         _count: {
@@ -2435,6 +2438,15 @@ const chapterSchema = z.object({
   summaryTh: z.string().trim().max(1000).optional().default(""),
   minutes: z.coerce.number().int().min(0).max(1000),
   pages: z.coerce.number().int().min(0).max(5000).optional(),
+  /** an uploaded video or PDF — only ever a file from our own Blob store */
+  mediaUrl: z
+    .string()
+    .max(600)
+    .regex(BLOB_URL)
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  mediaBytes: z.coerce.number().int().min(0).max(500 * 1024 * 1024).optional().default(0),
 });
 
 const courseFields = z.object({
@@ -2508,6 +2520,14 @@ export async function saveCourse(
       cover: d.cover || null,
     };
 
+    // files the course pointed at before this save, to tidy up afterwards
+    const before = existing
+      ? await db.chapter.findMany({
+          where: { courseId: existing.id, mediaUrl: { not: null } },
+          select: { mediaUrl: true },
+        })
+      : [];
+
     const id = await db.$transaction(async (tx) => {
       let target = existing?.id ?? "";
       if (target) {
@@ -2546,6 +2566,9 @@ export async function saveCourse(
           summaryTh: ch.summaryTh || null,
           minutes: ch.minutes,
           pages: ch.kind === "PDF" ? (ch.pages ?? null) : null,
+          // an article has no file; switching a chapter to one drops it
+          mediaUrl: ch.kind !== "ARTICLE" && ch.mediaUrl ? ch.mediaUrl : null,
+          mediaBytes: ch.kind !== "ARTICLE" && ch.mediaUrl ? ch.mediaBytes : null,
         };
         if (ch.id) {
           await tx.chapter.update({ where: { id: ch.id }, data: body });
@@ -2556,6 +2579,11 @@ export async function saveCourse(
 
       return target;
     });
+
+    const kept = new Set(
+      chapters.filter((c) => c.kind !== "ARTICLE" && c.mediaUrl).map((c) => c.mediaUrl),
+    );
+    await removeBlobs(before.map((b) => b.mediaUrl).filter((u): u is string => !!u && !kept.has(u)));
 
     await recordActivity({
       viewer,
@@ -2692,7 +2720,12 @@ export async function deleteCourse(
       );
     }
 
+    const files = await db.chapter.findMany({
+      where: { courseId: course.id, mediaUrl: { not: null } },
+      select: { mediaUrl: true },
+    });
     await db.course.delete({ where: { id: course.id } });
+    await removeBlobs(files.map((f) => f.mediaUrl));
     await recordActivity({
       viewer,
       action: "Deleted course",

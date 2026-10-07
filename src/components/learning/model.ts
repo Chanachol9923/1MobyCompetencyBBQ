@@ -65,6 +65,10 @@ export const LMS_POINTS = {
   course: 50,
   /** passing the post-test, awarded with the certificate */
   postTest: 40,
+  /** watching a short to the end */
+  short: 5,
+  /** reading a document to the last page */
+  document: 20,
 } as const;
 
 /** Reasons written on the point ledger, so an award can be recognised again. */
@@ -72,6 +76,8 @@ export const POINT_REASON = {
   course: "Completed a course",
   postTest: "Passed a course post-test",
   path: "Completed a learning path",
+  short: "Watched a short",
+  document: "Read a document",
 } as const;
 
 /**
@@ -86,7 +92,20 @@ export const POINT_REF = {
   course: "Course",
   postTest: "CourseCertificate",
   path: "LearningPath",
+  short: "Short",
+  document: "Document",
 } as const;
+
+/** What an administrator may upload, and how big. */
+export const MEDIA_LIMITS = {
+  video: { types: ["video/mp4", "video/webm", "video/quicktime"], maxMB: 200 },
+  pdf: { types: ["application/pdf"], maxMB: 50 },
+  image: { types: ["image/jpeg", "image/png", "image/webp"], maxMB: 5 },
+  /** a short is a short: anything longer belongs in a course chapter */
+  shortMaxSeconds: 180,
+} as const;
+
+export type MediaKind = keyof Pick<typeof MEDIA_LIMITS, "video" | "pdf" | "image">;
 
 /* ----------------------------------------------------------- default cover */
 
