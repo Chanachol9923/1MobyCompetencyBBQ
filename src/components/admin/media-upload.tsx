@@ -8,7 +8,13 @@ import { formatBytes, formatDuration } from "@/components/learning/media-types";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export type UploadFolder = "shorts" | "documents" | "chapters" | "posters";
+export type UploadFolder =
+  | "shorts"
+  | "documents"
+  | "chapters"
+  | "posters"
+  | "screenshots"
+  | "evidence";
 
 /** A safe, readable file name: the random suffix keeps it unique. */
 function blobPath(folder: UploadFolder, file: File | Blob, fallback: string) {
@@ -19,7 +25,8 @@ function blobPath(folder: UploadFolder, file: File | Blob, fallback: string) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(-80);
-  return `learning/${folder}/${clean || fallback}`;
+  const root = folder === "screenshots" || folder === "evidence" ? "reports" : "learning";
+  return `${root}/${folder}/${clean || fallback}`;
 }
 
 /**

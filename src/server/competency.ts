@@ -234,10 +234,21 @@ export async function getPointsBalance(employeeId: string): Promise<number> {
   return agg._sum.delta ?? 0;
 }
 
-/** Balances for many people at once — used by the leaderboard. */
+/**
+ * Ledger rows that move points around rather than earn them: spending points
+ * on a reward, and the refund when a redemption is cancelled.
+ */
+export const SPENDING_REF_TYPES = ["redemption"];
+
+/**
+ * The leaderboard ranks points *earned*. Spending them on a reward lowers the
+ * balance but must not cost anyone their place, so redemptions (and their
+ * refunds) are left out of the sum.
+ */
 export async function getPointsLeaderboard(limit = 10) {
   const grouped = await db.pointLedger.groupBy({
     by: ["employeeId"],
+    where: { OR: [{ refType: null }, { refType: { notIn: SPENDING_REF_TYPES } }] },
     _sum: { delta: true },
     orderBy: { _sum: { delta: "desc" } },
     take: limit,

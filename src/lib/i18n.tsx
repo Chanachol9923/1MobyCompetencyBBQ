@@ -25,6 +25,7 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "nav.announcements": { en: "Announcements", th: "ประกาศ" },
   "nav.staffRecords": { en: "Staff records", th: "ข้อมูลพนักงาน" },
   "nav.auditLog": { en: "Activity log", th: "บันทึกกิจกรรม" },
+  "nav.problems": { en: "Problem reports", th: "ปัญหาที่ได้รับแจ้ง" },
   "nav.accounts": { en: "Accounts", th: "บัญชีผู้ใช้" },
   "nav.roles": { en: "Roles & permissions", th: "บทบาทและสิทธิ์" },
 

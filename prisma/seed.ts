@@ -24,6 +24,7 @@ import {
   chapterKind,
 } from "../src/data/learning";
 import {
+  SAMPLE_CHAPTER_VIDEOS,
   SAMPLE_DOCUMENTS,
   SAMPLE_SHORTS,
   SAMPLE_SHORT_SECONDS,
@@ -586,7 +587,24 @@ async function seedLearningMedia() {
     });
     added++;
   }
-  console.log(`  shorts ${SAMPLE_SHORTS.length}, documents ${SAMPLE_DOCUMENTS.length} (${added} new)`);
+  // lesson videos for the sample courses' video chapters — only where the
+  // chapter has no file of its own yet, so an admin's upload is never replaced
+  let videos = 0;
+  for (const v of SAMPLE_CHAPTER_VIDEOS) {
+    const res = await db.chapter.updateMany({
+      where: {
+        course: { slug: v.course },
+        sortOrder: v.sortOrder,
+        kind: "VIDEO",
+        OR: [{ mediaUrl: null }, { mediaUrl: v.url }],
+      },
+      data: { mediaUrl: v.url, mediaBytes: v.bytes, minutes: Math.max(1, Math.round(v.seconds / 60)) },
+    });
+    videos += res.count;
+  }
+  console.log(
+    `  shorts ${SAMPLE_SHORTS.length}, documents ${SAMPLE_DOCUMENTS.length} (${added} new), chapter videos ${SAMPLE_CHAPTER_VIDEOS.length} (${videos} attached)`,
+  );
 }
 
 async function seedEngagement() {

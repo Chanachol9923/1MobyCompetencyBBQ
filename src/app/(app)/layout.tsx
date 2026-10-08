@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/server/session";
+import { db } from "@/lib/db";
+import { can, PERMISSIONS } from "@/lib/permissions";
 import { ViewerProvider, type ClientViewer } from "@/lib/viewer";
 import { AppShell } from "@/components/layout/AppShell";
 import { ResetBanner } from "@/components/auth/ResetBanner";
@@ -36,6 +38,9 @@ export default async function AppLayout({
     jobRoleName: viewer.jobRoleName,
     level: viewer.level,
     reportCount: viewer.reportIds.length,
+    openProblems: can(viewer.permissions, PERMISSIONS.MANAGE_PROBLEMS)
+      ? await db.problemReport.count({ where: { status: "OPEN" } })
+      : 0,
   };
 
   return (

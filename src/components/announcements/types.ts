@@ -15,7 +15,8 @@ export type NotificationKind =
   | "LMS"
   | "REWARD"
   | "ANNOUNCEMENT"
-  | "SYSTEM";
+  | "SYSTEM"
+  | "PROBLEM";
 
 /** One published announcement as an employee sees it. */
 export type AnnouncementCard = {

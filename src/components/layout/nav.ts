@@ -101,6 +101,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: "/admin/reward", label: "Reward", labelKey: "nav.reward", requires: PERMISSIONS.MANAGE_REWARDS },
   // reading and managing are one page; senders see it among their admin tools
   { href: "/announcements", label: "Announcements", labelKey: "nav.announcements", requires: PERMISSIONS.SEND_ANNOUNCEMENTS },
+  { href: "/admin/problems", label: "Problems", labelKey: "nav.problems", requires: PERMISSIONS.MANAGE_PROBLEMS },
   { href: "/admin/audit", label: "Activity Log", labelKey: "nav.auditLog", requires: PERMISSIONS.VIEW_AUDIT_LOG },
 ];
 

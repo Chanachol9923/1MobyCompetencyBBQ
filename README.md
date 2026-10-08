@@ -173,6 +173,16 @@ muted with one-tap sound, likes, a link to the full course, and 5 points for wat
 reaching the last page is worth 20 points. Administrators upload all three from one screen, which
 reads a video's length, grabs its cover frame and counts a PDF's pages for them.
 
+**Problem reports** — a small “Report a problem” link under Log out sends a report (category,
+description, screenshots — paste with Ctrl+V — plus the page and browser, attached automatically).
+Everyone holding `manage_problems` is notified and sees every report under Problem reports: filter
+by Unclaimed / In progress / Fixed, claim a report (several admins can; avatars show who, with a
+hover bubble), and mark it fixed with a note and evidence images. The reporter is notified when it
+is picked up and when it is fixed, and follows their reports on “My problem reports”.
+
+**Points and the leaderboard** — the leaderboard ranks points *earned*; spending points on a reward
+(or getting them back when a redemption is cancelled) changes the balance, never the rank.
+
 **Announcements** — a feed everyone can read, addressed to everyone or narrowed to a department,
 division, career role or one person, with read receipts. Publishing fans out notifications.
 

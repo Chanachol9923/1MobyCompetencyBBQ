@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { PERMISSIONS } from "@/lib/permissions";
-import { assertPermission, NotAuthorised } from "@/server/session";
+import { assertPermission, assertViewer, NotAuthorised } from "@/server/session";
 import { MEDIA_LIMITS, type MediaKind } from "@/components/learning/model";
 
 /**
@@ -23,11 +23,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       body,
       request,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
-        await assertPermission(PERMISSIONS.MANAGE_LMS);
         const kind = (clientPayload ?? "") as MediaKind;
         const limit = MEDIA_LIMITS[kind as "video" | "pdf" | "image"];
         if (!limit || !("types" in limit)) throw new Error("Unknown kind of file.");
-        if (!/^learning\/(shorts|documents|chapters|posters)\//.test(pathname)) {
+        if (/^reports\/(screenshots|evidence)\//.test(pathname)) {
+          // screenshots on a problem report, and an admin's evidence of the
+          // fix: anyone signed in, images only
+          await assertViewer();
+          if (kind !== "image") throw new Error("Only images can be attached to a report.");
+        } else if (/^learning\/(shorts|documents|chapters|posters)\//.test(pathname)) {
+          await assertPermission(PERMISSIONS.MANAGE_LMS);
+        } else {
           throw new Error("Unexpected upload location.");
         }
         return {

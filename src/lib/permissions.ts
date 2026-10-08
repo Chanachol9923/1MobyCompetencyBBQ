@@ -29,6 +29,7 @@ export const PERMISSIONS = {
   MANAGE_ROLES: "manage_roles",
   SEND_ANNOUNCEMENTS: "send_announcements",
   VIEW_AUDIT_LOG: "view_audit_log",
+  MANAGE_PROBLEMS: "manage_problems",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -207,6 +208,15 @@ export const PERMISSION_CATALOGUE: PermissionMeta[] = [
     descTh: "บันทึกทั้งหมดว่าใครแก้อะไร",
     source: "7",
   },
+  {
+    key: PERMISSIONS.MANAGE_PROBLEMS,
+    nameEn: "Handle problem reports",
+    nameTh: "จัดการปัญหาที่ผู้ใช้แจ้ง",
+    category: "administration",
+    descEn: "See every report, claim it, and mark it fixed.",
+    descTh: "ดูรายงานปัญหาทั้งหมด รับเรื่อง และแจ้งว่าแก้ไขแล้ว",
+    source: "Support",
+  },
 ];
 
 /** The three roles the system ships with, and what they can do out of the box. */
@@ -268,6 +278,7 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.MANAGE_ROLES,
       PERMISSIONS.SEND_ANNOUNCEMENTS,
       PERMISSIONS.VIEW_AUDIT_LOG,
+      PERMISSIONS.MANAGE_PROBLEMS,
     ],
   },
 ];

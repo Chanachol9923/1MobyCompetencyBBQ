@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Gift,
   Languages,
+  LifeBuoy,
   Megaphone,
   Menu,
   Settings2,
@@ -33,6 +34,7 @@ const KIND_ICON = {
   REWARD: Gift,
   ANNOUNCEMENT: Megaphone,
   SYSTEM: Settings2,
+  PROBLEM: LifeBuoy,
 } as const;
 
 export function Topbar() {
@@ -53,15 +55,11 @@ export function Topbar() {
    * an idle tab costs nothing.
    */
   const load = useCallback(async () => {
-    if (!viewer.employeeId) {
-      setLoaded(true);
-      return;
-    }
     const feed = await listMyNotifications();
     setItems(feed.items);
     setUnread(feed.unreadCount);
     setLoaded(true);
-  }, [viewer.employeeId]);
+  }, []);
 
   useEffect(() => {
     void load();

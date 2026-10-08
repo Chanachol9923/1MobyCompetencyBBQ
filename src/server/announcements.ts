@@ -318,14 +318,24 @@ export async function markAnnouncementRead(id: string): Promise<ActionResult> {
 
 /* ------------------------------------------------------ notifications (3) */
 
+/**
+ * A viewer's inbox: what was sent to their staff record and what was sent to
+ * their account. Administrators without a staff record still get the latter.
+ */
+function myInbox(viewer: { userId: string; employeeId: string | null }) {
+  return viewer.employeeId
+    ? { OR: [{ employeeId: viewer.employeeId }, { userId: viewer.userId }] }
+    : { userId: viewer.userId };
+}
+
 export async function listMyNotifications(): Promise<NotificationFeed> {
   const viewer = await assertViewer();
   await releaseDueAnnouncements();
-  if (!viewer.employeeId) return { items: [], unreadCount: 0 };
+  const mine = myInbox(viewer);
 
   const [rows, unreadCount] = await Promise.all([
     db.notification.findMany({
-      where: { employeeId: viewer.employeeId },
+      where: mine,
       orderBy: { createdAt: "desc" },
       take: 30,
       select: {
@@ -341,7 +351,7 @@ export async function listMyNotifications(): Promise<NotificationFeed> {
         createdAt: true,
       },
     }),
-    db.notification.count({ where: { employeeId: viewer.employeeId, readAt: null } }),
+    db.notification.count({ where: { ...mine, readAt: null } }),
   ]);
 
   return {
@@ -363,12 +373,12 @@ export async function listMyNotifications(): Promise<NotificationFeed> {
 
 export async function markNotificationRead(id: string): Promise<ActionResult> {
   const viewer = await assertViewer();
-  if (!viewer.employeeId || typeof id !== "string" || !id) {
+  if (typeof id !== "string" || !id) {
     return { ok: false, errorEn: "Unknown notification.", errorTh: "ไม่พบการแจ้งเตือนนี้" };
   }
-  // scoped by employeeId, so an id belonging to someone else updates nothing
+  // scoped to the viewer's inbox, so an id belonging to someone else updates nothing
   const res = await db.notification.updateMany({
-    where: { id, employeeId: viewer.employeeId, readAt: null },
+    where: { id, ...myInbox(viewer), readAt: null },
     data: { readAt: new Date() },
   });
   if (res.count > 0) revalidatePath("/", "layout");
@@ -377,10 +387,9 @@ export async function markNotificationRead(id: string): Promise<ActionResult> {
 
 export async function markAllNotificationsRead(): Promise<ActionResult> {
   const viewer = await assertViewer();
-  if (!viewer.employeeId) return { ok: true, data: null };
   // one statement for the whole inbox
   await db.notification.updateMany({
-    where: { employeeId: viewer.employeeId, readAt: null },
+    where: { ...myInbox(viewer), readAt: null },
     data: { readAt: new Date() },
   });
   revalidatePath("/", "layout");

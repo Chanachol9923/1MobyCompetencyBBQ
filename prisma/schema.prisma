@@ -50,6 +50,13 @@ model User {
   accessTokens AccessToken[]
   activityLogs ActivityLog[]
 
+  /// notifications addressed to the account itself — administrators often
+  /// have no staff record to hang them on
+  notifications    Notification[]
+  problemReports   ProblemReport[] @relation("ProblemReporter")
+  problemsResolved ProblemReport[] @relation("ProblemResolver")
+  problemClaims    ProblemClaim[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -804,11 +811,15 @@ enum NotificationKind {
   REWARD
   ANNOUNCEMENT
   SYSTEM
+  PROBLEM
 }
 
+/// Addressed to a staff record (employeeId) or straight to an account
+/// (userId); a check constraint requires at least one.
 model Notification {
   id         String              @id @default(cuid())
-  employeeId String
+  employeeId String?
+  userId     String?
   kind       NotificationKind    @default(SYSTEM)
   channel    NotificationChannel @default(IN_APP)
   titleEn    String
@@ -819,10 +830,77 @@ model Notification {
   readAt     DateTime?
   createdAt  DateTime            @default(now())
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([employeeId, readAt])
+  @@index([userId, readAt])
   @@index([createdAt])
+}
+
+/* --------------------------------------------------------- problem reports */
+
+enum ProblemCategory {
+  BUG
+  DATA
+  ACCESS
+  SUGGESTION
+  OTHER
+}
+
+/// OPEN = nobody has claimed it; IN_PROGRESS = at least one admin has;
+/// FIXED = an admin marked it fixed with a note.
+enum ProblemStatus {
+  OPEN
+  IN_PROGRESS
+  FIXED
+}
+
+/// Something a user reported from the "Report a problem" link. Every holder
+/// of manage_problems sees all of them.
+model ProblemReport {
+  id          String          @id @default(cuid())
+  /// the short number people quote: "#12"
+  number      Int             @unique @default(autoincrement())
+  reporterId  String
+  category    ProblemCategory @default(BUG)
+  title       String
+  description String
+  /// where the reporter was when they opened the form
+  pageUrl     String?
+  userAgent   String?
+  /// screenshots, Blob URLs
+  attachments String[]        @default([])
+  status      ProblemStatus   @default(OPEN)
+
+  resolutionNote   String?
+  /// evidence of the fix, Blob URLs
+  resolutionImages String[]  @default([])
+  resolvedById     String?
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reporter   User           @relation("ProblemReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User?          @relation("ProblemResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  claims     ProblemClaim[]
+
+  @@index([status, createdAt])
+  @@index([reporterId, createdAt])
+}
+
+/// An administrator who has taken a report on. Several may claim one.
+model ProblemClaim {
+  reportId  String
+  userId    String
+  claimedAt DateTime @default(now())
+
+  report ProblemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([reportId, userId])
+  @@index([userId])
 }
 
 model NotificationRule {

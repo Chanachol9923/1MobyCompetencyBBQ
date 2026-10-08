@@ -9,6 +9,7 @@ import { signOut } from "next-auth/react";
 import { useViewer } from "@/lib/viewer";
 import { useT } from "@/lib/i18n";
 import { navFor } from "./nav";
+import { ReportProblemButton } from "@/components/problems/ReportProblem";
 import { useMobileNav } from "./mobile-nav";
 import { BottomNav, NAV_ICON } from "./BottomNav";
 import { Logo } from "./Logo";
@@ -95,6 +96,14 @@ export function Sidebar() {
                   <Icon size={18} className="shrink-0 text-white/85" />
                 ) : null}
                 {t(item.labelKey)}
+                {item.href === "/admin/problems" && viewer.openProblems > 0 ? (
+                  <span
+                    className="ml-2 inline-grid min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-5 text-white"
+                    aria-label={tt(`${viewer.openProblems} unclaimed`, `ยังไม่มีผู้รับเรื่อง ${viewer.openProblems} เรื่อง`)}
+                  >
+                    {viewer.openProblems}
+                  </span>
+                ) : null}
               </Link>
               {item.children ? (
                 <ul className={cn("pb-1", inGroup && "bg-brand-dark/60")}>
@@ -164,6 +173,7 @@ export function Sidebar() {
             <LogOut size={15} />
             {t("action.logout")}
           </button>
+          <ReportProblemButton drawer={drawer} />
         </div>
       </div>
     </div>

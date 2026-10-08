@@ -25,6 +25,8 @@ export type ClientViewer = {
   jobRoleName: string | null;
   level: string | null;
   reportCount: number;
+  /** unclaimed problem reports, for the menu badge; 0 for anyone who can't handle them */
+  openProblems: number;
 };
 
 const ViewerContext = createContext<ClientViewer | null>(null);

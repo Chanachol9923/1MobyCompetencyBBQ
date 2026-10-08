@@ -147,3 +147,264 @@ export const SAMPLE_DOCUMENTS: SampleDocument[] = [
     "pages": 2
   }
 ];
+
+/**
+ * A lesson video for every VIDEO chapter of the sample courses, made from the
+ * chapter's own title, key idea and points. `sortOrder` is the chapter's
+ * position in its course.
+ */
+export type SampleChapterVideo = {
+  course: string;
+  sortOrder: number;
+  url: string;
+  bytes: number;
+  seconds: number;
+};
+
+export const SAMPLE_CHAPTER_VIDEOS: SampleChapterVideo[] = [
+  {
+    "course": "adaptive-change-workshop",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/adaptive-change-workshop-1-AtrdjH8QP65vD1XWMiahrgN24nkHpu.mp4",
+    "bytes": 1229961,
+    "seconds": 41
+  },
+  {
+    "course": "advanced-aws",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/advanced-aws-1-auK0r3kmk9Fwl5jhrfGPcPe3DvalZc.mp4",
+    "bytes": 942250,
+    "seconds": 34
+  },
+  {
+    "course": "blameless-problem-solving",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/blameless-problem-solving-1-Rk36AcPiuSYN1QJXFFbQ66ETcFG4Lf.mp4",
+    "bytes": 549116,
+    "seconds": 34
+  },
+  {
+    "course": "clean-code-and-reviews",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/clean-code-and-reviews-2-KdPhuQo7hWKSONFGtTfBcwQNomQob3.mp4",
+    "bytes": 630011,
+    "seconds": 41
+  },
+  {
+    "course": "coaching-and-feedback",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/coaching-and-feedback-1-AeI6KpFCYom2DpSM5kIKIFLnGXBOuq.mp4",
+    "bytes": 1084114,
+    "seconds": 41
+  },
+  {
+    "course": "cross-team-collaboration",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/cross-team-collaboration-1-Uha2jpIJUJQbIlDlevSxCA0YLYYG7B.mp4",
+    "bytes": 1393352,
+    "seconds": 41
+  },
+  {
+    "course": "data-modelling-essentials",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/data-modelling-essentials-1-EHLZYkVcI4sSJqPDmOdglIwZXKKckg.mp4",
+    "bytes": 971033,
+    "seconds": 34
+  },
+  {
+    "course": "delegation-and-decisions",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/delegation-and-decisions-1-cAh2bndrkHrxiXkRO5nyrBNMpPVYcE.mp4",
+    "bytes": 1102044,
+    "seconds": 34
+  },
+  {
+    "course": "delivery-cadence",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/delivery-cadence-1-fGO8DTVn3IgDf74BeVdlBzr4PlJXK4.mp4",
+    "bytes": 1372142,
+    "seconds": 41
+  },
+  {
+    "course": "end-to-end-ownership",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/end-to-end-ownership-1-BhvLltP7OVE5NcDHoT5qxGXCUob79X.mp4",
+    "bytes": 1189357,
+    "seconds": 41
+  },
+  {
+    "course": "git-in-practice",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/git-in-practice-1-XZYoiPSLmdw2f13fnGWig4lfGOWXOb.mp4",
+    "bytes": 1255641,
+    "seconds": 41
+  },
+  {
+    "course": "goal-setting-and-kpis",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/goal-setting-and-kpis-1-imcEuHG34l1KWarcE9uRF1Li6DNJgQ.mp4",
+    "bytes": 1379221,
+    "seconds": 41
+  },
+  {
+    "course": "how-to-be-funny",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/how-to-be-funny-1-SsUGzuCEya6Kp7TqxwBFz0sAM378K2.mp4",
+    "bytes": 986377,
+    "seconds": 34
+  },
+  {
+    "course": "impact-case-dashboard",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/impact-case-dashboard-2-Ts6a1LCldNyegS7oefo5fUMNAji4kg.mp4",
+    "bytes": 1200707,
+    "seconds": 41
+  },
+  {
+    "course": "impact-prioritisation",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/impact-prioritisation-1-N0WYGr8PNFlb1KJE7tvU0SenD1aNu3.mp4",
+    "bytes": 1276621,
+    "seconds": 41
+  },
+  {
+    "course": "leadership-team-dynamics",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/leadership-team-dynamics-1-9XrDAfUAqUnJrtsLkNuareCssHS6aY.mp4",
+    "bytes": 1803475,
+    "seconds": 49
+  },
+  {
+    "course": "leadership-team-dynamics",
+    "sortOrder": 2,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/leadership-team-dynamics-3-uiS3PYHVY9EQmzmoxgXKN98RpO1l2u.mp4",
+    "bytes": 1346185,
+    "seconds": 41
+  },
+  {
+    "course": "learning-agility",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/learning-agility-1-TWLrw8h2rodfbPyiYHAfWfvFkTr7aH.mp4",
+    "bytes": 1116344,
+    "seconds": 41
+  },
+  {
+    "course": "measuring-your-work",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/measuring-your-work-2-oK1KqwzBvcD2iarT5MCZ1Ov5vD7Cpw.mp4",
+    "bytes": 1106834,
+    "seconds": 41
+  },
+  {
+    "course": "nodejs-expert",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/nodejs-expert-1-JE387wV1hrucukhF3nfaDYAnlFU5A7.mp4",
+    "bytes": 625356,
+    "seconds": 34
+  },
+  {
+    "course": "ownership-clinic-status",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/ownership-clinic-status-1-N423cNWraH7O0UDLjYWp9WODuvN14v.mp4",
+    "bytes": 1091121,
+    "seconds": 41
+  },
+  {
+    "course": "people-clinic-first-thirty-days",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/people-clinic-first-thirty-days-1-2c5Q1k8fhKs17Y8B4cbdM0nGT5PLO8.mp4",
+    "bytes": 696607,
+    "seconds": 41
+  },
+  {
+    "course": "prioritisation-and-time",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/prioritisation-and-time-2-VsfBprZqO7efvio37zaaF2aLsUw8Fo.mp4",
+    "bytes": 1175286,
+    "seconds": 41
+  },
+  {
+    "course": "process-improvement",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/process-improvement-1-zQKvIizPgoHTcxuql3LPAcKxPLbOuz.mp4",
+    "bytes": 1304066,
+    "seconds": 41
+  },
+  {
+    "course": "project-management-essentials",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/project-management-essentials-1-0G7sBurL9jR3z2MNaeypvQ01oBqEPi.mp4",
+    "bytes": 1102140,
+    "seconds": 41
+  },
+  {
+    "course": "project-management-essentials",
+    "sortOrder": 2,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/project-management-essentials-3-zpzupq5V3Z43R3WjZMbdHBO3ZTOL2f.mp4",
+    "bytes": 912171,
+    "seconds": 34
+  },
+  {
+    "course": "purpose-mandate-workshop",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/purpose-mandate-workshop-1-8XAIzOkV46ou1XaCLj2yrgNPGQIiCN.mp4",
+    "bytes": 1355525,
+    "seconds": 41
+  },
+  {
+    "course": "query-tuning-lab",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/query-tuning-lab-1-O4s3RraBTxEXoxtYqax1GALElRs1jp.mp4",
+    "bytes": 1125609,
+    "seconds": 41
+  },
+  {
+    "course": "refactoring-lab",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/refactoring-lab-1-S9kRm0t8E2cVjLBMlHMpmDqt8kZmxb.mp4",
+    "bytes": 1193853,
+    "seconds": 41
+  },
+  {
+    "course": "repo-rescue-lab",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/repo-rescue-lab-2-h0X56MLISD8t5dNUHe81jqwKLB99Uz.mp4",
+    "bytes": 978823,
+    "seconds": 34
+  },
+  {
+    "course": "result-case-green-dashboard",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/result-case-green-dashboard-2-pVQq352hZaU5oiFx43EWGGTXIpF0AL.mp4",
+    "bytes": 1408395,
+    "seconds": 41
+  },
+  {
+    "course": "root-cause-analysis",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/root-cause-analysis-1-CJeErtEaUsy9BNcfTy24btuB0bLqbC.mp4",
+    "bytes": 1292347,
+    "seconds": 41
+  },
+  {
+    "course": "staying-steady-under-pressure",
+    "sortOrder": 1,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/staying-steady-under-pressure-2-dKYAkv17d9tWArG9ghnW3BUOKzvMKm.mp4",
+    "bytes": 1411009,
+    "seconds": 41
+  },
+  {
+    "course": "strategy-to-daily-work",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/strategy-to-daily-work-1-hUQXxdBu72GdySQjvwzfcY1SU3K9s1.mp4",
+    "bytes": 1181165,
+    "seconds": 41
+  },
+  {
+    "course": "testing-fundamentals",
+    "sortOrder": 0,
+    "url": "https://gvzppvcud9jrqwqy.public.blob.vercel-storage.com/learning/chapters/testing-fundamentals-1-F8nxbv5W6mrnrutKfxLjedCbc5xDlt.mp4",
+    "bytes": 911766,
+    "seconds": 41
+  }
+];
