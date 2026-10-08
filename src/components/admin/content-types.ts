@@ -270,6 +270,8 @@ export type AdminChapterRow = {
   titleTh: string | null;
   summaryEn: string | null;
   summaryTh: string | null;
+  bodyEn: string | null;
+  bodyTh: string | null;
   minutes: number;
   pages: number | null;
   /** the uploaded video or PDF, when there is one */

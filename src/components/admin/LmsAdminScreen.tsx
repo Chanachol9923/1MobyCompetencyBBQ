@@ -3,14 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Archive,
-  ArrowDown,
-  ArrowUp,
   BookOpen,
   Eye,
   EyeOff,
-  FileText,
   GraduationCap,
-  Newspaper,
   Pencil,
   Plus,
   Tags,
@@ -40,14 +36,19 @@ import { ResultBanner } from "@/components/admin/rbac-shared";
 import type {
   ActionResult,
   AdminCourseRow,
-  ChapterKindValue,
   CompetencyGroupValue,
   LmsAdminData,
 } from "@/components/admin/content-types";
 import { deleteCourse, saveCourse, setCourseStatus } from "@/server/admin-content";
 import { discardUpload } from "@/server/learning-media";
-import { FileField, readVideo, type PickedFile } from "@/components/admin/media-upload";
-import { countPdfPages } from "@/components/learning/PdfReader";
+import {
+  ChapterEditor,
+  chapterFromRow,
+  chapterPayload,
+  isBlankChapter,
+  useChapterUploader,
+  type ChapterDraft,
+} from "@/components/admin/ChapterEditor";
 import { useT } from "@/lib/i18n";
 
 const CATEGORIES: CompetencyGroupValue[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
@@ -58,12 +59,6 @@ const CATEGORY_LABEL: Record<CompetencyGroupValue, { key: string }> = {
   MANAGERIAL: { key: "group.managerial" },
 };
 
-const KIND_ICON: Record<ChapterKindValue, typeof Video> = {
-  VIDEO: Video,
-  PDF: FileText,
-  ARTICLE: Newspaper,
-};
-
 const COVERS = [
   "from-[#006bff] to-[#0b1b3f]",
   "from-[#f05123] to-[#faa21b]",
@@ -71,22 +66,6 @@ const COVERS = [
   "from-[#006bff] to-[#00b916]",
   "from-[#1c1e29] to-[#006bff]",
 ];
-
-type ChapterDraft = {
-  /** the real chapter id when it already exists — keeping it keeps its progress */
-  id: string;
-  /** stable key for React while a brand new chapter has no id yet */
-  uid: string;
-  kind: ChapterKindValue;
-  titleEn: string;
-  titleTh: string;
-  summaryEn: string;
-  summaryTh: string;
-  minutes: string;
-  pages: string;
-  /** the uploaded video or PDF; none means the built-in preview */
-  media: PickedFile | null;
-};
 
 type Draft = {
   titleEn: string;
@@ -100,22 +79,6 @@ type Draft = {
   chapters: ChapterDraft[];
 };
 
-let uidCounter = 0;
-const nextUid = () => `new-${++uidCounter}`;
-
-const newChapter = (): ChapterDraft => ({
-  id: "",
-  uid: nextUid(),
-  kind: "VIDEO",
-  titleEn: "",
-  titleTh: "",
-  summaryEn: "",
-  summaryTh: "",
-  minutes: "10",
-  pages: "",
-  media: null,
-});
-
 const emptyDraft = (coverIndex: number): Draft => ({
   titleEn: "",
   titleTh: "",
@@ -125,7 +88,8 @@ const emptyDraft = (coverIndex: number): Draft => ({
   competencyId: "",
   hours: "6",
   cover: COVERS[coverIndex % COVERS.length]!,
-  chapters: [newChapter()],
+  // a new course starts empty: dropping files is how most chapters arrive
+  chapters: [],
 });
 
 const fromCourse = (c: AdminCourseRow): Draft => ({
@@ -137,24 +101,7 @@ const fromCourse = (c: AdminCourseRow): Draft => ({
   competencyId: c.competencyId ?? "",
   hours: String(c.hours),
   cover: c.cover ?? COVERS[0]!,
-  chapters: c.chapters.map((ch) => ({
-    id: ch.id,
-    uid: ch.id,
-    kind: ch.kind,
-    titleEn: ch.titleEn,
-    titleTh: ch.titleTh ?? "",
-    summaryEn: ch.summaryEn ?? "",
-    summaryTh: ch.summaryTh ?? "",
-    minutes: String(ch.minutes),
-    pages: ch.pages === null ? "" : String(ch.pages),
-    media: ch.mediaUrl
-      ? {
-          url: ch.mediaUrl,
-          bytes: ch.mediaBytes ?? 0,
-          name: decodeURIComponent(ch.mediaUrl.split("/").pop() ?? "file"),
-        }
-      : null,
-  })),
+  chapters: c.chapters.map(chapterFromRow),
 });
 
 /**
@@ -182,11 +129,26 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
   const forget = (url: string | undefined) => {
     if (url && fresh.current.delete(url)) void discardUpload({ url }).catch(() => {});
   };
+  // bumps whenever the editor opens or closes, so a late upload knows it is stale
+  const session = useRef(0);
   function closeEditor() {
+    session.current++;
     for (const url of fresh.current) void discardUpload({ url }).catch(() => {});
     fresh.current.clear();
     setOpen(false);
   }
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const updateChapters = (fn: (chapters: ChapterDraft[]) => ChapterDraft[]) =>
+    setDraft((d) => ({ ...d, chapters: fn(d.chapters) }));
+  const uploader = useChapterUploader({
+    session,
+    getChapters: () => draftRef.current.chapters,
+    update: updateChapters,
+    remember: (url) => fresh.current.add(url),
+    forget,
+  });
+  const uploading = draft.chapters.filter((c) => c.upload).length;
 
   const title = (c: { titleEn: string; titleTh: string | null }) =>
     lang === "th" ? (c.titleTh ?? c.titleEn) : c.titleEn;
@@ -224,6 +186,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       const res = await fn();
       if (res.ok) {
         fresh.current.clear();
+        session.current++;
         setOpen(false);
         setResult(res);
       } else {
@@ -236,24 +199,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
 
-  function setChapter(uid: string, patch: Partial<ChapterDraft>) {
-    setDraft((d) => ({
-      ...d,
-      chapters: d.chapters.map((ch) => (ch.uid === uid ? { ...ch, ...patch } : ch)),
-    }));
-  }
-
-  function moveChapter(index: number, by: -1 | 1) {
-    setDraft((d) => {
-      const next = [...d.chapters];
-      const to = index + by;
-      if (to < 0 || to >= next.length) return d;
-      [next[index], next[to]] = [next[to]!, next[index]!];
-      return { ...d, chapters: next };
-    });
-  }
-
   function openCreate() {
+    session.current++;
     setDraft(emptyDraft(courses.length));
     setEditing(null);
     setStep(1);
@@ -261,6 +208,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
   }
 
   function openEdit(c: AdminCourseRow) {
+    session.current++;
     setDraft(fromCourse(c));
     setEditing(c);
     setStep(1);
@@ -268,6 +216,17 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
   }
 
   function save() {
+    if (uploading) return;
+    const untitled = draft.chapters.findIndex((ch) => !isBlankChapter(ch) && !ch.titleEn.trim());
+    if (untitled >= 0) {
+      setFormError(
+        tt(
+          `Chapter ${untitled + 1} needs an English title.`,
+          `บทที่ ${untitled + 1} ต้องมีชื่อภาษาอังกฤษ`,
+        ),
+      );
+      return;
+    }
     const payload = {
       courseId: editing?.id ?? "",
       titleEn: draft.titleEn,
@@ -278,20 +237,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       competencyId: draft.competencyId,
       hours: draft.hours,
       cover: draft.cover,
-      chapters: draft.chapters
-        .filter((ch) => ch.titleEn.trim())
-        .map((ch) => ({
-          id: ch.id,
-          kind: ch.kind,
-          titleEn: ch.titleEn,
-          titleTh: ch.titleTh,
-          summaryEn: ch.summaryEn,
-          summaryTh: ch.summaryTh,
-          minutes: ch.minutes,
-          pages: ch.pages || undefined,
-          mediaUrl: ch.kind === "ARTICLE" ? "" : (ch.media?.url ?? ""),
-          mediaBytes: ch.kind === "ARTICLE" ? 0 : (ch.media?.bytes ?? 0),
-        })),
+      chapters: draft.chapters.filter((ch) => !isBlankChapter(ch)).map(chapterPayload),
     };
     runForm(() => saveCourse(payload));
   }
@@ -401,7 +347,18 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                   </Td>
                   <Td className="text-muted">{t(CATEGORY_LABEL[c.category].key)}</Td>
                   <Td className="text-muted">{(lang === "th" ? (c.competencyNameTh ?? c.competencyName) : c.competencyName) ?? "—"}</Td>
-                  <Td className="text-muted">{c.chapters.length}</Td>
+                  <Td className="text-muted">
+                    {c.chapters.length}
+                    {(() => {
+                      const media = c.chapters.filter((ch) => ch.kind !== "ARTICLE");
+                      const files = media.filter((ch) => ch.mediaUrl).length;
+                      return media.length ? (
+                        <span className={files ? "block text-[10px] text-success" : "block text-[10px] text-line-2"}>
+                          {tt(`${files}/${media.length} files`, `ไฟล์ ${files}/${media.length}`)}
+                        </span>
+                      ) : null;
+                    })()}
+                  </Td>
                   <Td className="text-muted">
                     {tt(`${c.hours} hours`, `${c.hours} ชม.`)}
                   </Td>
@@ -507,8 +464,12 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
               <Button variant="outline" onClick={() => setStep(1)}>
                 {t("action.back")}
               </Button>
-              <Button onClick={save} disabled={busy}>
-                {editing ? t("action.saveChanges") : t("action.save")}
+              <Button onClick={save} disabled={busy || uploading > 0}>
+                {uploading
+                  ? tt(`Uploading ${uploading} file(s)…`, `กำลังอัปโหลด ${uploading} ไฟล์…`)
+                  : editing
+                    ? t("action.saveChanges")
+                    : t("action.save")}
               </Button>
             </>
           )
@@ -616,180 +577,12 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {draft.chapters.map((ch, i) => {
-              const Icon = KIND_ICON[ch.kind];
-              return (
-                <div key={ch.uid} className="rounded-xl border border-line/70 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="flex items-center gap-2 text-sm font-bold text-ink">
-                      <Icon size={15} className="text-brand" />
-                      {tt(`Chapter ${i + 1}`, `บทที่ ${i + 1}`)}
-                      {ch.id ? null : (
-                        <Pill tone="brand">{tt("New", "ใหม่")}</Pill>
-                      )}
-                    </p>
-                    <div className="flex gap-2">
-                      <IconAction
-                        disabled={i === 0}
-                        aria-label={tt(`Move chapter ${i + 1} up`, `เลื่อนบทที่ ${i + 1} ขึ้น`)}
-                        onClick={() => moveChapter(i, -1)}
-                      >
-                        <ArrowUp size={14} />
-                      </IconAction>
-                      <IconAction
-                        disabled={i === draft.chapters.length - 1}
-                        aria-label={tt(`Move chapter ${i + 1} down`, `เลื่อนบทที่ ${i + 1} ลง`)}
-                        onClick={() => moveChapter(i, 1)}
-                      >
-                        <ArrowDown size={14} />
-                      </IconAction>
-                      <IconAction
-                        tone="danger"
-                        aria-label={tt(`Remove chapter ${i + 1}`, `ลบบทที่ ${i + 1}`)}
-                        onClick={() => {
-                          forget(ch.media?.url);
-                          setDraft((d) => ({
-                            ...d,
-                            chapters: d.chapters.filter((c) => c.uid !== ch.uid),
-                          }));
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </IconAction>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <Field label={`${tt("Chapter title (English)", "ชื่อบทเรียน (อังกฤษ)")} *`}>
-                      <Input
-                        value={ch.titleEn}
-                        placeholder={tt("Chapter name", "ชื่อบทเรียน")}
-                        onChange={(e) => setChapter(ch.uid, { titleEn: e.target.value })}
-                      />
-                    </Field>
-                    <Field label={tt("Chapter title (Thai)", "ชื่อบทเรียน (ไทย)")}>
-                      <Input
-                        value={ch.titleTh}
-                        placeholder={tt("Optional", "ไม่บังคับ")}
-                        onChange={(e) => setChapter(ch.uid, { titleTh: e.target.value })}
-                      />
-                    </Field>
-                    <Field label={tt("Content type", "ประเภทเนื้อหา")}>
-                      <Select
-                        value={ch.kind}
-                        onChange={(e) => {
-                          // a video file is no use to a PDF chapter, and vice versa
-                          forget(ch.media?.url);
-                          setChapter(ch.uid, {
-                            kind: e.target.value as ChapterKindValue,
-                            media: null,
-                          });
-                        }}
-                      >
-                        <option value="VIDEO">{tt("Video", "วิดีโอ")}</option>
-                        <option value="PDF">{tt("PDF", "เอกสาร PDF")}</option>
-                        <option value="ARTICLE">{tt("Article", "บทความ")}</option>
-                      </Select>
-                    </Field>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label={tt("Minutes", "นาที")}>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={ch.minutes}
-                          onChange={(e) =>
-                            setChapter(ch.uid, { minutes: e.target.value })
-                          }
-                        />
-                      </Field>
-                      <Field label={tt("Pages", "จำนวนหน้า")}>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={ch.pages}
-                          disabled={ch.kind !== "PDF"}
-                          onChange={(e) => setChapter(ch.uid, { pages: e.target.value })}
-                        />
-                      </Field>
-                    </div>
-                    {ch.kind !== "ARTICLE" ? (
-                      <Field
-                        className="sm:col-span-2"
-                        label={
-                          ch.kind === "VIDEO"
-                            ? tt("Video file", "ไฟล์วิดีโอ")
-                            : tt("PDF file", "ไฟล์ PDF")
-                        }
-                        hint={
-                          ch.kind === "VIDEO"
-                            ? tt(
-                                "Optional. The minutes fill in from the video's length. Without a file, learners see a preview built from the summary.",
-                                "ไม่บังคับ ระบบจะใส่จำนวนนาทีตามความยาววิดีโอให้ ถ้าไม่มีไฟล์ ผู้เรียนจะเห็นตัวอย่างจากสรุปเนื้อหา",
-                              )
-                            : tt(
-                                "Optional. The page count fills in for you. Without a file, learners see a preview built from the summary.",
-                                "ไม่บังคับ ระบบจะใส่จำนวนหน้าให้อัตโนมัติ ถ้าไม่มีไฟล์ ผู้เรียนจะเห็นตัวอย่างจากสรุปเนื้อหา",
-                              )
-                        }
-                      >
-                        <FileField
-                          compact
-                          kind={ch.kind === "VIDEO" ? "video" : "pdf"}
-                          folder="chapters"
-                          value={ch.media}
-                          prepare={async (file) => {
-                            if (ch.kind === "VIDEO") {
-                              const meta = await readVideo(file);
-                              setChapter(ch.uid, {
-                                minutes: String(Math.max(1, Math.round(meta.durationSec / 60))),
-                              });
-                            } else {
-                              const pages = await countPdfPages(file);
-                              setChapter(ch.uid, { pages: String(pages) });
-                            }
-                            return null;
-                          }}
-                          onChange={(media) => {
-                            forget(ch.media?.url);
-                            if (media) fresh.current.add(media.url);
-                            setChapter(ch.uid, { media });
-                          }}
-                        />
-                      </Field>
-                    ) : null}
-                    <Field label={tt("Summary (English)", "สรุปเนื้อหา (อังกฤษ)")}>
-                      <Textarea
-                        value={ch.summaryEn}
-                        placeholder={tt(
-                          "What this chapter covers",
-                          "บทนี้ครอบคลุมเรื่องอะไร",
-                        )}
-                        onChange={(e) =>
-                          setChapter(ch.uid, { summaryEn: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field label={tt("Summary (Thai)", "สรุปเนื้อหา (ไทย)")}>
-                      <Textarea
-                        value={ch.summaryTh}
-                        placeholder={tt("Optional", "ไม่บังคับ")}
-                        onChange={(e) =>
-                          setChapter(ch.uid, { summaryTh: e.target.value })
-                        }
-                      />
-                    </Field>
-                  </div>
-                </div>
-              );
-            })}
-            <Button
-              variant="secondary"
-              onClick={() =>
-                setDraft((d) => ({ ...d, chapters: [...d.chapters, newChapter()] }))
-              }
-            >
-              <Plus size={15} />
-              {tt("Add chapter", "เพิ่มบทเรียน")}
-            </Button>
+            <ChapterEditor
+              chapters={draft.chapters}
+              update={updateChapters}
+              uploader={uploader}
+              forget={forget}
+            />
             <p className="text-xs leading-relaxed text-muted">
               {draft.chapters.length === 0
                 ? tt(

@@ -2366,6 +2366,8 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
             titleTh: true,
             summaryEn: true,
             summaryTh: true,
+            bodyEn: true,
+            bodyTh: true,
             minutes: true,
             pages: true,
             mediaUrl: true,
@@ -2436,6 +2438,9 @@ const chapterSchema = z.object({
   titleTh: optionalText,
   summaryEn: z.string().trim().max(1000).optional().default(""),
   summaryTh: z.string().trim().max(1000).optional().default(""),
+  /** an article's text; blank lines separate paragraphs */
+  bodyEn: z.string().trim().max(20000).optional().default(""),
+  bodyTh: z.string().trim().max(20000).optional().default(""),
   minutes: z.coerce.number().int().min(0).max(1000),
   pages: z.coerce.number().int().min(0).max(5000).optional(),
   /** an uploaded video or PDF — only ever a file from our own Blob store */
@@ -2564,6 +2569,8 @@ export async function saveCourse(
           titleTh: ch.titleTh || null,
           summaryEn: ch.summaryEn || null,
           summaryTh: ch.summaryTh || null,
+          bodyEn: ch.bodyEn || null,
+          bodyTh: ch.bodyTh || null,
           minutes: ch.minutes,
           pages: ch.kind === "PDF" ? (ch.pages ?? null) : null,
           // an article has no file; switching a chapter to one drops it
