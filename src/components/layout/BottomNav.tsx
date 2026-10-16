@@ -78,7 +78,7 @@ export function BottomNav() {
       case "/lms":
         return tt("Learn", "เรียนรู้");
       case "/admin/lms":
-        return tt("LMS", "หลักสูตร");
+        return tt("Learn", "เรียนรู้");
       case "/admin/employee":
         return tt("People", "พนักงาน");
       case "/reward":

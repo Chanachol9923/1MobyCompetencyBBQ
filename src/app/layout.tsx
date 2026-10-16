@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
 import { UiProvider } from "@/lib/ui-state";
+import { LANG_COOKIE } from "@/lib/lang-cookie";
 import { Toast } from "@/components/layout/Toast";
 
 // Self-hosted from npm rather than fetched from Google Fonts at build time, so
@@ -19,13 +21,16 @@ export const metadata: Metadata = {
     "1Moby competency assessment, individual development plans and learning.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // the language is a cookie as well as a local preference, so the server
+  // renders the page in Thai straight away instead of flashing English first
+  const lang = (await cookies()).get(LANG_COOKIE)?.value === "th" ? "th" : "en";
   return (
-    <html lang="en" className={geologica.variable}>
+    <html lang={lang} className={geologica.variable}>
       <body className="min-h-screen bg-white antialiased">
-        <UiProvider>
+        <UiProvider initialLang={lang}>
           {children}
           <Toast />
         </UiProvider>

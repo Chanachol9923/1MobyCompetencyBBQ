@@ -1,18 +1,25 @@
 "use client";
 
-import {
-  Cell,
-  Legend,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+import dynamic from "next/dynamic";
+
+/** Grey stand-in with the chart's exact footprint, so nothing moves when it arrives. */
+function ChartPlaceholder({ round }: { round?: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className={`h-full w-full animate-pulse bg-surface ${round ? "rounded-full" : "rounded-xl"}`}
+    />
+  );
+}
+
+const RadarImpl = dynamic(() => import("./recharts-charts"), {
+  ssr: false,
+  loading: () => <ChartPlaceholder />,
+});
+const RingImpl = dynamic(() => import("./recharts-charts").then((m) => m.DonutRing), {
+  ssr: false,
+  loading: () => <ChartPlaceholder round />,
+});
 
 export type RadarDatum = { skill: string; expectation: number; actual: number };
 
@@ -25,37 +32,7 @@ export function CompetencyRadar({
 }) {
   return (
     <div style={{ height }} className="w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <RadarChart data={data} outerRadius="72%">
-          <PolarGrid stroke="#dde1e6" />
-          <PolarAngleAxis
-            dataKey="skill"
-            tick={{ fill: "#697077", fontSize: 11 }}
-          />
-          <PolarRadiusAxis domain={[0, 4]} tick={false} axisLine={false} />
-          <Radar
-            name="Expectation"
-            dataKey="expectation"
-            stroke="#c1c7cd"
-            fill="#c1c7cd"
-            fillOpacity={0.25}
-          />
-          <Radar
-            name="Employee Skill Point"
-            dataKey="actual"
-            stroke="#faa21b"
-            fill="#faa21b"
-            fillOpacity={0.6}
-          />
-          <Tooltip
-            contentStyle={{
-              borderRadius: 10,
-              border: "1px solid #dde1e6",
-              fontSize: 12,
-            }}
-          />
-        </RadarChart>
-      </ResponsiveContainer>
+      <RadarImpl data={data} height={height} />
     </div>
   );
 }
@@ -77,34 +54,7 @@ export function Donut({
 }) {
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          {/* recharts 2.x + React 19 never advances the mount animation, which
-              leaves the sectors unrendered - draw them at their final value */}
-          <Pie
-            data={data}
-            dataKey="value"
-            innerRadius="62%"
-            outerRadius="100%"
-            paddingAngle={1}
-            startAngle={90}
-            endAngle={-270}
-            stroke="none"
-            isAnimationActive={false}
-          >
-            {data.map((d) => (
-              <Cell key={d.name} fill={d.color} />
-            ))}
-          </Pie>
-          <Tooltip
-            contentStyle={{
-              borderRadius: 10,
-              border: "1px solid #dde1e6",
-              fontSize: 12,
-            }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+      <RingImpl data={data} />
       <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
         <span
           className={`text-[10px] font-medium ${dark ? "text-white/70" : "text-muted"}`}
@@ -156,4 +106,3 @@ export function heatColor(score: number) {
   return "#f7c1c7";
 }
 
-export { Legend };

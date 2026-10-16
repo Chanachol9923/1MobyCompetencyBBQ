@@ -21,6 +21,7 @@ import {
   type AttachEvidenceInput,
   type EvidenceError,
 } from "./actions";
+import { APP_TIME_ZONE } from "@/lib/datetime";
 
 type Kind = EvidenceItem["kind"];
 
@@ -77,6 +78,7 @@ export function GoalEvidencePanel({
 
   const dateFmt = (iso: string) =>
     new Date(iso).toLocaleDateString(lang === "th" ? "th-TH" : "en-GB", {
+      timeZone: APP_TIME_ZONE,
       day: "2-digit",
       month: "short",
       year: "numeric",

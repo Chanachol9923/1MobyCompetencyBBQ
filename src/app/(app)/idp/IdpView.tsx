@@ -32,6 +32,7 @@ import type { CertificateOption, IdpGoalView } from "@/server/learning";
 import { GoalEvidencePanel } from "./GoalEvidence";
 import { GoalTimeline, StatusPill, useStatusLabel } from "./GoalTimeline";
 import { daysLeft, goalStatus, parseDate } from "./status";
+import { APP_TIME_ZONE } from "@/lib/datetime";
 
 const ACTIVITY_LABEL: Record<
   IdpGoalView["activity"],
@@ -140,7 +141,7 @@ export function IdpView({
   const dateFmt = (iso: string) =>
     new Date(parseDate(iso)).toLocaleDateString(
       lang === "th" ? "th-TH" : "en-GB",
-      { day: "2-digit", month: "short", year: "numeric" },
+      { timeZone: APP_TIME_ZONE, day: "2-digit", month: "short", year: "numeric" },
     );
 
   return (
@@ -358,7 +359,7 @@ export function IdpView({
                     type="button"
                     onClick={() => show(index - 1)}
                     aria-label={tt("Previous course", "หลักสูตรก่อนหน้า")}
-                    className="grid size-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink"
+                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink max-lg:size-11"
                   >
                     <ChevronLeft size={15} />
                   </button>
@@ -375,7 +376,7 @@ export function IdpView({
                           title={`${title} — ${p}%`}
                           aria-label={`${title} — ${p}%`}
                           aria-current={i === index}
-                          className="group flex-1 py-2"
+                          className="group flex-1 py-2 max-lg:py-4"
                         >
                           <span
                             className={`block h-1.5 overflow-hidden rounded-full transition-colors ${
@@ -400,7 +401,7 @@ export function IdpView({
                     type="button"
                     onClick={() => show(index + 1)}
                     aria-label={tt("Next course", "หลักสูตรถัดไป")}
-                    className="grid size-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink"
+                    className="grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink max-lg:size-11"
                   >
                     <ChevronRight size={15} />
                   </button>

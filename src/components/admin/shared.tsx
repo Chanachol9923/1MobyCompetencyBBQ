@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { AnimatedNumber, Card, Input, ResponsiveTable } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { formatDateTimeTz, isoDateTz } from "@/lib/datetime";
 
 /**
  * The furniture the admin screens share: tables that fold on a phone, the CSV
@@ -226,24 +227,11 @@ export function formatDate(iso: string) {
   return `${d}-${m}-${y}`;
 }
 
-/** `2026-04-30T08:12:00Z` -> `30-04-2026 15:12` in the viewer's locale time. */
-export function formatDateTime(iso: string) {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
-}
+/** `2026-04-30T08:12:00Z` -> `30-04-2026 15:12`, in Bangkok time on server and browser alike. */
+export const formatDateTime = formatDateTimeTz;
 
-/** Local date part of an ISO timestamp, for date-range filtering. */
-export function isoDatePart(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+/** The Bangkok calendar day of an ISO timestamp, for date-range filtering. */
+export const isoDatePart = isoDateTz;
 
 /* ------------------------------------------------------------- switches */
 

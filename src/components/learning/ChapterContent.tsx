@@ -398,6 +398,19 @@ function PdfPanel({ course, chapter, index, complete, onComplete }: PanelProps) 
 
 /* ---------------------------------------------------------------- article */
 
+/** `pendingApprovals` in an article's text is shown as code, not with backticks. */
+function withInlineCode(text: string) {
+  return text.split(/(`[^`]+`)/).map((part, i) =>
+    part.startsWith("`") && part.endsWith("`") && part.length > 2 ? (
+      <code key={i} className="rounded bg-surface px-1 py-0.5 font-mono text-[0.85em] font-normal text-ink">
+        {part.slice(1, -1)}
+      </code>
+    ) : (
+      part
+    ),
+  );
+}
+
 function ArticlePanel({ course, chapter, index, complete, onComplete }: PanelProps) {
   const { tt, lang } = useT();
   const title = pick(lang, chapter.titleEn, chapter.titleTh);
@@ -431,7 +444,7 @@ function ArticlePanel({ course, chapter, index, complete, onComplete }: PanelPro
         <div className="scroll-thin mt-4 max-h-[320px] space-y-3 overflow-y-auto pr-1">
           {paragraphs.map((p, i) => (
             <p key={i} className="text-sm font-light leading-relaxed text-muted">
-              {p}
+              {withInlineCode(p)}
             </p>
           ))}
         </div>

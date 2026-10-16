@@ -17,7 +17,7 @@ import {
 import { Button, Card, EmptyState, Field, Modal, PageHeading, Pill, Tabs, Textarea } from "@/components/ui";
 import { CountTile, SearchInput } from "@/components/admin/shared";
 import { ResultBanner } from "@/components/admin/rbac-shared";
-import { timeAgo } from "@/components/announcements/format";
+import { TimeAgo } from "@/components/ui/TimeAgo";
 import {
   claimProblem,
   discardReportImage,
@@ -26,6 +26,7 @@ import {
   resolveProblem,
 } from "@/server/problems";
 import { useT } from "@/lib/i18n";
+import { formatDateTimeLocale } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { ImagePicker } from "./ImagePicker";
 import {
@@ -109,7 +110,7 @@ export function Claimers({ claims, size = 28 }: { claims: ProblemClaimRow[]; siz
             <span className="block font-bold">{c.name}</span>
             <span className="block text-white/70">{c.email}</span>
             <span className="mt-0.5 block text-white/70">
-              {tt("Claimed", "รับเรื่องเมื่อ")} {timeAgo(c.claimedAt, lang)}
+              {tt("Claimed", "รับเรื่องเมื่อ")} <TimeAgo iso={c.claimedAt} />
             </span>
             <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-ink" />
           </span>
@@ -227,7 +228,7 @@ export function ProblemsAdminScreen({ data }: { data: ProblemsAdminData }) {
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted">
                       {tt(CATEGORY_LABEL[p.category].en, CATEGORY_LABEL[p.category].th)} · {p.reporter.name} ·{" "}
-                      {timeAgo(p.createdAt, lang)}
+                      <TimeAgo iso={p.createdAt} />
                       {p.pageUrl ? ` · ${p.pageUrl}` : ""}
                     </span>
                   </button>
@@ -426,7 +427,7 @@ function ProblemDetail({
                 <User size={13} /> <span className="font-medium text-ink">{p.reporter.name}</span> ({p.reporter.email})
               </span>
               <span className="inline-flex items-center gap-1">
-                <Clock size={13} /> {new Date(p.createdAt).toLocaleString(lang === "th" ? "th-TH" : "en-GB")}
+                <Clock size={13} /> {formatDateTimeLocale(p.createdAt, lang === "th" ? "th-TH" : "en-GB")}
               </span>
             </div>
 
@@ -463,7 +464,7 @@ function ProblemDetail({
                       <Claimers claims={[c]} size={24} />
                       <span className="font-medium text-ink">{c.name}</span>
                       {c.userId === me ? <Pill tone="brand">{tt("You", "คุณ")}</Pill> : null}
-                      <span className="text-xs text-muted">· {timeAgo(c.claimedAt, lang)}</span>
+                      <span className="text-xs text-muted">· <TimeAgo iso={c.claimedAt} /></span>
                     </li>
                   ))}
                 </ul>
@@ -479,7 +480,7 @@ function ProblemDetail({
                   {tt("Fixed", "แก้ไขแล้ว")}
                   {p.resolvedBy ? (
                     <span className="font-normal text-muted">
-                      · {p.resolvedBy.name} · {p.resolvedAt ? timeAgo(p.resolvedAt, lang) : ""}
+                      · {p.resolvedBy.name} · {p.resolvedAt ? <TimeAgo iso={p.resolvedAt} /> : null}
                     </span>
                   ) : null}
                 </p>

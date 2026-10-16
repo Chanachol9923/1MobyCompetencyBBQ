@@ -359,7 +359,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                       ) : null;
                     })()}
                   </Td>
-                  <Td className="text-muted">
+                  <Td className="whitespace-nowrap text-muted">
                     {tt(`${c.hours} hours`, `${c.hours} ชม.`)}
                   </Td>
                   <Td className="text-muted">

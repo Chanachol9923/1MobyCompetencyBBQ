@@ -257,7 +257,7 @@ export function PdfReader({
               inputMode="numeric"
               aria-label={tt("Page number", "เลขหน้า")}
               className={cn(
-                "h-8 w-11 rounded-md border border-line bg-white text-center text-xs font-medium text-ink",
+                "h-8 w-11 rounded-md border border-line bg-white text-center text-xs font-medium text-ink max-lg:h-10",
                 full && "border-white/20 bg-white/10 text-white",
               )}
             />
@@ -289,7 +289,7 @@ export function PdfReader({
             type="button"
             onClick={() => setZoom(1)}
             className={cn(
-              "h-8 min-w-12 rounded-md px-1.5 text-xs font-medium text-muted hover:text-ink",
+              "h-8 min-w-12 rounded-md px-1.5 text-xs font-medium text-muted hover:text-ink max-lg:h-10",
               full && "text-white/70 hover:text-white",
             )}
             aria-label={tt("Reset zoom", "รีเซ็ตการซูม")}
@@ -319,7 +319,7 @@ export function PdfReader({
             aria-label={tt("Download PDF", "ดาวน์โหลด PDF")}
             title={tt("Download PDF", "ดาวน์โหลด PDF")}
             className={cn(
-              "grid size-8 place-items-center rounded-md text-muted transition hover:bg-surface hover:text-ink",
+              "grid size-8 place-items-center rounded-md text-muted transition hover:bg-surface hover:text-ink max-lg:size-10",
               full && "text-white/70 hover:bg-white/10 hover:text-white",
             )}
           >
@@ -418,7 +418,7 @@ function ToolButton({
       aria-label={label}
       title={label}
       className={cn(
-        "grid size-8 place-items-center rounded-md transition disabled:opacity-35",
+        "grid size-8 place-items-center rounded-md transition disabled:opacity-35 max-lg:size-10",
         primary
           ? "bg-brand text-white hover:brightness-110"
           : dark

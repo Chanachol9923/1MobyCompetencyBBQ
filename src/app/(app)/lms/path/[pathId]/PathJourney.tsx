@@ -129,7 +129,7 @@ export function PathJourney({ path }: { path: PathView }) {
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <Link
         href="/lms?view=journey"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-brand"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-brand max-lg:min-h-11"
       >
         <ArrowLeft size={15} /> {tt("Training journey", "เส้นทางการฝึกอบรม")}
       </Link>

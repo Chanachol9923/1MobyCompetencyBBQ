@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { LANG_COOKIE } from "@/lib/lang-cookie";
 
 /**
  * The only client state left in the app.
@@ -22,6 +23,10 @@ import {
 export type Lang = "en" | "th";
 
 const LANG_KEY = "1moby-lang";
+
+function writeLangCookie(lang: Lang) {
+  document.cookie = `${LANG_COOKIE}=${lang}; path=/; max-age=31536000; samesite=lax`;
+}
 
 export type ToastTone = "success" | "error";
 export type ToastMessage = { id: number; message: string; tone: ToastTone };
@@ -52,7 +57,11 @@ export function UiProvider({
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(LANG_KEY);
-      if (saved === "en" || saved === "th") setLangState(saved);
+      if (saved === "en" || saved === "th") {
+        setLangState(saved);
+        // people who chose a language before the cookie existed get one now
+        if (saved !== initialLang) writeLangCookie(saved);
+      }
     } catch {
       /* private mode or blocked storage — English is a fine default */
     }
@@ -60,6 +69,7 @@ export function UiProvider({
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
+    writeLangCookie(next);
     try {
       window.localStorage.setItem(LANG_KEY, next);
     } catch {

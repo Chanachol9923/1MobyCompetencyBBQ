@@ -13,6 +13,7 @@ import {
   type GoalStatus,
   type PlanGoal,
 } from "./status";
+import { APP_TIME_ZONE } from "@/lib/datetime";
 
 export function useStatusLabel() {
   const { t, tt } = useT();
@@ -60,6 +61,7 @@ export function GoalTimeline({
 
   const fmt = (iso: string) =>
     new Date(parseDate(iso)).toLocaleDateString(locale, {
+      timeZone: APP_TIME_ZONE,
       day: "2-digit",
       month: "short",
       year: "2-digit",
@@ -85,6 +87,7 @@ export function GoalTimeline({
               style={{ left: `${tick.at}%` }}
             >
               {tick.label.toLocaleDateString(locale, {
+                timeZone: APP_TIME_ZONE,
                 month: "short",
                 year: "2-digit",
               })}

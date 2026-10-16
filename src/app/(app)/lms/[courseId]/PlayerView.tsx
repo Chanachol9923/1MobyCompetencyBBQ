@@ -245,7 +245,7 @@ function Player({ view }: { view: PlayerData }) {
   const backLink = (
     <Link
       href="/lms"
-      className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-brand"
+      className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-brand max-lg:min-h-11"
     >
       <ArrowLeft size={15} /> {tt("All courses", "หลักสูตรทั้งหมด")}
     </Link>
@@ -377,7 +377,7 @@ function Player({ view }: { view: PlayerData }) {
       {backLink}
 
       <PageHeading
-        title={t("nav.lms")}
+        title={courseTitle}
         right={
           <div className="min-w-[200px]">
             <div className="mb-1 flex items-center justify-between text-xs text-muted">
@@ -394,27 +394,55 @@ function Player({ view }: { view: PlayerData }) {
 
       {banner}
 
-      {/* ---------------------------------------------------- content panel */}
-      <div className="relative">
-        <ChapterContent
-          key={chapter.id}
-          course={view}
-          chapter={chapter}
-          index={chapterIndex}
-          complete={chapterDone}
-          onComplete={() => completeChapter(chapter.id)}
-        />
+      {/* the lesson on the left, the syllabus in its own column on the right —
+          it used to float over the player and covered the video controls */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+        <div className="min-w-0">
+          <ChapterContent
+            key={chapter.id}
+            course={view}
+            chapter={chapter}
+            index={chapterIndex}
+            complete={chapterDone}
+            onComplete={() => completeChapter(chapter.id)}
+          />
+
+          {/* ---------------------------------------------------------- summary */}
+          <div className="mt-6">
+            <div className="flex gap-3">
+              <span
+                className="mt-1.5 size-0 shrink-0 border-x-[9px] border-t-[13px] border-x-transparent border-t-accent"
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <p className="font-bold text-ink">{summary}</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-light text-muted">
+                  {bullets.map((b) => (
+                    <li key={b}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+              <Pill tone={chapterDone ? "success" : "neutral"}>
+                {chapterDone
+                  ? tt("Chapter complete", "เรียนจบบทนี้แล้ว")
+                  : tt("Not complete", "ยังไม่จบบทนี้")}
+              </Pill>
+              <KindBadge kind={chapter.kind} />
+              <Pill tone="brand">{t(categoryDictKey(view.category))}</Pill>
+              <span className="text-xs text-muted">
+                {tt(
+                  `${doneCount} of ${chapters.length} chapters done`,
+                  `เรียนจบ ${doneCount} จาก ${chapters.length} บท`,
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* ------------------------------------------------- chapter list */}
-        <div
-          className={cn(
-            "mt-4 rounded-xl bg-brand p-3 shadow-lg",
-            // the Figma layout floats the list over the bottom-right of the dark
-            // panel; an article chapter is a light card, so stack it instead
-            chapter.kind !== "ARTICLE" &&
-              "lg:absolute lg:right-6 lg:top-full lg:z-10 lg:mt-0 lg:w-[340px] lg:-translate-y-8",
-          )}
-        >
+        <aside className="rounded-xl bg-brand p-3 shadow-lg lg:sticky lg:top-20">
           <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wide text-white/70">
             {tt("Chapters", "บทเรียน")}
           </p>
@@ -428,7 +456,7 @@ function Player({ view }: { view: PlayerData }) {
                     type="button"
                     onClick={() => setActiveId(c.id)}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-white transition-colors",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-white transition-colors max-lg:min-h-11",
                       active
                         ? "border-2 border-accent bg-brand-dark"
                         : "border-2 border-transparent bg-brand-dark/70 hover:bg-brand-dark",
@@ -447,40 +475,7 @@ function Player({ view }: { view: PlayerData }) {
               );
             })}
           </ul>
-        </div>
-      </div>
-
-      {/* ---------------------------------------------------------- summary */}
-      <div className="mt-6 lg:mt-8 lg:w-[62%]">
-        <div className="flex gap-3">
-          <span
-            className="mt-1.5 size-0 shrink-0 border-x-[9px] border-t-[13px] border-x-transparent border-t-accent"
-            aria-hidden
-          />
-          <div className="min-w-0">
-            <p className="font-bold text-ink">{summary}</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-light text-muted">
-              {bullets.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-          <Pill tone={chapterDone ? "success" : "neutral"}>
-            {chapterDone
-              ? tt("Chapter complete", "เรียนจบบทนี้แล้ว")
-              : tt("Not complete", "ยังไม่จบบทนี้")}
-          </Pill>
-          <KindBadge kind={chapter.kind} />
-          <Pill tone="brand">{t(categoryDictKey(view.category))}</Pill>
-          <span className="text-xs text-muted">
-            {tt(
-              `${doneCount} of ${chapters.length} chapters done`,
-              `เรียนจบ ${doneCount} จาก ${chapters.length} บท`,
-            )}
-          </span>
-        </div>
+        </aside>
       </div>
 
       {/* ------------------------------------------------- linked IDP goals */}

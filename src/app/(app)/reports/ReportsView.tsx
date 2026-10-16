@@ -32,7 +32,14 @@ import {
 } from "@/components/profile/gap";
 import { useT } from "@/lib/i18n";
 import { initials } from "@/lib/utils";
-import { GapBarChart, toBarData } from "./GapBarChart";
+import dynamic from "next/dynamic";
+import { barChartHeight, toBarData } from "./bar-data";
+
+// the chart library loads after the report is on screen
+const GapBarChart = dynamic(() => import("./GapBarChart").then((m) => m.GapBarChart), {
+  ssr: false,
+  loading: () => <div aria-hidden className="h-[240px] w-full animate-pulse rounded-xl bg-surface" />,
+});
 import { downloadCsv } from "./csv";
 import { recordExportAction } from "./actions";
 
@@ -390,7 +397,10 @@ export function ReportsView({
               )}
               subtitle={scopeCaption}
             />
-            <div className="scroll-thin min-w-0 overflow-x-auto px-2 pb-5">
+            <div
+              className="scroll-thin min-w-0 overflow-x-auto px-2 pb-5"
+              style={{ minHeight: barChartHeight(byGapDesc.length) }}
+            >
               <GapBarChart
                 data={toBarData(byGapDesc, lang)}
                 actualLabel={tt("Average manager score", "คะแนนหัวหน้าประเมินเฉลี่ย")}

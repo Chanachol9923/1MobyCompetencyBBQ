@@ -45,7 +45,7 @@ export function Sidebar() {
     >
       <Link
         href={items[0]!.href}
-        className="flex h-[72px] items-center px-6 text-2xl focus-visible:outline-white focus-visible:-outline-offset-2"
+        className="flex h-16 items-center px-6 text-2xl focus-visible:outline-white focus-visible:-outline-offset-2 [@media(min-height:900px)]:h-[72px]"
         onClick={() => setOpen(false)}
       >
         <Logo className="text-2xl" />
@@ -82,7 +82,9 @@ export function Sidebar() {
                 onClick={() => setOpen(false)}
                 aria-current={inGroup && !item.children ? "page" : undefined}
                 className={cn(
-                  "block px-4 py-3.5 text-[15px] font-bold text-white transition-colors duration-150",
+                  // compact on a short laptop screen so the whole menu fits
+                  // without scrolling; roomy again from 900px of height
+                  "block px-4 py-2.5 text-[15px] font-bold text-white transition-colors duration-150 [@media(min-height:900px)]:py-3.5",
                   "focus-visible:outline-white focus-visible:-outline-offset-2",
                   drawer && "flex min-h-[52px] items-center gap-3",
                   inGroup
@@ -116,7 +118,7 @@ export function Sidebar() {
                           onClick={() => setOpen(false)}
                           aria-current={current ? "page" : undefined}
                           className={cn(
-                            "flex items-center gap-2 py-2 pl-8 pr-4 text-sm text-white/85 transition-colors duration-150",
+                            "flex items-center gap-2 py-1.5 pl-8 pr-4 text-sm text-white/85 transition-colors duration-150 [@media(min-height:900px)]:py-2",
                             "focus-visible:outline-white focus-visible:-outline-offset-2",
                             drawer && "min-h-11 pl-11",
                             current
@@ -143,11 +145,11 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-white/15 px-4 py-3">
+      <div className="border-t border-white/15 px-4 py-2.5">
         <p className="truncate text-[11px] text-white/70" title={viewer.email}>
           {viewer.email}
         </p>
-        <div className="mt-2 grid gap-1">
+        <div className="mt-1.5 grid gap-0.5">
           <button
             type="button"
             onClick={() => {
@@ -155,7 +157,7 @@ export function Sidebar() {
               setChangingPassword(true);
             }}
             className={cn(
-              "flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white",
+              "flex h-8 items-center gap-2 rounded-lg px-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white",
               drawer && "h-11",
             )}
           >
@@ -166,7 +168,7 @@ export function Sidebar() {
             type="button"
             onClick={() => void signOut({ redirectTo: "/login" })}
             className={cn(
-              "flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white",
+              "flex h-8 items-center gap-2 rounded-lg px-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-white",
               drawer && "h-11",
             )}
           >

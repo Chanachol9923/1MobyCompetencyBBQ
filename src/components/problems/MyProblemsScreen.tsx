@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Globe, LifeBuoy } from "lucide-react";
 import { Card, EmptyState, PageHeading, Pill } from "@/components/ui";
-import { timeAgo } from "@/components/announcements/format";
+import { TimeAgo } from "@/components/ui/TimeAgo";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Gallery, STATUS_TONE } from "./ProblemsAdminScreen";
@@ -42,7 +42,7 @@ export function MyProblemsScreen({ problems }: { problems: MyProblemRow[] }) {
                       {p.title}
                     </p>
                     <p className="mt-0.5 text-xs text-muted">
-                      {tt(CATEGORY_LABEL[p.category].en, CATEGORY_LABEL[p.category].th)} · {timeAgo(p.createdAt, lang)}
+                      {tt(CATEGORY_LABEL[p.category].en, CATEGORY_LABEL[p.category].th)} · <TimeAgo iso={p.createdAt} />
                       {p.pageUrl ? (
                         <span className="ml-1 inline-flex items-center gap-0.5">
                           · <Globe size={11} /> {p.pageUrl}
@@ -74,7 +74,7 @@ export function MyProblemsScreen({ problems }: { problems: MyProblemRow[] }) {
                       {p.resolvedBy ? (
                         <span className="font-normal text-muted">
                           · {p.resolvedBy.name}
-                          {p.resolvedAt ? ` · ${timeAgo(p.resolvedAt, lang)}` : ""}
+                          {p.resolvedAt ? ` · $<TimeAgo iso={p.resolvedAt} />` : ""}
                         </span>
                       ) : null}
                     </p>

@@ -55,6 +55,7 @@ import {
   saveGoalAction,
   type ActionError,
 } from "./actions";
+import { APP_TIME_ZONE } from "@/lib/datetime";
 
 export type MemberCells = Record<
   string,
@@ -677,7 +678,7 @@ export function TeamProfileView({
                 {tt("Evaluated", "ประเมินแล้ว")} ·{" "}
                 {new Date(selected.reviewedAt).toLocaleDateString(
                   lang === "th" ? "th-TH" : "en-GB",
-                  { day: "2-digit", month: "short", year: "numeric" },
+                  { timeZone: APP_TIME_ZONE, day: "2-digit", month: "short", year: "numeric" },
                 )}
               </p>
             </div>
@@ -800,7 +801,7 @@ export function TeamProfileView({
                       {m.learning.lastActivity
                         ? new Date(m.learning.lastActivity).toLocaleDateString(
                             lang === "th" ? "th-TH" : "en-GB",
-                            { day: "2-digit", month: "short" },
+                            { timeZone: APP_TIME_ZONE, day: "2-digit", month: "short" },
                           )
                         : "—"}
                     </td>

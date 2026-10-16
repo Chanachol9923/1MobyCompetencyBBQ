@@ -11,33 +11,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  VERDICT_HEX,
-  VerdictDot,
-  useVerdictLabel,
-} from "@/components/profile/VerdictPill";
-import {
-  VERDICT_ORDER,
-  nameOf,
-  type AggRow,
-  type Lang,
-} from "@/components/profile/gap";
-
-export type BarDatum = {
-  name: string;
-  actual: number;
-  expected: number;
-  fill: string;
-};
-
-export function toBarData(rows: AggRow[], lang: Lang): BarDatum[] {
-  return rows.map((r) => ({
-    name: nameOf(r, lang),
-    actual: r.avgScore,
-    expected: r.avgExpected,
-    fill: VERDICT_HEX[r.verdict],
-  }));
-}
+import { VerdictDot, useVerdictLabel } from "@/components/profile/VerdictPill";
+import { VERDICT_ORDER } from "@/components/profile/gap";
+import { barChartHeight, type BarDatum } from "./bar-data";
 
 const AXIS_WIDTH = 190;
 const LINE_HEIGHT = 15;
@@ -116,7 +92,7 @@ export function GapBarChart({
 }) {
   const verdictLabel = useVerdictLabel();
   // two-line labels need the extra room, otherwise rows collide
-  const height = Math.max(240, data.length * 52 + 56);
+  const height = barChartHeight(data.length);
 
   return (
     <div className="w-full">
