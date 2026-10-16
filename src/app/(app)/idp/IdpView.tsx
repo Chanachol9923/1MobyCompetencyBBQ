@@ -33,6 +33,7 @@ import { GoalEvidencePanel } from "./GoalEvidence";
 import { GoalTimeline, StatusPill, useStatusLabel } from "./GoalTimeline";
 import { daysLeft, goalStatus, parseDate } from "./status";
 import { APP_TIME_ZONE } from "@/lib/datetime";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 const ACTIVITY_LABEL: Record<
   IdpGoalView["activity"],
@@ -210,7 +211,7 @@ export function IdpView({
         ) : null}
       </div>
 
-      <div className="space-y-6">
+      <SmoothPanel swapKey={activeGroup ?? ""} className="space-y-6">
         {visible.map((g) => {
           const status = goalStatus(g);
           const left = daysLeft(g);
@@ -443,7 +444,7 @@ export function IdpView({
             />
           </Card>
         ) : null}
-      </div>
+      </SmoothPanel>
 
       {/* ------------------------------------------------ resume latest class */}
       {resumeCourse ? (

@@ -40,10 +40,11 @@ function readQuery(params: Record<string, string | string[] | undefined>) {
 /**
  * The catalogue.
  *
- * The filters live in the URL and are answered by the query, so a course the
- * search excludes never reaches the browser and the page is shareable. Progress
- * is this viewer's own — the employee id comes from the session, and a
- * catalogue of 39 courses costs three queries, not thirty-nine.
+ * The whole published catalogue, the learning paths, the shorts and the
+ * documents arrive in one request; searching, filtering and switching tabs are
+ * then instant in the browser, with the URL kept in step so a link or a
+ * refresh opens the same view. Progress is this viewer's own — the employee id
+ * comes from the session.
  */
 export default async function LmsPage({
   searchParams,
@@ -53,19 +54,13 @@ export default async function LmsPage({
   const viewer = await requireEmployee();
   const query = readQuery(await searchParams);
 
-  // each tab loads only what it shows
-  const courseTab = query.view === "courses" || query.view === "journey";
+  // all four tabs at once — the filters and tab switches then happen in the
+  // browser without asking the server again
   const [{ courses, stats }, paths, shorts, documents] = await Promise.all([
-    courseTab
-      ? getCatalogue(viewer.employeeId, {
-          q: query.q,
-          category: query.category,
-          kind: query.kind,
-        })
-      : { courses: [], stats: { total: 0, completed: 0, inProgress: 0, overall: 0 } },
-    query.view === "journey" ? listPathViews(viewer.employeeId) : [],
-    query.view === "shorts" ? getShortsFeed().then((r) => r.shorts) : [],
-    query.view === "documents" ? listDocuments().then((r) => r.documents) : [],
+    getCatalogue(viewer.employeeId, { q: "", category: "ALL", kind: "ALL" }),
+    listPathViews(viewer.employeeId),
+    getShortsFeed().then((r) => r.shorts),
+    listDocuments().then((r) => r.documents),
   ]);
 
   return (

@@ -56,6 +56,7 @@ import {
 } from "@/server/admin-content";
 import { useT } from "@/lib/i18n";
 import { formatNumber } from "@/lib/utils";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 /**
  * The four presets carry the gradient and the icon slug together, because the
@@ -283,276 +284,278 @@ export function RewardAdminScreen({ data }: { data: RewardAdminData }) {
         />
       </div>
 
-      {tab === "catalogue" ? (
-        <Card className="mt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <h3 className="text-lg font-bold text-ink">
-              {tt("Reward catalogue", "รายการของรางวัล")}
-            </h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <SearchInput
-                value={query}
-                onChange={setQuery}
-                placeholder={tt("Search rewards", "ค้นหาของรางวัล")}
-                className="w-full sm:w-56"
-              />
-              <Button size="sm" onClick={openAdd}>
-                <Plus size={15} />
-                {tt("Add reward", "เพิ่มของรางวัล")}
-              </Button>
+      <SmoothPanel swapKey={tab}>
+        {tab === "catalogue" ? (
+          <Card className="mt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <h3 className="text-lg font-bold text-ink">
+                {tt("Reward catalogue", "รายการของรางวัล")}
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={tt("Search rewards", "ค้นหาของรางวัล")}
+                  className="w-full sm:w-56"
+                />
+                <Button size="sm" onClick={openAdd}>
+                  <Plus size={15} />
+                  {tt("Add reward", "เพิ่มของรางวัล")}
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <TableWrap>
-            <table className="w-full min-w-[880px] xl:min-w-0 border-collapse">
-              <thead>
-                <tr className="border-y border-line/70 bg-surface/60">
-                  <Th>{tt("Reward", "ของรางวัล")}</Th>
-                  <Th>{t("label.points")}</Th>
-                  <Th className="w-44">{tt("Rewards", "คงเหลือ")}</Th>
-                  <Th>{tt("Redeemed", "แลกไปแล้ว")}</Th>
-                  <Th>{t("label.status")}</Th>
-                  <Th className="text-right">{t("label.actions")}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((r) => {
-                  const status = stockTone(r.stock, r.active);
-                  return (
+            <TableWrap>
+              <table className="w-full min-w-[880px] xl:min-w-0 border-collapse">
+                <thead>
+                  <tr className="border-y border-line/70 bg-surface/60">
+                    <Th>{tt("Reward", "ของรางวัล")}</Th>
+                    <Th>{t("label.points")}</Th>
+                    <Th className="w-44">{tt("Rewards", "คงเหลือ")}</Th>
+                    <Th>{tt("Redeemed", "แลกไปแล้ว")}</Th>
+                    <Th>{t("label.status")}</Th>
+                    <Th className="text-right">{t("label.actions")}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((r) => {
+                    const status = stockTone(r.stock, r.active);
+                    return (
+                      <tr key={r.id} className="border-b border-line/60 last:border-0">
+                        <Td>
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="size-9 shrink-0 rounded-lg"
+                              style={coverStyle(r.tone ?? "")}
+                            />
+                            <span className="min-w-0">
+                              <span className="block font-bold">{name(r)}</span>
+                            </span>
+                          </div>
+                        </Td>
+                        <Td className="font-bold text-brand">
+                          {tt(
+                            `${formatNumber(r.points)} pts`,
+                            `${formatNumber(r.points)} คะแนน`,
+                          )}
+                        </Td>
+                        <Td>
+                          <div className="flex items-center gap-2">
+                            <IconAction
+                              disabled={busy || r.stock === 0}
+                              aria-label={tt(
+                                `Decrease ${r.nameEn} stock`,
+                                `ลดคงเหลือ ${r.nameEn}`,
+                              )}
+                              onClick={() =>
+                                run(() => adjustRewardStock({ rewardId: r.id, delta: -1 }))
+                              }
+                            >
+                              <Minus size={14} />
+                            </IconAction>
+                            <span className="w-10 text-center font-bold">{r.stock}</span>
+                            <IconAction
+                              disabled={busy}
+                              aria-label={tt(
+                                `Increase ${r.nameEn} stock`,
+                                `เพิ่มคงเหลือ ${r.nameEn}`,
+                              )}
+                              onClick={() =>
+                                run(() => adjustRewardStock({ rewardId: r.id, delta: 1 }))
+                              }
+                            >
+                              <Plus size={14} />
+                            </IconAction>
+                          </div>
+                        </Td>
+                        <Td className="text-muted">
+                          {r.redeemedCount}
+                          {r.preparingCount ? (
+                            <span className="ml-1 text-[10px] text-amber">
+                              {tt(
+                                `(${r.preparingCount} waiting)`,
+                                `(รอส่ง ${r.preparingCount})`,
+                              )}
+                            </span>
+                          ) : null}
+                        </Td>
+                        <Td>
+                          <Pill tone={status.tone}>
+                            {status.key === "off"
+                              ? tt("Delisted", "ซ่อนอยู่")
+                              : status.key === "out"
+                                ? tt("Out of stock", "หมด")
+                                : status.key === "low"
+                                  ? tt("Low stock", "เหลือน้อย")
+                                  : tt("In stock", "มีสินค้า")}
+                          </Pill>
+                        </Td>
+                        <Td>
+                          <div className="flex justify-end gap-2">
+                            <IconAction
+                              disabled={busy}
+                              aria-label={
+                                r.active
+                                  ? tt(`Delist ${r.nameEn}`, `ซ่อน ${r.nameEn}`)
+                                  : tt(`List ${r.nameEn}`, `แสดง ${r.nameEn}`)
+                              }
+                              onClick={() =>
+                                run(() =>
+                                  setRewardActive({ rewardId: r.id, active: !r.active }),
+                                )
+                              }
+                            >
+                              {r.active ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </IconAction>
+                            <IconAction
+                              tone="brand"
+                              aria-label={`${t("action.edit")} ${r.nameEn}`}
+                              onClick={() => openEdit(r)}
+                            >
+                              <Pencil size={14} />
+                            </IconAction>
+                            <IconAction
+                              tone="danger"
+                              aria-label={`${t("action.delete")} ${r.nameEn}`}
+                              onClick={() => setConfirmDelete(r)}
+                            >
+                              <Trash2 size={14} />
+                            </IconAction>
+                          </div>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                  {visible.length === 0 ? (
+                    <tr>
+                      <Td colSpan={6} className="py-10 text-center text-muted">
+                        {t("admin.noMatch")}
+                      </Td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </TableWrap>
+          </Card>
+        ) : (
+          <Card className="mt-5">
+            <CardHeader
+              title={tt("Redemption requests", "คำขอแลกของรางวัล")}
+              subtitle={tt(
+                "Preparing orders need to be handed over and marked delivered. Cancelling refunds the points and returns the item to stock.",
+                "รายการที่กำลังเตรียมต้องส่งมอบและบันทึกว่าส่งแล้ว การยกเลิกจะคืนคะแนนและนำของกลับเข้าสต๊อก",
+              )}
+              right={
+                <Pill tone={pendingQueue.length ? "warn" : "success"}>
+                  {tt(
+                    `${pendingQueue.length} waiting`,
+                    `รอดำเนินการ ${pendingQueue.length} รายการ`,
+                  )}
+                </Pill>
+              }
+            />
+            <TableWrap>
+              <table className="w-full min-w-[860px] xl:min-w-0 border-collapse">
+                <thead>
+                  <tr className="border-y border-line/70 bg-surface/60">
+                    <Th>{t("label.employee")}</Th>
+                    <Th>{tt("Reward", "ของรางวัล")}</Th>
+                    <Th>{t("label.points")}</Th>
+                    <Th>{t("label.date")}</Th>
+                    <Th>{t("label.status")}</Th>
+                    <Th className="text-right">{t("label.actions")}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queue.map((r) => (
                     <tr key={r.id} className="border-b border-line/60 last:border-0">
                       <Td>
-                        <div className="flex items-center gap-3">
-                          <span
-                            className="size-9 shrink-0 rounded-lg"
-                            style={coverStyle(r.tone ?? "")}
-                          />
-                          <span className="min-w-0">
-                            <span className="block font-bold">{name(r)}</span>
-                          </span>
-                        </div>
+                        <span className="block font-bold">{r.employeeName}</span>
+                        <span className="block text-[10px] text-muted">
+                          {r.employeeCode}
+                        </span>
                       </Td>
-                      <Td className="font-bold text-brand">
+                      <Td className="font-bold">{name({ nameEn: r.rewardNameEn, nameTh: r.rewardNameTh })}</Td>
+                      <Td className="text-muted">
                         {tt(
                           `${formatNumber(r.points)} pts`,
                           `${formatNumber(r.points)} คะแนน`,
                         )}
                       </Td>
+                      <Td className="text-muted">{formatDateTime(r.createdAt)}</Td>
                       <Td>
-                        <div className="flex items-center gap-2">
-                          <IconAction
-                            disabled={busy || r.stock === 0}
-                            aria-label={tt(
-                              `Decrease ${r.nameEn} stock`,
-                              `ลดคงเหลือ ${r.nameEn}`,
-                            )}
-                            onClick={() =>
-                              run(() => adjustRewardStock({ rewardId: r.id, delta: -1 }))
-                            }
-                          >
-                            <Minus size={14} />
-                          </IconAction>
-                          <span className="w-10 text-center font-bold">{r.stock}</span>
-                          <IconAction
-                            disabled={busy}
-                            aria-label={tt(
-                              `Increase ${r.nameEn} stock`,
-                              `เพิ่มคงเหลือ ${r.nameEn}`,
-                            )}
-                            onClick={() =>
-                              run(() => adjustRewardStock({ rewardId: r.id, delta: 1 }))
-                            }
-                          >
-                            <Plus size={14} />
-                          </IconAction>
-                        </div>
-                      </Td>
-                      <Td className="text-muted">
-                        {r.redeemedCount}
-                        {r.preparingCount ? (
-                          <span className="ml-1 text-[10px] text-amber">
-                            {tt(
-                              `(${r.preparingCount} waiting)`,
-                              `(รอส่ง ${r.preparingCount})`,
-                            )}
-                          </span>
-                        ) : null}
-                      </Td>
-                      <Td>
-                        <Pill tone={status.tone}>
-                          {status.key === "off"
-                            ? tt("Delisted", "ซ่อนอยู่")
-                            : status.key === "out"
-                              ? tt("Out of stock", "หมด")
-                              : status.key === "low"
-                                ? tt("Low stock", "เหลือน้อย")
-                                : tt("In stock", "มีสินค้า")}
+                        <Pill
+                          tone={
+                            r.status === "DELIVERED"
+                              ? "success"
+                              : r.status === "CANCELLED"
+                                ? "danger"
+                                : "warn"
+                          }
+                        >
+                          {r.status === "DELIVERED"
+                            ? t("status.delivered")
+                            : r.status === "CANCELLED"
+                              ? tt("Cancelled", "ยกเลิกแล้ว")
+                              : t("status.preparing")}
                         </Pill>
                       </Td>
                       <Td>
-                        <div className="flex justify-end gap-2">
-                          <IconAction
-                            disabled={busy}
-                            aria-label={
-                              r.active
-                                ? tt(`Delist ${r.nameEn}`, `ซ่อน ${r.nameEn}`)
-                                : tt(`List ${r.nameEn}`, `แสดง ${r.nameEn}`)
-                            }
-                            onClick={() =>
-                              run(() =>
-                                setRewardActive({ rewardId: r.id, active: !r.active }),
-                              )
-                            }
-                          >
-                            {r.active ? <EyeOff size={14} /> : <Eye size={14} />}
-                          </IconAction>
-                          <IconAction
-                            tone="brand"
-                            aria-label={`${t("action.edit")} ${r.nameEn}`}
-                            onClick={() => openEdit(r)}
-                          >
-                            <Pencil size={14} />
-                          </IconAction>
-                          <IconAction
-                            tone="danger"
-                            aria-label={`${t("action.delete")} ${r.nameEn}`}
-                            onClick={() => setConfirmDelete(r)}
-                          >
-                            <Trash2 size={14} />
-                          </IconAction>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {r.status === "PREPARING" ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() =>
+                                  run(() =>
+                                    setRedemptionStatus({
+                                      redemptionId: r.id,
+                                      status: "DELIVERED",
+                                    }),
+                                  )
+                                }
+                              >
+                                <Check size={13} className="text-success" />
+                                {tt("Mark delivered", "ทำเครื่องหมายว่าส่งแล้ว")}
+                              </Button>
+                              <IconAction
+                                tone="danger"
+                                disabled={busy}
+                                aria-label={tt(
+                                  `Cancel and refund ${r.employeeName}`,
+                                  `ยกเลิกและคืนคะแนนให้ ${r.employeeName}`,
+                                )}
+                                onClick={() => setConfirmCancel(r.id)}
+                              >
+                                <Undo2 size={14} />
+                              </IconAction>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted">
+                              {r.status === "DELIVERED"
+                                ? tt("Fulfilled", "จัดส่งแล้ว")
+                                : tt("Refunded", "คืนคะแนนแล้ว")}
+                            </span>
+                          )}
                         </div>
                       </Td>
                     </tr>
-                  );
-                })}
-                {visible.length === 0 ? (
-                  <tr>
-                    <Td colSpan={6} className="py-10 text-center text-muted">
-                      {t("admin.noMatch")}
-                    </Td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </TableWrap>
-        </Card>
-      ) : (
-        <Card className="mt-5">
-          <CardHeader
-            title={tt("Redemption requests", "คำขอแลกของรางวัล")}
-            subtitle={tt(
-              "Preparing orders need to be handed over and marked delivered. Cancelling refunds the points and returns the item to stock.",
-              "รายการที่กำลังเตรียมต้องส่งมอบและบันทึกว่าส่งแล้ว การยกเลิกจะคืนคะแนนและนำของกลับเข้าสต๊อก",
-            )}
-            right={
-              <Pill tone={pendingQueue.length ? "warn" : "success"}>
-                {tt(
-                  `${pendingQueue.length} waiting`,
-                  `รอดำเนินการ ${pendingQueue.length} รายการ`,
-                )}
-              </Pill>
-            }
-          />
-          <TableWrap>
-            <table className="w-full min-w-[860px] xl:min-w-0 border-collapse">
-              <thead>
-                <tr className="border-y border-line/70 bg-surface/60">
-                  <Th>{t("label.employee")}</Th>
-                  <Th>{tt("Reward", "ของรางวัล")}</Th>
-                  <Th>{t("label.points")}</Th>
-                  <Th>{t("label.date")}</Th>
-                  <Th>{t("label.status")}</Th>
-                  <Th className="text-right">{t("label.actions")}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {queue.map((r) => (
-                  <tr key={r.id} className="border-b border-line/60 last:border-0">
-                    <Td>
-                      <span className="block font-bold">{r.employeeName}</span>
-                      <span className="block text-[10px] text-muted">
-                        {r.employeeCode}
-                      </span>
-                    </Td>
-                    <Td className="font-bold">{name({ nameEn: r.rewardNameEn, nameTh: r.rewardNameTh })}</Td>
-                    <Td className="text-muted">
-                      {tt(
-                        `${formatNumber(r.points)} pts`,
-                        `${formatNumber(r.points)} คะแนน`,
-                      )}
-                    </Td>
-                    <Td className="text-muted">{formatDateTime(r.createdAt)}</Td>
-                    <Td>
-                      <Pill
-                        tone={
-                          r.status === "DELIVERED"
-                            ? "success"
-                            : r.status === "CANCELLED"
-                              ? "danger"
-                              : "warn"
-                        }
-                      >
-                        {r.status === "DELIVERED"
-                          ? t("status.delivered")
-                          : r.status === "CANCELLED"
-                            ? tt("Cancelled", "ยกเลิกแล้ว")
-                            : t("status.preparing")}
-                      </Pill>
-                    </Td>
-                    <Td>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {r.status === "PREPARING" ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={busy}
-                              onClick={() =>
-                                run(() =>
-                                  setRedemptionStatus({
-                                    redemptionId: r.id,
-                                    status: "DELIVERED",
-                                  }),
-                                )
-                              }
-                            >
-                              <Check size={13} className="text-success" />
-                              {tt("Mark delivered", "ทำเครื่องหมายว่าส่งแล้ว")}
-                            </Button>
-                            <IconAction
-                              tone="danger"
-                              disabled={busy}
-                              aria-label={tt(
-                                `Cancel and refund ${r.employeeName}`,
-                                `ยกเลิกและคืนคะแนนให้ ${r.employeeName}`,
-                              )}
-                              onClick={() => setConfirmCancel(r.id)}
-                            >
-                              <Undo2 size={14} />
-                            </IconAction>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted">
-                            {r.status === "DELIVERED"
-                              ? tt("Fulfilled", "จัดส่งแล้ว")
-                              : tt("Refunded", "คืนคะแนนแล้ว")}
-                          </span>
-                        )}
-                      </div>
-                    </Td>
-                  </tr>
-                ))}
-                {queue.length === 0 ? (
-                  <tr>
-                    <Td colSpan={6} className="py-10 text-center text-muted">
-                      {tt("No redemption requests yet.", "ยังไม่มีคำขอแลกของรางวัล")}
-                    </Td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </TableWrap>
-        </Card>
-      )}
+                  ))}
+                  {queue.length === 0 ? (
+                    <tr>
+                      <Td colSpan={6} className="py-10 text-center text-muted">
+                        {tt("No redemption requests yet.", "ยังไม่มีคำขอแลกของรางวัล")}
+                      </Td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </TableWrap>
+          </Card>
+        )}
+      </SmoothPanel>
 
       {/* ------------------------------------------------- create / edit */}
       <Modal

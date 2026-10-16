@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Megaphone, Pin, Users } from "lucide-react";
 import { Card, EmptyState, Pill, Tabs } from "@/components/ui";
 import { SearchInput } from "@/components/admin/shared";
@@ -14,13 +13,13 @@ import { audienceLabel, channelLabel, excerpt, formatWhen, pick } from "./format
 /**
  * What every signed-in person sees at /announcements.
  *
- * The rows arrive already narrowed to this viewer's audience — the filter and
- * the search box re-run the query on the server through the URL rather than
- * hiding rows that were sent to the browser anyway.
+ * The rows arrive already narrowed to this viewer's audience (the server never
+ * sends anyone else's); the unread filter and the search then work on them in
+ * the browser, instantly.
  */
 export function AnnouncementFeed({
   feed,
-  filter,
+  filter: initialFilter,
   query,
   keepView = false,
 }: {
@@ -31,33 +30,32 @@ export function AnnouncementFeed({
   keepView?: boolean;
 }) {
   const { t, tt, lang } = useT();
-  const router = useRouter();
+  // the whole feed is here: the unread filter and the search are instant,
+  // with the URL kept in step so a refresh or a link opens the same view
+  const [filter, setFilter] = useState(initialFilter);
   const [draftQuery, setDraftQuery] = useState(query);
-  const typed = useRef(false);
-
-  // keep the box in step when the URL changes underneath us (back button)
   useEffect(() => {
-    if (!typed.current) setDraftQuery(query);
-  }, [query]);
+    setFilter(initialFilter);
+    setDraftQuery(query);
+  }, [initialFilter, query]);
 
-  const go = (next: { filter?: "all" | "unread"; q?: string }) => {
+  const sync = (f: "all" | "unread", q: string) => {
     const params = new URLSearchParams();
     if (keepView) params.set("view", "feed");
-    const f = next.filter ?? filter;
-    const q = next.q ?? draftQuery;
     if (f !== "all") params.set("filter", f);
     if (q.trim()) params.set("q", q.trim());
     const qs = params.toString();
-    router.replace(qs ? `/announcements?${qs}` : "/announcements");
+    window.history.replaceState(null, "", qs ? `/announcements?${qs}` : "/announcements");
   };
 
-  // debounce the search so a keystroke is not a query
-  useEffect(() => {
-    if (!typed.current) return;
-    const id = window.setTimeout(() => go({ q: draftQuery }), 350);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftQuery]);
+  const items = useMemo(() => {
+    const needle = draftQuery.trim().toLowerCase();
+    return feed.items.filter((a) => {
+      if (filter === "unread" && a.read) return false;
+      if (!needle) return true;
+      return [a.titleEn, a.titleTh, a.bodyEn, a.bodyTh].some((v) => v?.toLowerCase().includes(needle));
+    });
+  }, [feed.items, filter, draftQuery]);
 
   const nothingAtAll = feed.totalCount === 0;
 
@@ -68,8 +66,8 @@ export function AnnouncementFeed({
           <Tabs
             value={filter}
             onChange={(v) => {
-              typed.current = false;
-              go({ filter: v });
+              setFilter(v);
+              sync(v, draftQuery);
             }}
             options={[
               { value: "all" as const, label: t("label.all") },
@@ -85,8 +83,8 @@ export function AnnouncementFeed({
             className="w-full sm:w-72"
             value={draftQuery}
             onChange={(v) => {
-              typed.current = true;
               setDraftQuery(v);
+              sync(filter, v);
             }}
             placeholder={tt("Search announcements...", "ค้นหาประกาศ...")}
           />
@@ -94,7 +92,7 @@ export function AnnouncementFeed({
       </Card>
 
       <div className="mt-5 space-y-3">
-        {feed.items.map((a) => {
+        {items.map((a) => {
           const title = pick(lang, a.titleEn, a.titleTh);
           const body = pick(lang, a.bodyEn, a.bodyTh);
           return (
@@ -153,7 +151,7 @@ export function AnnouncementFeed({
           );
         })}
 
-        {feed.items.length === 0 ? (
+        {items.length === 0 ? (
           <Card className="p-2">
             <EmptyState
               title={

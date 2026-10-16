@@ -388,7 +388,11 @@ function Slide({
             caption={String(likes)}
             onClick={like}
           >
-            <Heart size={26} className={cn(liked && "fill-accent text-accent")} />
+            <Heart
+              key={liked ? "on" : "off"}
+              size={26}
+              className={cn(liked && "animate-pop fill-accent text-accent")}
+            />
           </Action>
           <Action
             label={muted ? tt("Turn sound on", "เปิดเสียง") : tt("Mute", "ปิดเสียง")}

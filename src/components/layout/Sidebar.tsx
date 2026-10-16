@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { KeyRound, LogOut, User, X } from "lucide-react";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 import { useViewer } from "@/lib/viewer";
 import { useT } from "@/lib/i18n";
-import { navFor } from "./nav";
+import { navFor, type NavItem } from "./nav";
 import { ReportProblemButton } from "@/components/problems/ReportProblem";
 import { useMobileNav } from "./mobile-nav";
 import { BottomNav, NAV_ICON } from "./BottomNav";
@@ -22,14 +22,16 @@ export function Sidebar() {
   const router = useRouter();
   const { open, setOpen } = useMobileNav();
   const [changingPassword, setChangingPassword] = useState(false);
+  // the item just clicked, highlighted before its page has arrived
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => setPending(null), [pathname]);
+  const here = pending ?? pathname;
 
   // the menu is derived from what this person may actually do, so an admin
   // changing a role changes the menu without a deploy
   const items = navFor(viewer);
   if (items.length === 0) return null;
 
-  const isActive = (href: string) =>
-    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   /**
    * Same column for both surfaces. `drawer` only adds phone affordances —
@@ -71,79 +73,17 @@ export function Sidebar() {
         </span>
       </div>
 
-      <nav className="mt-2 flex-1 overflow-y-auto scroll-thin">
-        {items.map((item) => {
-          const Icon = NAV_ICON[item.href];
-          const inGroup = isActive(item.href);
-          return (
-            <div key={item.href}>
-              <Link
-                href={item.href}
-                onClick={() => setOpen(false)}
-                aria-current={inGroup && !item.children ? "page" : undefined}
-                className={cn(
-                  // compact on a short laptop screen so the whole menu fits
-                  // without scrolling; roomy again from 900px of height
-                  "block px-4 py-2.5 text-[15px] font-bold text-white transition-colors duration-150 [@media(min-height:900px)]:py-3.5",
-                  "focus-visible:outline-white focus-visible:-outline-offset-2",
-                  drawer && "flex min-h-[52px] items-center gap-3",
-                  inGroup
-                    ? item.children
-                      ? "bg-brand-dark/60"
-                      : "bg-brand-dark"
-                    : "hover:bg-white/10",
-                )}
-              >
-                {drawer && Icon ? (
-                  <Icon size={18} className="shrink-0 text-white/85" />
-                ) : null}
-                {t(item.labelKey)}
-                {item.href === "/admin/problems" && viewer.openProblems > 0 ? (
-                  <span
-                    className="ml-2 inline-grid min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-5 text-white"
-                    aria-label={tt(`${viewer.openProblems} unclaimed`, `ยังไม่มีผู้รับเรื่อง ${viewer.openProblems} เรื่อง`)}
-                  >
-                    {viewer.openProblems}
-                  </span>
-                ) : null}
-              </Link>
-              {item.children ? (
-                <ul className={cn("pb-1", inGroup && "bg-brand-dark/60")}>
-                  {item.children.map((child) => {
-                    const current = pathname === child.href;
-                    return (
-                      <li key={child.href}>
-                        <Link
-                          href={child.href}
-                          onClick={() => setOpen(false)}
-                          aria-current={current ? "page" : undefined}
-                          className={cn(
-                            "flex items-center gap-2 py-1.5 pl-8 pr-4 text-sm text-white/85 transition-colors duration-150 [@media(min-height:900px)]:py-2",
-                            "focus-visible:outline-white focus-visible:-outline-offset-2",
-                            drawer && "min-h-11 pl-11",
-                            current
-                              ? "bg-brand-dark font-bold text-white"
-                              : "hover:bg-white/10 hover:text-white",
-                          )}
-                        >
-                          <span
-                            aria-hidden
-                            className={cn(
-                              "size-1.5 shrink-0 rounded-full",
-                              current ? "bg-white" : "bg-white/40",
-                            )}
-                          />
-                          {t(child.labelKey)}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </div>
-          );
-        })}
-      </nav>
+      <NavList
+        items={items}
+        here={here}
+        drawer={drawer}
+        openProblems={viewer.openProblems}
+        onNavigate={(href, e) => {
+          setOpen(false);
+          // move the highlight now; the page follows a moment later
+          if (!e.metaKey && !e.ctrlKey && !e.shiftKey && href !== pathname) setPending(href);
+        }}
+      />
 
       <div className="border-t border-white/15 px-4 py-2.5">
         <p className="truncate text-[11px] text-white/70" title={viewer.email}>
@@ -212,5 +152,134 @@ export function Sidebar() {
         />
       ) : null}
     </>
+  );
+}
+
+/* ------------------------------------------------------------- the menu */
+
+const isActiveFor = (here: string) => (href: string) =>
+  href === "/admin" ? here === "/admin" : here === href || here.startsWith(href + "/");
+
+/**
+ * The list of destinations. The highlight is a single block that slides to the
+ * current item, so moving between pages reads as one motion; it moves the
+ * moment an item is clicked, before the page has finished loading.
+ */
+function NavList({
+  items,
+  here,
+  drawer,
+  openProblems,
+  onNavigate,
+}: {
+  items: NavItem[];
+  here: string;
+  drawer: boolean;
+  openProblems: number;
+  onNavigate: (href: string, e: MouseEvent) => void;
+}) {
+  const { t, tt } = useT();
+  const nav = useRef<HTMLElement>(null);
+  const [mark, setMark] = useState<{ top: number; height: number } | null>(null);
+  const isActive = isActiveFor(here);
+
+  const measure = useCallback(() => {
+    const el = nav.current?.querySelector<HTMLElement>('[data-current="true"]');
+    setMark((cur) => {
+      if (!el) return null;
+      const next = { top: el.offsetTop, height: el.offsetHeight };
+      return cur && cur.top === next.top && cur.height === next.height ? cur : next;
+    });
+  }, []);
+  useLayoutEffect(measure, [here, measure]);
+  useEffect(() => {
+    if (!nav.current) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav.current);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  const ready = mark !== null;
+
+  return (
+    <nav ref={nav} className="relative mt-2 flex-1 overflow-y-auto scroll-thin">
+      {ready ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 z-0 bg-brand-dark transition-[top,height] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-r-full before:bg-white"
+          style={{ top: mark.top, height: mark.height }}
+        />
+      ) : null}
+      {items.map((item) => {
+        const Icon = NAV_ICON[item.href];
+        const inGroup = isActive(item.href);
+        const current = inGroup && !item.children;
+        return (
+          <div key={item.href}>
+            <Link
+              href={item.href}
+              onClick={(e) => onNavigate(item.href, e)}
+              data-current={current}
+              aria-current={current ? "page" : undefined}
+              className={cn(
+                // compact on a short laptop screen so the whole menu fits
+                // without scrolling; roomy again from 900px of height
+                "relative z-10 block px-4 py-2.5 text-[15px] font-bold text-white transition-colors duration-150 [@media(min-height:900px)]:py-3.5",
+                "focus-visible:outline-white focus-visible:-outline-offset-2",
+                drawer && "flex min-h-[52px] items-center gap-3",
+                inGroup && item.children
+                  ? "bg-brand-dark/60"
+                  : current
+                    ? !ready && "bg-brand-dark"
+                    : "hover:bg-white/10",
+              )}
+            >
+              {drawer && Icon ? <Icon size={18} className="shrink-0 text-white/85" /> : null}
+              {t(item.labelKey)}
+              {item.href === "/admin/problems" && openProblems > 0 ? (
+                <span
+                  className="ml-2 inline-grid min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-bold leading-5 text-white"
+                  aria-label={tt(`${openProblems} unclaimed`, `ยังไม่มีผู้รับเรื่อง ${openProblems} เรื่อง`)}
+                >
+                  {openProblems}
+                </span>
+              ) : null}
+            </Link>
+            {item.children ? (
+              <ul className={cn("pb-1", inGroup && "bg-brand-dark/60")}>
+                {item.children.map((child) => {
+                  const on = here === child.href;
+                  return (
+                    <li key={child.href}>
+                      <Link
+                        href={child.href}
+                        onClick={(e) => onNavigate(child.href, e)}
+                        data-current={on}
+                        aria-current={on ? "page" : undefined}
+                        className={cn(
+                          "relative z-10 flex items-center gap-2 py-1.5 pl-8 pr-4 text-sm text-white/85 transition-colors duration-150 [@media(min-height:900px)]:py-2",
+                          "focus-visible:outline-white focus-visible:-outline-offset-2",
+                          drawer && "min-h-11 pl-11",
+                          on ? cn("font-bold text-white", !ready && "bg-brand-dark") : "hover:bg-white/10 hover:text-white",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full transition-colors",
+                            on ? "bg-white" : "bg-white/40",
+                          )}
+                        />
+                        {t(child.labelKey)}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        );
+      })}
+    </nav>
   );
 }

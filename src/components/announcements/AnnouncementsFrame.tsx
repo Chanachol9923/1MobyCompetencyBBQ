@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 import { PageHeading, Tabs } from "@/components/ui";
 import { useT } from "@/lib/i18n";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 export type AnnouncementsView = "manage" | "feed";
 
@@ -13,16 +13,21 @@ export type AnnouncementsView = "manage" | "feed";
  * a reload or a shared link lands on the same one.
  */
 export function AnnouncementsFrame({
-  view,
+  view: initialView,
   unreadCount,
-  children,
+  manage,
+  feed,
 }: {
   view: AnnouncementsView;
   unreadCount: number;
-  children: ReactNode;
+  manage: ReactNode;
+  feed: ReactNode;
 }) {
   const { tt } = useT();
-  const router = useRouter();
+  // both panels are on the page; switching is instant and neither loses what
+  // was typed into it, while the URL keeps the tab for a refresh or a link
+  const [view, setView] = useState(initialView);
+  useEffect(() => setView(initialView), [initialView]);
 
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
@@ -43,9 +48,10 @@ export function AnnouncementsFrame({
       <div className="scroll-thin -mx-1 mb-5 overflow-x-auto px-1">
         <Tabs
           value={view}
-          onChange={(next) =>
-            router.push(next === "manage" ? "/announcements" : "/announcements?view=feed")
-          }
+          onChange={(next) => {
+            setView(next);
+            window.history.replaceState(null, "", next === "manage" ? "/announcements" : "/announcements?view=feed");
+          }}
           options={[
             { value: "manage", label: tt("Manage", "จัดการ") },
             {
@@ -59,7 +65,12 @@ export function AnnouncementsFrame({
           className="min-w-max"
         />
       </div>
-      {children}
+      <SmoothPanel swapKey={view}>
+        <div hidden={view !== "manage"}>{manage}</div>
+        <div hidden={view !== "feed"} className="max-w-[900px]">
+          {feed}
+        </div>
+      </SmoothPanel>
     </div>
   );
 }

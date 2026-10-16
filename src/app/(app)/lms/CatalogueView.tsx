@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpen, Clapperboard, FileText, Route, Search } from "lucide-react";
 import { DocumentsGrid, ShortsGrid } from "./MediaViews";
 import {
@@ -34,6 +33,7 @@ import type {
   CatalogueStats,
   PathView,
 } from "@/server/learning";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 export type CatalogueQuery = {
   q: string;
@@ -66,33 +66,38 @@ export function CatalogueView({
   query: CatalogueQuery;
 }) {
   const { t, tt, lang } = useT();
-  const router = useRouter();
-  const [draftQuery, setDraftQuery] = useState(query.q);
-  const typed = useRef(false);
-
-  // keep the box in step when the URL changes underneath us (back button)
-  useEffect(() => {
-    if (!typed.current) setDraftQuery(query.q);
-  }, [query.q]);
+  // everything is on the page already: tabs, search and filters are instant,
+  // and the URL follows along so a link or a refresh lands in the same place
+  const [state, setState] = useState<CatalogueQuery>(query);
+  const draftQuery = state.q;
 
   const go = (next: Partial<CatalogueQuery>) => {
-    const merged = { ...query, q: draftQuery, ...next };
+    const merged = { ...state, ...next };
+    setState(merged);
+    // the address follows outside of React's render, in the event itself
     const params = new URLSearchParams();
     if (merged.q.trim()) params.set("q", merged.q.trim());
     if (merged.category !== "ALL") params.set("category", merged.category);
     if (merged.kind !== "ALL") params.set("kind", merged.kind);
     if (merged.view !== "courses") params.set("view", merged.view);
     const qs = params.toString();
-    router.replace(qs ? `/lms?${qs}` : "/lms");
+    window.history.replaceState(null, "", qs ? `/lms?${qs}` : "/lms");
   };
 
-  // debounce the search so a keystroke is not a query
-  useEffect(() => {
-    if (!typed.current) return;
-    const id = window.setTimeout(() => go({ q: draftQuery }), 350);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftQuery]);
+  // the browser's back/forward lands on another state of this same page
+  useEffect(() => setState(query), [query]);
+
+  const visibleCourses = useMemo(() => {
+    const needle = state.q.trim().toLowerCase();
+    return courses.filter((c) => {
+      if (state.category !== "ALL" && c.category !== state.category) return false;
+      if (state.kind !== "ALL" && !c.kinds.includes(state.kind)) return false;
+      if (!needle) return true;
+      return [c.titleEn, c.titleTh, c.descriptionEn, c.descriptionTh].some((v) =>
+        v?.toLowerCase().includes(needle),
+      );
+    });
+  }, [courses, state.q, state.category, state.kind]);
 
   const categoryOptions = [
     { value: "ALL" as const, label: t("label.all") },
@@ -120,7 +125,7 @@ export function CatalogueView({
         )}
       />
 
-      {query.view === "courses" || query.view === "journey" ? (
+      {state.view === "courses" || state.view === "journey" ? (
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs text-muted">
@@ -151,9 +156,8 @@ export function CatalogueView({
       <Tabs
         className="mb-6 gap-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] sm:gap-6"
         variant="underline"
-        value={query.view}
+        value={state.view}
         onChange={(view) => {
-          typed.current = false;
           go({ view });
         }}
         options={[
@@ -188,87 +192,84 @@ export function CatalogueView({
         ]}
       />
 
-      {query.view === "shorts" ? (
-        <ShortsGrid shorts={shorts} />
-      ) : query.view === "documents" ? (
-        <DocumentsGrid documents={documents} />
-      ) : query.view === "courses" ? (
-        <>
-          <div className="mb-6 flex flex-wrap items-center gap-3">
-            <div className="relative min-w-[220px] flex-1">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-              />
-              <Input
-                value={draftQuery}
-                onChange={(e) => {
-                  typed.current = true;
-                  setDraftQuery(e.target.value);
+      <SmoothPanel swapKey={state.view}>
+        {state.view === "shorts" ? (
+          <ShortsGrid shorts={shorts} />
+        ) : state.view === "documents" ? (
+          <DocumentsGrid documents={documents} />
+        ) : state.view === "courses" ? (
+          <>
+            <div className="mb-6 flex flex-wrap items-center gap-3">
+              <div className="relative min-w-[220px] flex-1">
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                />
+                <Input
+                  value={draftQuery}
+                  onChange={(e) => go({ q: e.target.value })}
+                  placeholder={tt("Search courses", "ค้นหาหลักสูตร")}
+                  className="pl-9"
+                  aria-label={tt("Search courses", "ค้นหาหลักสูตร")}
+                />
+              </div>
+              <Tabs
+                value={state.category}
+                onChange={(category) => {
+                  go({ category });
                 }}
-                placeholder={tt("Search courses", "ค้นหาหลักสูตร")}
-                className="pl-9"
-                aria-label={tt("Search courses", "ค้นหาหลักสูตร")}
+                options={categoryOptions}
               />
             </div>
-            <Tabs
-              value={query.category}
-              onChange={(category) => {
-                typed.current = false;
-                go({ category });
-              }}
-              options={categoryOptions}
-            />
-          </div>
 
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted">
-              {tt("Content type", "ประเภทเนื้อหา")}
-            </span>
-            {kindOptions.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  typed.current = false;
-                  go({ kind: o.value });
-                }}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors max-lg:min-h-11",
-                  query.kind === o.value
-                    ? "border-brand bg-brand text-white"
-                    : "border-line bg-white text-muted hover:border-line-2 hover:text-ink",
-                )}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-
-          {courses.length ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {courses.map((c) => (
-                <CourseCard key={c.id} course={c} />
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted">
+                {tt("Content type", "ประเภทเนื้อหา")}
+              </span>
+              {kindOptions.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => {
+                    go({ kind: o.value });
+                  }}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors max-lg:min-h-11",
+                    state.kind === o.value
+                      ? "border-brand bg-brand text-white"
+                      : "border-line bg-white text-muted hover:border-line-2 hover:text-ink",
+                  )}
+                >
+                  {o.label}
+                </button>
               ))}
             </div>
-          ) : (
-            <Card>
-              <EmptyState
-                title={tt(
-                  "No courses match your filters",
-                  "ไม่พบหลักสูตรที่ตรงกับตัวกรอง",
-                )}
-                hint={tt(
-                  "Try a different search term, category or content type.",
-                  "ลองเปลี่ยนคำค้นหา หมวดหมู่ หรือประเภทเนื้อหา",
-                )}
-              />
-            </Card>
-          )}
-        </>
-      ) : (
-        <JourneyList paths={paths} />
-      )}
+
+            {visibleCourses.length ? (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleCourses.map((c) => (
+                  <CourseCard key={c.id} course={c} />
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <EmptyState
+                  title={tt(
+                    "No courses match your filters",
+                    "ไม่พบหลักสูตรที่ตรงกับตัวกรอง",
+                  )}
+                  hint={tt(
+                    "Try a different search term, category or content type.",
+                    "ลองเปลี่ยนคำค้นหา หมวดหมู่ หรือประเภทเนื้อหา",
+                  )}
+                />
+              </Card>
+            )}
+          </>
+        ) : (
+          <JourneyList paths={paths} />
+        )}
+      </SmoothPanel>
     </div>
   );
 }

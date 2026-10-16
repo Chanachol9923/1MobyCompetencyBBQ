@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { BookOpen, Clapperboard, FileText } from "lucide-react";
 import { PageHeading, Tabs } from "@/components/ui";
 import { LmsAdminScreen } from "@/components/admin/LmsAdminScreen";
@@ -8,6 +8,7 @@ import { DocumentsAdmin, ShortsAdmin } from "@/components/admin/MediaAdminScreen
 import type { LmsAdminData } from "@/components/admin/content-types";
 import type { MediaAdminData } from "@/components/learning/media-types";
 import { useT } from "@/lib/i18n";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 export type LearningAdminTab = "courses" | "shorts" | "documents";
 
@@ -25,8 +26,10 @@ export function LearningAdminScreen({
   media: MediaAdminData;
 }) {
   const { tt } = useT();
-  const router = useRouter();
-  const pathname = usePathname();
+  // both datasets are already here, so a tab switch is instant; the URL
+  // follows so a refresh or a shared link opens the same tab
+  const [current, setCurrent] = useState<LearningAdminTab>(tab);
+  useEffect(() => setCurrent(tab), [tab]);
 
   const label = (Icon: typeof BookOpen, text: string, count: number) => (
     <span className="inline-flex items-center gap-1.5">
@@ -47,10 +50,11 @@ export function LearningAdminScreen({
       <Tabs
         className="mb-6 gap-4 overflow-x-auto whitespace-nowrap [scrollbar-width:none] sm:gap-6"
         variant="underline"
-        value={tab}
-        onChange={(next) =>
-          router.replace(next === "courses" ? pathname : `${pathname}?tab=${next}`, { scroll: false })
-        }
+        value={current}
+        onChange={(next) => {
+          setCurrent(next);
+          window.history.replaceState(null, "", next === "courses" ? "/admin/lms" : `/admin/lms?tab=${next}`);
+        }}
         options={[
           { value: "courses" as const, label: label(BookOpen, tt("Courses", "หลักสูตร"), courses.counts.total) },
           { value: "shorts" as const, label: label(Clapperboard, "Shorts", media.shorts.length) },
@@ -60,13 +64,15 @@ export function LearningAdminScreen({
           },
         ]}
       />
-      {tab === "shorts" ? (
-        <ShortsAdmin data={media} />
-      ) : tab === "documents" ? (
-        <DocumentsAdmin data={media} />
-      ) : (
-        <LmsAdminScreen data={courses} />
-      )}
+      <SmoothPanel swapKey={current}>
+        {current === "shorts" ? (
+          <ShortsAdmin data={media} />
+        ) : current === "documents" ? (
+          <DocumentsAdmin data={media} />
+        ) : (
+          <LmsAdminScreen data={courses} />
+        )}
+      </SmoothPanel>
     </div>
   );
 }

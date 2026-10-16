@@ -148,8 +148,10 @@ export function ProblemsAdminScreen({ data }: { data: ProblemsAdminData }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.problems, filter, query]);
 
+  // the report is already on the page: open it without asking the server,
+  // keeping ?id= in the address so the link can be shared or refreshed
   const open = (id: string | null) =>
-    router.replace(id ? `${pathname}?id=${id}` : pathname, { scroll: false });
+    window.history.replaceState(null, "", id ? `${pathname}?id=${id}` : pathname);
 
   const run = (fn: () => Promise<ProblemResult>) =>
     startTransition(async () => {

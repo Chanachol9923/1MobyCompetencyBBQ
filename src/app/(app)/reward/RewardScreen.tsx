@@ -37,6 +37,7 @@ import type {
   RewardCard,
   RewardScreenData,
 } from "./types";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 const RULE_ICON: Record<string, typeof BookOpen> = {
   book: BookOpen,
@@ -179,148 +180,150 @@ export function RewardScreen({ data }: { data: RewardScreenData }) {
         />
       </div>
 
-      {tab === "stock" ? (
-        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {rewards.map((r) => {
-            const affordable = balance >= r.points;
-            const disabled = !affordable || r.stock === 0 || busy;
-            const Icon = REWARD_ICON[r.image ?? ""] ?? Gift;
-            return (
-              <Card key={r.id} className="flex flex-col overflow-hidden">
-                <div
-                  className={cn(
-                    "grid h-36 place-items-center bg-gradient-to-br text-white",
-                    r.tone ?? "from-[#006bff] to-[#0b1b3f]",
-                  )}
-                >
-                  <Icon size={52} strokeWidth={1.2} />
-                </div>
-                <div className="flex flex-1 flex-col p-4">
-                  <p className="text-sm font-medium text-ink">{name(r)}</p>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-ink">{points(r.points)}</p>
-                      <p className="text-xs text-muted">
-                        {tt(`${r.stock} ${r.stock === 1 ? "item" : "items"} in stock`,
-                          `คงเหลือ ${r.stock} ชิ้น`,
-                        )}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      disabled={disabled}
-                      onClick={() => setPending(r)}
-                      className="shrink-0 whitespace-nowrap"
-                    >
-                      {t("action.redeem")}
-                    </Button>
+      <SmoothPanel swapKey={tab}>
+        {tab === "stock" ? (
+          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {rewards.map((r) => {
+              const affordable = balance >= r.points;
+              const disabled = !affordable || r.stock === 0 || busy;
+              const Icon = REWARD_ICON[r.image ?? ""] ?? Gift;
+              return (
+                <Card key={r.id} className="flex flex-col overflow-hidden">
+                  <div
+                    className={cn(
+                      "grid h-36 place-items-center bg-gradient-to-br text-white",
+                      r.tone ?? "from-[#006bff] to-[#0b1b3f]",
+                    )}
+                  >
+                    <Icon size={52} strokeWidth={1.2} />
                   </div>
-                  {!affordable || r.stock === 0 ? (
-                    <p className="mt-2 text-xs text-accent">
-                      {r.stock === 0
-                        ? t("status.outOfStock")
-                        : tt(
-                            `Need ${formatNumber(r.points - balance)} more points`,
-                            `ต้องการอีก ${formatNumber(r.points - balance)} คะแนน`,
+                  <div className="flex flex-1 flex-col p-4">
+                    <p className="text-sm font-medium text-ink">{name(r)}</p>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-base font-medium text-ink">{points(r.points)}</p>
+                        <p className="text-xs text-muted">
+                          {tt(`${r.stock} ${r.stock === 1 ? "item" : "items"} in stock`,
+                            `คงเหลือ ${r.stock} ชิ้น`,
                           )}
-                    </p>
-                  ) : null}
-                </div>
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => setPending(r)}
+                        className="shrink-0 whitespace-nowrap"
+                      >
+                        {t("action.redeem")}
+                      </Button>
+                    </div>
+                    {!affordable || r.stock === 0 ? (
+                      <p className="mt-2 text-xs text-accent">
+                        {r.stock === 0
+                          ? t("status.outOfStock")
+                          : tt(
+                              `Need ${formatNumber(r.points - balance)} more points`,
+                              `ต้องการอีก ${formatNumber(r.points - balance)} คะแนน`,
+                            )}
+                      </p>
+                    ) : null}
+                  </div>
+                </Card>
+              );
+            })}
+            {rewards.length === 0 ? (
+              <Card className="sm:col-span-2 lg:col-span-3">
+                <EmptyState
+                  title={tt("The catalogue is empty", "ยังไม่มีของรางวัลในรายการ")}
+                  hint={tt(
+                    "An administrator has not published any rewards yet.",
+                    "ผู้ดูแลระบบยังไม่ได้เพิ่มของรางวัล",
+                  )}
+                />
               </Card>
-            );
-          })}
-          {rewards.length === 0 ? (
-            <Card className="sm:col-span-2 lg:col-span-3">
-              <EmptyState
-                title={tt("The catalogue is empty", "ยังไม่มีของรางวัลในรายการ")}
-                hint={tt(
-                  "An administrator has not published any rewards yet.",
-                  "ผู้ดูแลระบบยังไม่ได้เพิ่มของรางวัล",
-                )}
-              />
-            </Card>
-          ) : null}
-        </div>
-      ) : (
-        <Card className="mt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-5">
-            <div className="relative min-w-[220px] flex-1">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-              />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={tt("Search redemption details", "ค้นหารายการที่แลก")}
-                aria-label={tt(
-                  "Search redemption history",
-                  "ค้นหาประวัติการแลกของรางวัล",
-                )}
-                className="pl-9"
-              />
-            </div>
-            <Pill tone="brand">
-              {tt(
-                `${visibleHistory.length} records`,
-                `${visibleHistory.length} รายการ`,
-              )}
-            </Pill>
+            ) : null}
           </div>
-
-          {visibleHistory.length ? (
-            <div className="overflow-x-auto px-5 pb-5">
-              <table className="w-full min-w-[560px] text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs text-muted">
-                    <th className="py-2 font-medium">{t("label.date")}</th>
-                    <th className="py-2 font-medium">
-                      {tt("Redemption details", "รายการที่แลก")}
-                    </th>
-                    <th className="py-2 font-medium">{tt("Points", "คะแนนที่ใช้")}</th>
-                    <th className="py-2 text-right font-medium">{t("label.status")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleHistory.map((row) => (
-                    <tr key={row.id} className="border-b border-line/60 last:border-0">
-                      <td className="py-3 text-muted">
-                        {row.createdAt.slice(0, 10).split("-").reverse().join(" / ")}
-                      </td>
-                      <td className="py-3 font-medium text-ink">{name(row)}</td>
-                      <td className="py-3 text-muted">{points(row.points)}</td>
-                      <td className="py-3 text-right">
-                        <Pill
-                          tone={
-                            row.status === "DELIVERED"
-                              ? "success"
-                              : row.status === "CANCELLED"
-                                ? "danger"
-                                : "warn"
-                          }
-                        >
-                          {row.status === "DELIVERED"
-                            ? t("status.delivered")
-                            : row.status === "CANCELLED"
-                              ? tt("Cancelled — refunded", "ยกเลิก — คืนคะแนนแล้ว")
-                              : t("status.preparing")}
-                        </Pill>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        ) : (
+          <Card className="mt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div className="relative min-w-[220px] flex-1">
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={tt("Search redemption details", "ค้นหารายการที่แลก")}
+                  aria-label={tt(
+                    "Search redemption history",
+                    "ค้นหาประวัติการแลกของรางวัล",
+                  )}
+                  className="pl-9"
+                />
+              </div>
+              <Pill tone="brand">
+                {tt(
+                  `${visibleHistory.length} records`,
+                  `${visibleHistory.length} รายการ`,
+                )}
+              </Pill>
             </div>
-          ) : (
-            <EmptyState
-              title={tt("No redemptions yet", "ยังไม่มีการแลกของรางวัล")}
-              hint={tt("Redeem something from the Rewards tab and it will show up here.",
-                "เลือกแลกของรางวัลจากแท็บรายการของรางวัล แล้วรายการจะแสดงที่นี่",
-              )}
-            />
-          )}
-        </Card>
-      )}
+
+            {visibleHistory.length ? (
+              <div className="overflow-x-auto px-5 pb-5">
+                <table className="w-full min-w-[560px] text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-left text-xs text-muted">
+                      <th className="py-2 font-medium">{t("label.date")}</th>
+                      <th className="py-2 font-medium">
+                        {tt("Redemption details", "รายการที่แลก")}
+                      </th>
+                      <th className="py-2 font-medium">{tt("Points", "คะแนนที่ใช้")}</th>
+                      <th className="py-2 text-right font-medium">{t("label.status")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleHistory.map((row) => (
+                      <tr key={row.id} className="border-b border-line/60 last:border-0">
+                        <td className="py-3 text-muted">
+                          {row.createdAt.slice(0, 10).split("-").reverse().join(" / ")}
+                        </td>
+                        <td className="py-3 font-medium text-ink">{name(row)}</td>
+                        <td className="py-3 text-muted">{points(row.points)}</td>
+                        <td className="py-3 text-right">
+                          <Pill
+                            tone={
+                              row.status === "DELIVERED"
+                                ? "success"
+                                : row.status === "CANCELLED"
+                                  ? "danger"
+                                  : "warn"
+                            }
+                          >
+                            {row.status === "DELIVERED"
+                              ? t("status.delivered")
+                              : row.status === "CANCELLED"
+                                ? tt("Cancelled — refunded", "ยกเลิก — คืนคะแนนแล้ว")
+                                : t("status.preparing")}
+                          </Pill>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                title={tt("No redemptions yet", "ยังไม่มีการแลกของรางวัล")}
+                hint={tt("Redeem something from the Rewards tab and it will show up here.",
+                  "เลือกแลกของรางวัลจากแท็บรายการของรางวัล แล้วรายการจะแสดงที่นี่",
+                )}
+              />
+            )}
+          </Card>
+        )}
+      </SmoothPanel>
 
       <Modal
         open={Boolean(pending)}

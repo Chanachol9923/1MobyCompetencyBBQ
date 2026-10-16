@@ -32,8 +32,9 @@ export default async function AnnouncementsPage({
   const query = typeof params.q === "string" ? params.q.slice(0, 120) : "";
   const canManage = can(viewer.permissions, PERMISSIONS.SEND_ANNOUNCEMENTS);
 
+  // the whole feed in one go; filtering and searching it happen in the browser
   if (!canManage) {
-    const feed = await listMyAnnouncements({ filter, q: query });
+    const feed = await listMyAnnouncements({ filter: "all", q: "" });
     return (
       <div className="mx-auto max-w-[900px] p-6 lg:p-10">
         <AnnouncementsHeading unreadCount={feed.unreadCount} totalCount={feed.totalCount} />
@@ -42,18 +43,7 @@ export default async function AnnouncementsPage({
     );
   }
 
-  // senders land on Manage; the feed is one tab away
-  if (params.view === "feed") {
-    const feed = await listMyAnnouncements({ filter, q: query });
-    return (
-      <AnnouncementsFrame view="feed" unreadCount={feed.unreadCount}>
-        <div className="max-w-[900px]">
-          <AnnouncementFeed feed={feed} filter={filter} query={query} keepView />
-        </div>
-      </AnnouncementsFrame>
-    );
-  }
-
+  // senders get both tabs on one page and switch between them instantly
   const [rows, options, rules, feed] = await Promise.all([
     listAnnouncementsForAdmin(),
     getAudienceOptions(),
@@ -61,8 +51,11 @@ export default async function AnnouncementsPage({
     listMyAnnouncements({ filter: "all", q: "" }),
   ]);
   return (
-    <AnnouncementsFrame view="manage" unreadCount={feed.unreadCount}>
-      <AnnouncementAdmin rows={rows} options={options} rules={rules} embedded />
-    </AnnouncementsFrame>
+    <AnnouncementsFrame
+      view={params.view === "feed" ? "feed" : "manage"}
+      unreadCount={feed.unreadCount}
+      manage={<AnnouncementAdmin rows={rows} options={options} rules={rules} embedded />}
+      feed={<AnnouncementFeed feed={feed} filter={filter} query={query} keepView />}
+    />
   );
 }

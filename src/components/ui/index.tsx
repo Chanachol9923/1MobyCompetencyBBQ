@@ -8,8 +8,10 @@ import {
   Children,
   Fragment,
   isValidElement,
+  useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -163,6 +165,12 @@ export function Stat({
 
 /* -------------------------------------------------------------------- Tabs */
 
+/**
+ * Segmented tabs in three looks. The highlight is one element that slides to
+ * the chosen tab, so a change of tab reads as movement rather than a flicker.
+ * Until it has measured itself (server render, first paint) the chosen tab
+ * carries its own highlight, so nothing ever renders unselected.
+ */
 export function Tabs<T extends string>({
   value,
   onChange,
@@ -176,68 +184,131 @@ export function Tabs<T extends string>({
   variant?: "pill" | "underline" | "dark";
   className?: string;
 }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ left: number; width: number; top: number; height: number } | null>(null);
+
+  const measure = useCallback(() => {
+    const el = wrap.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!el) return setBox(null);
+    setBox((cur) => {
+      const next = { left: el.offsetLeft, width: el.offsetWidth, top: el.offsetTop, height: el.offsetHeight };
+      return cur && cur.left === next.left && cur.width === next.width && cur.top === next.top && cur.height === next.height
+        ? cur
+        : next;
+    });
+  }, []);
+
+  // re-measure when the choice changes, and whenever a label changes width
+  // (a language switch, a count that grows)
+  useLayoutEffect(measure, [value, options.length, measure]);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    el.querySelectorAll("button").forEach((b) => ro.observe(b));
+    return () => ro.disconnect();
+  }, [measure, options.length]);
+
+  // in a row that scrolls sideways, bring the chosen tab into view — sideways
+  // only, so the page itself never moves
+  useEffect(() => {
+    const el = wrap.current;
+    const tab = el?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!el || !tab || el.scrollWidth <= el.clientWidth) return;
+    const left = tab.offsetLeft;
+    if (left < el.scrollLeft || left + tab.offsetWidth > el.scrollLeft + el.clientWidth) {
+      el.scrollTo({ left: Math.max(0, left - 16), behavior: "smooth" });
+    }
+  }, [value]);
+
+  const ready = box !== null;
+  const slide = "pointer-events-none absolute transition-[left,width,top,height] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]";
+
+  const tab = (o: { value: T; label: ReactNode }, cls: (on: boolean) => string) => {
+    const on = value === o.value;
+    return (
+      <button
+        key={o.value}
+        type="button"
+        role="tab"
+        aria-selected={on}
+        onClick={() => {
+          if (!on) onChange(o.value);
+        }}
+        className={cn("relative z-10 transition-colors duration-200", cls(on))}
+      >
+        {o.label}
+      </button>
+    );
+  };
+
   if (variant === "underline") {
     return (
-      <div className={cn("flex gap-6 border-b border-line", className)}>
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "-mb-px border-b-2 pb-2 text-sm font-medium transition-colors max-lg:min-h-11",
-              value === o.value
-                ? "border-brand text-brand"
-                : "border-transparent text-muted hover:text-ink",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
+      <div ref={wrap} role="tablist" className={cn("relative flex gap-6 border-b border-line", className)}>
+        {ready ? (
+          <span
+            aria-hidden
+            className={cn(slide, "bottom-0 h-0.5 rounded-full bg-brand")}
+            style={{ left: box.left, width: box.width }}
+          />
+        ) : null}
+        {options.map((o) =>
+          tab(o, (on) =>
+            cn(
+              "-mb-px border-b-2 pb-2 text-sm font-medium max-lg:min-h-11",
+              on ? "text-brand" : "text-muted hover:text-ink",
+              on && !ready ? "border-brand" : "border-transparent",
+            ),
+          ),
+        )}
       </div>
     );
   }
   if (variant === "dark") {
     return (
       <div
-        className={cn(
-          "inline-flex rounded-full bg-ink p-1 text-sm font-bold text-white",
-          className,
-        )}
+        ref={wrap}
+        role="tablist"
+        className={cn("relative inline-flex rounded-full bg-ink p-1 text-sm font-bold text-white", className)}
       >
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={cn(
-              "rounded-full px-4 py-1.5 transition-colors active:scale-[.98] max-lg:min-h-11",
-              value === o.value ? "bg-accent text-white" : "text-white/70 hover:text-white",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
+        {ready ? (
+          <span
+            aria-hidden
+            className={cn(slide, "rounded-full bg-accent shadow-sm")}
+            style={{ left: box.left, width: box.width, top: box.top, height: box.height }}
+          />
+        ) : null}
+        {options.map((o) =>
+          tab(o, (on) =>
+            cn(
+              "rounded-full px-4 py-1.5 active:scale-[.98] max-lg:min-h-11",
+              on ? "text-white" : "text-white/70 hover:text-white",
+              on && !ready && "bg-accent",
+            ),
+          ),
+        )}
       </div>
     );
   }
   return (
-    <div className={cn("inline-flex gap-1 rounded-lg bg-surface p-1", className)}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "rounded-md px-4 py-1.5 text-sm font-medium transition-colors active:scale-[.98] max-lg:min-h-11",
-            value === o.value
-              ? "bg-brand text-white shadow-sm"
-              : "text-muted hover:text-ink",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
+    <div ref={wrap} role="tablist" className={cn("relative inline-flex gap-1 rounded-lg bg-surface p-1", className)}>
+      {ready ? (
+        <span
+          aria-hidden
+          className={cn(slide, "rounded-md bg-brand shadow-sm")}
+          style={{ left: box.left, width: box.width, top: box.top, height: box.height }}
+        />
+      ) : null}
+      {options.map((o) =>
+        tab(o, (on) =>
+          cn(
+            "rounded-md px-4 py-1.5 text-sm font-medium active:scale-[.98] max-lg:min-h-11",
+            on ? "text-white" : "text-muted hover:text-ink",
+            on && !ready && "bg-brand shadow-sm",
+          ),
+        ),
+      )}
     </div>
   );
 }
@@ -284,17 +355,23 @@ export function Progress({
   showLabel?: boolean;
 }) {
   const v = Math.max(0, Math.min(100, value));
+  // start empty and fill to the value, so a progress bar reads as progress
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const id = window.setTimeout(() => setShown(v), 60);
+    return () => window.clearTimeout(id);
+  }, [v]);
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface">
         <div
           className={cn(
-            "h-full rounded-full transition-[width] duration-500",
+            "h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(.2,.8,.2,1)]",
             tone === "brand" && "bg-brand",
             tone === "amber" && "bg-amber",
             tone === "success" && "bg-success",
           )}
-          style={{ width: `${v}%` }}
+          style={{ width: `${shown}%` }}
         />
       </div>
       {showLabel ? (

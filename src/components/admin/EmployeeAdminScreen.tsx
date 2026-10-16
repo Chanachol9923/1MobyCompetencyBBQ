@@ -13,6 +13,7 @@ import type {
   EmployeeAdminData,
 } from "@/components/admin/content-types";
 import { useT } from "@/lib/i18n";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 export type EmployeeTabKey =
   | "employees"
@@ -91,40 +92,42 @@ export function EmployeeAdminScreen({
           />
         </div>
 
-        {tab === "employees" ? (
-          <EmployeesTab data={data} onResult={setResult} />
-        ) : null}
+        <SmoothPanel swapKey={tab}>
+          {tab === "employees" ? (
+            <EmployeesTab data={data} onResult={setResult} />
+          ) : null}
 
-        {tab === "position" ? (
-          <OrgTab
-            entity="position"
-            rows={positions}
-            departments={departments}
-            onResult={setResult}
-          />
-        ) : null}
+          {tab === "position" ? (
+            <OrgTab
+              entity="position"
+              rows={positions}
+              departments={departments}
+              onResult={setResult}
+            />
+          ) : null}
 
-        {tab === "role" ? (
-          <JobRolesTab rows={jobRoles} onResult={setResult} />
-        ) : null}
+          {tab === "role" ? (
+            <JobRolesTab rows={jobRoles} onResult={setResult} />
+          ) : null}
 
-        {tab === "department" ? (
-          <OrgTab
-            entity="department"
-            rows={departments}
-            departments={departments}
-            onResult={setResult}
-          />
-        ) : null}
+          {tab === "department" ? (
+            <OrgTab
+              entity="department"
+              rows={departments}
+              departments={departments}
+              onResult={setResult}
+            />
+          ) : null}
 
-        {tab === "division" ? (
-          <OrgTab
-            entity="division"
-            rows={divisions}
-            departments={departments}
-            onResult={setResult}
-          />
-        ) : null}
+          {tab === "division" ? (
+            <OrgTab
+              entity="division"
+              rows={divisions}
+              departments={departments}
+              onResult={setResult}
+            />
+          ) : null}
+        </SmoothPanel>
 
       </Card>
 

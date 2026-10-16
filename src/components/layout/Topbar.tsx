@@ -46,6 +46,13 @@ export function Topbar() {
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [unread, setUnread] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  // bumps when the unread count goes up, which swings the bell once
+  const [ring, setRing] = useState(0);
+  const lastUnread = useRef(0);
+  useEffect(() => {
+    if (unread > lastUnread.current) setRing((r) => r + 1);
+    lastUnread.current = unread;
+  }, [unread]);
   const [, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -137,9 +144,12 @@ export function Topbar() {
           aria-expanded={open}
           className="relative grid size-9 place-items-center rounded-lg border border-line text-muted transition-colors duration-150 hover:bg-surface hover:text-ink active:scale-95 active:bg-surface max-lg:size-11"
         >
-          <Bell size={17} />
+          <Bell key={ring} size={17} className={ring ? "animate-bell-ring" : undefined} />
           {unread > 0 ? (
-            <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+            <span
+              key={`badge-${unread}`}
+              className="animate-pop absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-white"
+            >
               {unread}
             </span>
           ) : null}

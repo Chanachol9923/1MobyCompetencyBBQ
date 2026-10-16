@@ -28,6 +28,7 @@ import {
   type GapRow,
 } from "@/components/profile/gap";
 import { useT } from "@/lib/i18n";
+import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 /** A heat-map row: the member plus their cells, keyed by competency id. */
 export type TeamHeatRow = {
@@ -213,7 +214,7 @@ export function DashboardView({
             </div>
           </div>
 
-          <div className="mt-6 grid items-stretch gap-8 lg:grid-cols-2">
+          <SmoothPanel swapKey={activeGroup ?? ""} className="mt-6 grid items-stretch gap-8 lg:grid-cols-2">
             <RadarPanel
               data={radar}
               height={300}
@@ -221,7 +222,7 @@ export function DashboardView({
               fill
             />
             <SkillPointsList rows={groupRows} fill />
-          </div>
+          </SmoothPanel>
 
           <p className="mt-5 text-xs text-muted">
             {tt("The manager's score is the official result; Self is your own rating. Competencies your role is not assessed on are hidden.",

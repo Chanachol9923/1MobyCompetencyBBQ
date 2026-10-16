@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -104,8 +106,12 @@ export function BottomNav() {
     }
   };
 
+  // the tab just tapped lights up at once; the page follows a moment later
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => setPending(null), [pathname]);
+  const here = pending ?? pathname;
   const isActive = (href: string) =>
-    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+    href === "/admin" ? here === "/admin" : here === href || here.startsWith(href + "/");
 
   return (
     <nav
@@ -123,6 +129,9 @@ export function BottomNav() {
             <li key={tab.href} className="min-w-0 flex-1">
               <Link
                 href={tab.href}
+                onClick={() => {
+                  if (tab.href !== pathname) setPending(tab.href);
+                }}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-1 py-1.5",
@@ -130,13 +139,20 @@ export function BottomNav() {
                   active ? "text-brand" : "text-muted",
                 )}
               >
-                <span
-                  className={cn(
-                    "grid h-7 w-12 place-items-center rounded-full transition-colors duration-150",
-                    active && "bg-brand-tint",
-                  )}
-                >
-                  <Icon size={19} strokeWidth={active ? 2.4 : 2} />
+                <span className="relative grid h-7 w-12 place-items-center">
+                  {/* the pill grows in behind the icon of the chosen tab */}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute inset-0 rounded-full bg-brand-tint transition-all duration-300 ease-[cubic-bezier(.2,.8,.2,1)]",
+                      active ? "scale-100 opacity-100" : "scale-50 opacity-0",
+                    )}
+                  />
+                  <Icon
+                    size={19}
+                    strokeWidth={active ? 2.4 : 2}
+                    className={cn("relative transition-transform duration-300", active && "-translate-y-px")}
+                  />
                 </span>
                 <span
                   className={cn(
