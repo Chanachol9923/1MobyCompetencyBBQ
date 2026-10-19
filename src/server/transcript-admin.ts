@@ -32,6 +32,7 @@ export async function getTranscriptStates(input: { urls: string[] }): Promise<Re
       summaryTh: true,
       summaryError: true,
       _count: { select: { cues: true } },
+      cues: { where: { rawText: { not: null } }, select: { id: true } },
     },
   });
   return Object.fromEntries(
@@ -45,6 +46,7 @@ export async function getTranscriptStates(input: { urls: string[] }): Promise<Re
         error: r.error,
         hasSummary: Boolean(r.summaryTh),
         summaryError: r.summaryError,
+        corrected: r.cues.length,
         enabled: Boolean(process.env.TYPHOON_API_KEY),
       } satisfies TranscriptState,
     ]),
@@ -74,7 +76,7 @@ export async function getTranscriptCues(input: { url: string }): Promise<Transcr
   if (!parsed.success) return [];
   const t = await db.mediaTranscript.findUnique({
     where: { mediaUrl: parsed.data },
-    select: { cues: { orderBy: { startMs: "asc" }, select: { id: true, startMs: true, endMs: true, text: true, edited: true } } },
+    select: { cues: { orderBy: { startMs: "asc" }, select: { id: true, startMs: true, endMs: true, text: true, edited: true, rawText: true } } },
   });
   return t?.cues ?? [];
 }

@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
 import { transcribeClip, typhoonConfigured } from "@/server/typhoon";
-import { summarizeTranscript } from "@/server/study-ai";
+import { correctTranscript, summarizeTranscript } from "@/server/study-ai";
 
 /**
  * Turns a video's speech into timed subtitle lines, once per file.
@@ -202,8 +202,30 @@ export async function resetTranscript(mediaUrl: string) {
         keyPointsTh: [],
         keyPointsEn: [],
         summaryError: null,
+        correctedAt: null,
+        correctionError: null,
       },
     });
+  });
+}
+
+/**
+ * Check the subtitles again (the course glossary changed, say): the AI pass
+ * re-runs from what was heard, then the summary is rewritten.
+ */
+export async function recheckTranscripts(urls: string[]) {
+  if (!urls.length) return;
+  await db.mediaTranscript.updateMany({
+    where: { mediaUrl: { in: urls } },
+    data: {
+      correctedAt: null,
+      correctionError: null,
+      summaryTh: null,
+      summaryEn: null,
+      keyPointsTh: [],
+      keyPointsEn: [],
+      summaryError: null,
+    },
   });
 }
 
@@ -234,10 +256,28 @@ async function claim() {
   return null;
 }
 
-/** Ready transcripts that still have no summary (the summary step failed or never ran). */
+/** Ready transcripts whose words have not been checked yet. */
+async function claimCorrection() {
+  return db.mediaTranscript.findFirst({
+    where: { status: "READY", correctedAt: null, correctionError: null },
+    orderBy: { completedAt: "asc" },
+    select: { id: true },
+  });
+}
+
+/**
+ * Ready transcripts that still have no summary (the summary step failed or
+ * never ran). The summary waits for the correction pass, so it is written
+ * from the fixed words.
+ */
 async function claimSummary() {
   return db.mediaTranscript.findFirst({
-    where: { status: "READY", summaryTh: null, summaryError: null },
+    where: {
+      status: "READY",
+      summaryTh: null,
+      summaryError: null,
+      OR: [{ correctedAt: { not: null } }, { correctionError: { not: null } }],
+    },
     orderBy: { completedAt: "asc" },
     select: { id: true },
   });
@@ -305,6 +345,7 @@ export async function runTranscriptJobs(budgetMs: number): Promise<{ remaining: 
           data: { status: "READY", completedAt: new Date(), lockedUntil: null, error: null },
         });
         done++;
+        await correctTranscript(job.id).catch(() => {});
         await summarizeTranscript(job.id).catch(() => {});
       } else {
         // out of time mid-video: release it for the next run
@@ -325,7 +366,12 @@ export async function runTranscriptJobs(budgetMs: number): Promise<{ remaining: 
     }
   }
 
-  // summaries that are still missing
+  // corrections, then summaries, that are still missing
+  while (Date.now() < stopAt - 30_000) {
+    const c = await claimCorrection();
+    if (!c) break;
+    await correctTranscript(c.id).catch(() => {});
+  }
   while (Date.now() < stopAt - 30_000) {
     const s = await claimSummary();
     if (!s) break;
@@ -333,7 +379,13 @@ export async function runTranscriptJobs(budgetMs: number): Promise<{ remaining: 
   }
 
   const left = await db.mediaTranscript.count({
-    where: { status: { in: ["PENDING", "PROCESSING"] }, attempts: { lt: MAX_ATTEMPTS } },
+    where: {
+      OR: [
+        { status: { in: ["PENDING", "PROCESSING"] }, attempts: { lt: MAX_ATTEMPTS } },
+        { status: "READY", correctedAt: null, correctionError: null },
+        { status: "READY", summaryTh: null, summaryError: null },
+      ],
+    },
   });
   return { remaining: left > 0, done };
 }

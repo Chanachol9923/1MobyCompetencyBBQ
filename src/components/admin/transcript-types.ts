@@ -9,6 +9,8 @@ export type TranscriptState = {
   error: string | null;
   hasSummary: boolean;
   summaryError: string | null;
+  /** lines the AI check changed */
+  corrected: number;
   /** false until TYPHOON_API_KEY is set */
   enabled: boolean;
 };
@@ -19,4 +21,6 @@ export type TranscriptAdminCue = {
   endMs: number;
   text: string;
   edited: boolean;
+  /** what speech recognition heard, when the AI check changed the line */
+  rawText: string | null;
 };

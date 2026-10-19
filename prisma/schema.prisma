@@ -508,6 +508,9 @@ model Course {
   hours         Int            @default(0)
   cover         String?
   status        PublishStatus  @default(PUBLISHED)
+  /// words the course uses (product names, English jargon) - helps the AI
+  /// correct what speech recognition mishears
+  glossary      String[]       @default([])
 
   competency  Competency?        @relation(fields: [competencyId], references: [id], onDelete: SetNull)
   chapters    Chapter[]
@@ -1047,6 +1050,10 @@ model MediaTranscript {
   /// a runner holds the job until then; another runner leaves it alone
   lockedUntil DateTime?
 
+  /// when the AI pass that fixes misheard words ran
+  correctedAt     DateTime?
+  correctionError String?
+
   /// written once the transcript is ready
   summaryTh    String?
   summaryEn    String?
@@ -1072,6 +1079,8 @@ model TranscriptCue {
   text         String
   /// corrected by hand; never overwritten by a re-run
   edited       Boolean @default(false)
+  /// what speech recognition heard, kept when the AI pass changed the line
+  rawText      String?
 
   transcript MediaTranscript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
 

@@ -76,6 +76,7 @@ type Draft = {
   competencyId: string;
   hours: string;
   cover: string;
+  glossary: string;
   chapters: ChapterDraft[];
 };
 
@@ -88,6 +89,7 @@ const emptyDraft = (coverIndex: number): Draft => ({
   competencyId: "",
   hours: "6",
   cover: COVERS[coverIndex % COVERS.length]!,
+  glossary: "",
   // a new course starts empty: dropping files is how most chapters arrive
   chapters: [],
 });
@@ -101,6 +103,7 @@ const fromCourse = (c: AdminCourseRow): Draft => ({
   competencyId: c.competencyId ?? "",
   hours: String(c.hours),
   cover: c.cover ?? COVERS[0]!,
+  glossary: c.glossary.join(", "),
   chapters: c.chapters.map(chapterFromRow),
 });
 
@@ -237,6 +240,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       competencyId: draft.competencyId,
       hours: draft.hours,
       cover: draft.cover,
+      glossary: draft.glossary,
       chapters: draft.chapters.filter((ch) => !isBlankChapter(ch)).map(chapterPayload),
     };
     runForm(() => saveCourse(payload));
@@ -573,6 +577,20 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field
+              label={tt("Glossary for subtitles", "คำศัพท์ประจำหลักสูตร (ช่วยถอดเสียง)")}
+              hint={tt(
+                "Product names and English terms the videos use, separated by commas. The AI uses them to fix words speech recognition mishears.",
+                "ชื่อเฉพาะและศัพท์อังกฤษที่วิดีโอพูดถึง คั่นด้วยจุลภาค AI ใช้แก้คำที่ระบบถอดเสียงได้ยินผิด เช่น โค้ด, merge conflict, pull request",
+              )}
+              className="sm:col-span-2"
+            >
+              <Input
+                value={draft.glossary}
+                placeholder={tt("e.g. code review, merge conflict, Jira", "เช่น code review, merge conflict, Jira")}
+                onChange={(e) => set("glossary", e.target.value)}
+              />
             </Field>
           </div>
         ) : (

@@ -13,8 +13,6 @@ import { typhoon, TYPHOON_CHAT_MODEL } from "@/server/typhoon";
  * would add — an English question still finds a Thai lecture.
  */
 
-/* ------------------------------------------------------------ summaries */
-
 const mmss = (ms: number) => {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -46,6 +44,168 @@ function firstJson(text: string): unknown {
     return JSON.parse(body.replace(/,\s*([}\]])/g, "$1"));
   }
 }
+
+/* ----------------------------------------------------------- correction */
+
+/**
+ * What the video is meant to say, for the correction pass: the chapter's (or
+ * short's) own text and the course glossary. Speech recognition hears English
+ * loanwords as Thai look-alikes ("โค้ด" as "คุด"); this is what lets the model
+ * tell which word was meant.
+ */
+async function referenceOf(mediaUrl: string) {
+  const chapter = await db.chapter.findFirst({
+    where: { mediaUrl },
+    select: {
+      titleEn: true,
+      titleTh: true,
+      summaryEn: true,
+      summaryTh: true,
+      bulletsEn: true,
+      bulletsTh: true,
+      course: { select: { titleEn: true, titleTh: true, glossary: true, descriptionTh: true } },
+    },
+  });
+  if (chapter) {
+    return {
+      glossary: chapter.course.glossary,
+      text: [
+        `Course: ${chapter.course.titleTh ?? ""} (${chapter.course.titleEn})`,
+        chapter.course.descriptionTh ?? "",
+        `Chapter: ${chapter.titleTh ?? ""} (${chapter.titleEn})`,
+        chapter.summaryTh ?? "",
+        chapter.summaryEn ?? "",
+        ...chapter.bulletsTh,
+        ...chapter.bulletsEn,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    };
+  }
+  const short = await db.shortVideo.findFirst({
+    where: { videoUrl: mediaUrl },
+    select: {
+      titleEn: true,
+      titleTh: true,
+      captionEn: true,
+      captionTh: true,
+      course: { select: { titleEn: true, glossary: true } },
+    },
+  });
+  return {
+    glossary: short?.course?.glossary ?? [],
+    text: short
+      ? [`Short video: ${short.titleTh ?? ""} (${short.titleEn})`, short.captionTh ?? "", short.captionEn ?? "", short.course?.titleEn ?? ""]
+          .filter(Boolean)
+          .join("\n")
+      : "A training video",
+  };
+}
+
+/** Characters changed between two lines (Levenshtein). */
+function editDistance(a: string, b: string) {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length]!;
+}
+
+/**
+ * A fix is a word or two, not a rewrite: anything that changes much of the
+ * line is the model paraphrasing, and the line stays as it was heard.
+ */
+function plausibleFix(heard: string, fixed: string) {
+  if (!fixed || fixed === heard) return false;
+  const limit = Math.max(8, Math.round(heard.length * 0.4));
+  return editDistance(heard, fixed) <= limit && fixed.length <= heard.length * 1.6 + 10;
+}
+
+const BATCH = 40;
+
+/**
+ * Fix the words speech recognition misheard, using what the video is about.
+ * Runs once after transcription, before the summary. What was heard is kept in
+ * `rawText`, so a later run (say, after the glossary changes) starts again
+ * from it; lines an admin corrected are left alone.
+ */
+export async function correctTranscript(transcriptId: string) {
+  const t = await db.mediaTranscript.findUnique({
+    where: { id: transcriptId },
+    select: {
+      mediaUrl: true,
+      cues: { orderBy: { startMs: "asc" }, select: { id: true, text: true, rawText: true, edited: true } },
+    },
+  });
+  if (!t) return;
+  const lines = t.cues.filter((c) => !c.edited).map((c) => ({ id: c.id, heard: c.rawText ?? c.text, now: c.text }));
+  const ref = await referenceOf(t.mediaUrl);
+  const glossary = ref.glossary.length ? `\nGlossary (spell these exactly so): ${ref.glossary.join(", ")}` : "";
+
+  const ask = async (batch: typeof lines) => {
+    const res = await typhoon().chat.completions.create({
+      model: TYPHOON_CHAT_MODEL,
+      temperature: 0,
+      max_tokens: 3000,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You proofread Thai speech-recognition output from company training videos. " +
+            "The recogniser often mishears English loanwords and technical terms as Thai words that sound alike " +
+            '(for example "คุด" for "โค้ด", "คอนเฟิร์ต" for "conflict"). ' +
+            "Using the reference text and glossary, fix only words that are clearly misheard. " +
+            "Keep everything else exactly as it is: do not rephrase, translate, summarise, reorder or add words. " +
+            "Write a term the way the reference or glossary writes it (Thai or English). If unsure, leave the line alone. " +
+            'Reply with JSON only: {"fixes": [{"n": number, "text": string}]} listing only the lines you changed, with n the line number. ' +
+            'If nothing needs fixing reply {"fixes": []}.',
+        },
+        {
+          role: "user",
+          content: `Reference:\n${ref.text.slice(0, 6000)}${glossary}\n\nLines:\n${batch.map((l, i) => `${i + 1}. ${l.heard}`).join("\n")}`,
+        },
+      ],
+    });
+    const j = firstJson(res.choices[0]?.message?.content ?? "") as { fixes?: unknown };
+    if (!Array.isArray(j.fixes)) throw new Error("The correction came back in the wrong shape.");
+    const out = new Map<number, string>();
+    for (const f of j.fixes as { n?: unknown; text?: unknown }[]) {
+      if (typeof f?.n === "number" && typeof f.text === "string") out.set(f.n - 1, f.text.trim());
+    }
+    return out;
+  };
+
+  try {
+    const updates: { id: string; text: string; rawText: string | null }[] = [];
+    for (let i = 0; i < lines.length; i += BATCH) {
+      const batch = lines.slice(i, i + BATCH);
+      const fixes = await ask(batch).catch(() => ask(batch));
+      batch.forEach((l, k) => {
+        const fixed = fixes.get(k);
+        const text = fixed && plausibleFix(l.heard, fixed) ? fixed : l.heard;
+        if (text !== l.now) updates.push({ id: l.id, text, rawText: text === l.heard ? null : l.heard });
+      });
+    }
+    await db.$transaction([
+      ...updates.map((u) => db.transcriptCue.update({ where: { id: u.id }, data: { text: u.text, rawText: u.rawText } })),
+      db.mediaTranscript.update({ where: { id: transcriptId }, data: { correctedAt: new Date(), correctionError: null } }),
+    ]);
+  } catch (err) {
+    // the subtitles stay as heard; the summary goes ahead without the fixes
+    await db.mediaTranscript.update({
+      where: { id: transcriptId },
+      data: { correctionError: err instanceof Error ? err.message.slice(0, 300) : "Correction failed." },
+    });
+  }
+}
+
+/* ------------------------------------------------------------ summaries */
 
 /**
  * A summary in Thai and English with key points, written once when the

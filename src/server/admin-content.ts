@@ -60,7 +60,7 @@ import type {
   RedemptionQueueRow,
   RewardAdminData,
 } from "@/components/admin/content-types";
-import { enqueueTranscript } from "@/server/transcribe";
+import { enqueueTranscript, recheckTranscripts } from "@/server/transcribe";
 import { kickTranscription } from "@/server/transcript-kick";
 
 /* ------------------------------------------------------------------ plumbing */
@@ -2357,6 +2357,7 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
         hours: true,
         cover: true,
         status: true,
+        glossary: true,
         competency: { select: { nameEn: true, nameTh: true } },
         chapters: {
           orderBy: { sortOrder: "asc" },
@@ -2409,6 +2410,7 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
     hours: c.hours,
     cover: c.cover,
     status: c.status,
+    glossary: c.glossary,
     chapters: c.chapters,
     enrolledCount: c._count.enrollments,
     completedCount: completedByCourse.get(c.id) ?? 0,
@@ -2465,6 +2467,20 @@ const courseFields = z.object({
   competencyId: z.string().max(64).optional().default(""),
   hours: z.coerce.number().int().min(0).max(1000),
   cover: z.string().trim().max(120).optional().default(""),
+  /** comma- or line-separated words the subtitles should spell this way */
+  glossary: z
+    .string()
+    .max(3000)
+    .optional()
+    .default("")
+    .transform((s) => [
+      ...new Set(
+        s
+          .split(/[,\n]/)
+          .map((w) => w.trim())
+          .filter((w) => w && w.length <= 60),
+      ),
+    ].slice(0, 80)),
   chapters: z.array(chapterSchema).max(60),
 });
 
@@ -2509,7 +2525,7 @@ export async function saveCourse(
     const existing = courseId
       ? await db.course.findUnique({
           where: { id: courseId },
-          select: { id: true, titleEn: true, status: true },
+          select: { id: true, titleEn: true, status: true, glossary: true },
         })
       : null;
     if (courseId && !existing) {
@@ -2525,6 +2541,7 @@ export async function saveCourse(
       competencyId: d.competencyId || null,
       hours: d.hours,
       cover: d.cover || null,
+      glossary: d.glossary,
     };
 
     // files the course pointed at before this save, to tidy up afterwards
@@ -2596,6 +2613,10 @@ export async function saveCourse(
     const videos = chapters.filter((c) => c.kind === "VIDEO" && c.mediaUrl).map((c) => c.mediaUrl);
     if (videos.length) {
       await Promise.all(videos.map((u) => enqueueTranscript(u)));
+      // new words to listen for: the subtitles are checked again, then re-summarised
+      if (existing && existing.glossary.join("\n") !== d.glossary.join("\n")) {
+        await recheckTranscripts(videos);
+      }
       await kickTranscription();
     }
     await removeBlobs(before.map((b) => b.mediaUrl).filter((u): u is string => !!u && !kept.has(u)));

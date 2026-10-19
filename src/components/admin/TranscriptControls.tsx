@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Captions, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { Captions, Loader2, RefreshCw, Sparkles, TriangleAlert } from "lucide-react";
 import { Button, Modal } from "@/components/ui";
 import { useUi } from "@/lib/ui-state";
 import { useT } from "@/lib/i18n";
@@ -75,7 +75,12 @@ export function TranscriptBadge({
   const label = !state
     ? tt("No subtitles", "ยังไม่มีคำบรรยาย")
     : state.status === "READY"
-      ? tt(`Subtitles · ${state.cues} lines`, `คำบรรยาย · ${state.cues} ท่อน`)
+      ? state.corrected
+        ? tt(
+            `Subtitles · ${state.cues} lines · AI fixed ${state.corrected}`,
+            `คำบรรยาย · ${state.cues} ท่อน · AI แก้คำ ${state.corrected}`,
+          )
+        : tt(`Subtitles · ${state.cues} lines`, `คำบรรยาย · ${state.cues} ท่อน`)
       : state.status === "FAILED"
         ? tt("Subtitles failed", "สร้างคำบรรยายไม่สำเร็จ")
         : state.status === "PROCESSING"
@@ -175,8 +180,8 @@ function TranscriptEditor({ url, onClose, onSaved }: { url: string; onClose: () 
       onClose={onClose}
       title={tt("Subtitles", "คำบรรยาย (Transcript)")}
       subtitle={tt(
-        "Correct what was misheard. Corrected lines are kept even if the video is transcribed again; empty a line to remove it.",
-        "แก้คำที่ถอดผิด บรรทัดที่แก้แล้วจะไม่ถูกเขียนทับเมื่อถอดเสียงใหม่ ลบข้อความทั้งบรรทัดเพื่อเอาท่อนนั้นออก",
+        "Correct what was misheard. Lines the AI already fixed show what was heard underneath. Your corrections are kept even if the video is transcribed again; empty a line to remove it.",
+        "แก้คำที่ถอดผิด บรรทัดที่ AI แก้ให้แล้วจะแสดงคำที่ได้ยินจริงไว้ด้านล่าง บรรทัดที่คุณแก้จะไม่ถูกเขียนทับเมื่อถอดเสียงใหม่ ลบข้อความทั้งบรรทัดเพื่อเอาท่อนนั้นออก",
       )}
       width="max-w-2xl"
       footer={
@@ -201,15 +206,26 @@ function TranscriptEditor({ url, onClose, onSaved }: { url: string; onClose: () 
           {cues.map((c) => (
             <li key={c.id} className="flex gap-3">
               <span className="w-12 shrink-0 pt-2 font-mono text-xs text-brand">{clock(c.startMs)}</span>
-              <textarea
-                rows={2}
-                defaultValue={c.text}
-                onChange={(e) => setChanged((m) => ({ ...m, [c.id]: e.target.value }))}
-                className={cn(
-                  "min-h-[52px] w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20",
-                  changed[c.id] !== undefined ? "border-amber" : c.edited ? "border-success/50" : "border-line",
-                )}
-              />
+              <div className="min-w-0 flex-1">
+                <textarea
+                  rows={2}
+                  defaultValue={c.text}
+                  onChange={(e) => setChanged((m) => ({ ...m, [c.id]: e.target.value }))}
+                  className={cn(
+                    "min-h-[52px] w-full resize-y rounded-lg border bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20",
+                    changed[c.id] !== undefined ? "border-amber" : c.edited ? "border-success/50" : "border-line",
+                  )}
+                />
+                {c.rawText && !c.edited ? (
+                  <p className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-muted">
+                    <Sparkles size={11} className="mt-0.5 shrink-0 text-brand" />
+                    <span>
+                      {tt("AI fixed · heard: ", "AI แก้แล้ว · ได้ยินว่า: ")}
+                      <span className="line-through decoration-muted/60">{c.rawText}</span>
+                    </span>
+                  </p>
+                ) : null}
+              </div>
             </li>
           ))}
         </ol>

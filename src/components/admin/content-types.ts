@@ -293,6 +293,8 @@ export type AdminCourseRow = {
   hours: number;
   cover: string | null;
   status: PublishStatusValue;
+  /** words the subtitle check should spell this way */
+  glossary: string[];
   chapters: AdminChapterRow[];
   enrolledCount: number;
   completedCount: number;
