@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  Captions,
+  CaptionsOff,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -23,6 +25,7 @@ import {
 import type { PlayerChapter } from "@/server/learning";
 import { PdfReader } from "./PdfReader";
 import { SEEK_EVENT, takePendingSeek, type SeekRequest } from "./lesson-seek";
+import { useCaptionsPref, useTrackMode } from "./captions-pref";
 
 /* ------------------------------------------------------------ kind badges */
 
@@ -102,6 +105,9 @@ function UploadedVideoPanel({ course, chapter, index, complete, onComplete }: Pa
   const [now, setNow] = useState(0);
   const transcript = chapter.transcript;
   const cues = transcript?.cues ?? [];
+  const hasCaptions = transcript?.status === "READY";
+  const [captions, setCaptions] = useCaptionsPref();
+  useTrackMode(video, captions, hasCaptions);
   const finish = () => {
     if (finished.current) return;
     finished.current = true;
@@ -148,8 +154,8 @@ function UploadedVideoPanel({ course, chapter, index, complete, onComplete }: Pa
           }}
           onEnded={finish}
         >
-          {transcript?.status === "READY" ? (
-            <track kind="subtitles" src={`/api/captions/${transcript.id}`} srcLang="th" label="ไทย" default />
+          {hasCaptions && transcript ? (
+            <track kind="subtitles" src={`/api/captions/${transcript.id}`} srcLang="th" label="ไทย" default={captions} />
           ) : null}
           {tt("Your browser cannot play this video.", "เบราว์เซอร์ของคุณเล่นวิดีโอนี้ไม่ได้")}
         </video>
@@ -157,8 +163,25 @@ function UploadedVideoPanel({ course, chapter, index, complete, onComplete }: Pa
           <p className="min-w-0 truncate text-xs text-white/75">
             {pick(lang, course.titleEn, course.titleTh)} · {tt("Chapter", "บทที่")} {index + 1}
           </p>
-          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-white/70">
-            <Clock size={12} /> {chapter.minutes} {tt("min", "นาที")}
+          <span className="inline-flex shrink-0 items-center gap-3">
+            {hasCaptions ? (
+              <button
+                type="button"
+                onClick={() => setCaptions(!captions)}
+                aria-pressed={captions}
+                title={captions ? tt("Hide subtitles", "ปิดคำบรรยาย") : tt("Show subtitles", "เปิดคำบรรยาย")}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition",
+                  captions ? "bg-white/15 text-white hover:bg-white/25" : "text-white/60 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                {captions ? <Captions size={14} /> : <CaptionsOff size={14} />}
+                {tt("Subtitles", "คำบรรยาย")}
+              </button>
+            ) : null}
+            <span className="inline-flex items-center gap-1 text-[11px] text-white/70">
+              <Clock size={12} /> {chapter.minutes} {tt("min", "นาที")}
+            </span>
           </span>
         </div>
       </div>

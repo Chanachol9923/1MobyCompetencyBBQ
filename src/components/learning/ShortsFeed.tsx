@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BookOpen,
+  Captions,
+  CaptionsOff,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -22,6 +24,7 @@ import { recordShortProgress, setShortLike } from "@/server/learning-media";
 import { useT } from "@/lib/i18n";
 import { useUi } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
+import { useCaptionsPref, useTrackMode } from "./captions-pref";
 
 /** How much of a short counts as watched. */
 const WATCHED = 0.9;
@@ -195,6 +198,8 @@ function Slide({
   const [expanded, setExpanded] = useState(false);
   const seen = useRef(false);
   const reported = useRef(short.completed);
+  const [captions, setCaptions] = useCaptionsPref();
+  useTrackMode(video, captions, loaded);
 
   const title = pick(lang, short.titleEn, short.titleTh);
   const caption = short.captionEn ? pick(lang, short.captionEn, short.captionTh) : null;
@@ -306,7 +311,7 @@ function Slide({
             className="absolute inset-0 h-full w-full cursor-pointer object-cover"
           >
             {short.captionsId ? (
-              <track kind="subtitles" src={`/api/captions/${short.captionsId}`} srcLang="th" label="ไทย" default />
+              <track kind="subtitles" src={`/api/captions/${short.captionsId}`} srcLang="th" label="ไทย" default={captions} />
             ) : null}
           </video>
         ) : null}
@@ -405,6 +410,15 @@ function Slide({
           >
             {muted ? <VolumeX size={24} /> : <Volume2 size={24} />}
           </Action>
+          {short.captionsId ? (
+            <Action
+              label={captions ? tt("Hide subtitles", "ปิดคำบรรยาย") : tt("Show subtitles", "เปิดคำบรรยาย")}
+              caption={tt("Subtitles", "คำบรรยาย")}
+              onClick={() => setCaptions(!captions)}
+            >
+              {captions ? <Captions size={24} /> : <CaptionsOff size={24} className="opacity-70" />}
+            </Action>
+          ) : null}
           <Action label={tt("Copy link", "คัดลอกลิงก์")} caption={tt("Share", "แชร์")} onClick={share}>
             <Link2 size={24} />
           </Action>

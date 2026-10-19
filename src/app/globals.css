@@ -258,6 +258,18 @@ body {
 }
 
 /* ---------------------------------------------------------------
+   Subtitles — a line of text on a soft band, not a solid block.
+   The size is relative to the browser's own, which follows the
+   video's height, so full screen still gets bigger text.
+   --------------------------------------------------------------- */
+video::cue {
+  font-size: 85%;
+  line-height: 1.5;
+  color: #fff;
+  background-color: rgb(0 0 0 / 0.6);
+}
+
+/* ---------------------------------------------------------------
    Reduced motion — every animation collapses to an instant state
    change. Not optional.
    --------------------------------------------------------------- */

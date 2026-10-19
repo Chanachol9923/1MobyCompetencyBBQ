@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { CheckCircle2, PlayCircle, RotateCcw, Send, Sparkles, XCircle } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { pick } from "./model";
@@ -18,6 +18,10 @@ type QuizQuestion = {
   stem: string;
   options: string[];
   answerIndex: number;
+  /** why the answer is right (AI quizzes) */
+  explain?: string;
+  /** where in the chapter video the answer is */
+  sec?: number | null;
 };
 
 type AiMessage =
@@ -30,6 +34,8 @@ type AiMessage =
       kind: "quiz";
       text: string;
       questions: QuizQuestion[];
+      /** being written by the AI */
+      loading?: boolean;
     }
   | {
       id: string;
@@ -151,6 +157,7 @@ export function AiStudyPanel({
 }) {
   const { tt, lang } = useT();
   const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -171,20 +178,69 @@ export function AiStudyPanel({
   const push = (...msgs: AiMessage[]) =>
     setMessages((prev) => [...prev, ...msgs]);
 
-  const quickQuiz = () => {
+  const scrollDown = () =>
+    window.requestAnimationFrame(() => {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    });
+
+  /** questions already asked, so "another set" asks new ones */
+  const asked = useRef<string[]>([]);
+  const [quizBusy, setQuizBusy] = useState(false);
+
+  const quickQuiz = async () => {
+    if (quizBusy) return;
+    const id = nextId();
+    const intro = tt(
+      `Three questions on chapter ${chapterNo} — ${chTitle}. Pick an answer to check it.`,
+      `คำถามสามข้อจากบทที่ ${chapterNo} — ${chTitle} เลือกคำตอบเพื่อตรวจได้ทันที`,
+    );
     push(
       { id: nextId(), role: "user", kind: "text", text: labels.quiz },
-      {
-        id: nextId(),
-        role: "ai",
-        kind: "quiz",
-        text: tt(
-          `Three questions on chapter ${chapterNo} — ${chTitle}. Reveal each answer when you are ready.`,
-          `คำถามสามข้อจากบทที่ ${chapterNo} — ${chTitle} กดดูเฉลยได้เมื่อพร้อม`,
-        ),
-        questions: buildQuiz(course, chapter, lang),
-      },
+      { id, role: "ai", kind: "quiz", text: intro, questions: [], loading: true },
     );
+    scrollDown();
+    setQuizBusy(true);
+    const settle = (patch: Partial<Extract<AiMessage, { kind: "quiz" }>> | null, error?: string) =>
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id !== id
+            ? m
+            : patch
+              ? ({ ...m, ...patch, loading: false } as AiMessage)
+              : { id, role: "ai", kind: "text", text: error ?? tt("Something went wrong.", "เกิดข้อผิดพลาด") },
+        ),
+      );
+    try {
+      const res = await fetch("/api/learn/quiz", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ courseId: course.courseId, chapterId: chapter.id, lang, avoid: asked.current.slice(-12) }),
+      });
+      if (res.status === 503) {
+        // the assistant is not switched on: a quiz from the chapter's own points
+        const questions = buildQuiz(course, chapter, lang);
+        if (questions.length) settle({ questions });
+        else settle(null, tt("This chapter has no quiz yet.", "บทนี้ยังไม่มีแบบทดสอบ"));
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as {
+        questions?: QuizQuestion[];
+        remaining?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.questions?.length) {
+        settle(null, data.error);
+        return;
+      }
+      asked.current.push(...data.questions.map((q) => q.stem));
+      if (typeof data.remaining === "number") setRemaining(data.remaining);
+      settle({ questions: data.questions });
+    } catch {
+      settle(null, tt("The assistant could not be reached. Try again.", "ติดต่อผู้ช่วยไม่ได้ ลองใหม่อีกครั้ง"));
+    } finally {
+      setQuizBusy(false);
+      scrollDown();
+    }
   };
 
   const summarize = () => {
@@ -244,12 +300,6 @@ export function AiStudyPanel({
   };
 
   const [busy, setBusy] = useState(false);
-  const [remaining, setRemaining] = useState<number | null>(null);
-
-  const scrollDown = () =>
-    window.requestAnimationFrame(() => {
-      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-    });
 
   const update = (id: string, patch: Partial<Extract<AiMessage, { kind: "answer" }>>) =>
     setMessages((prev) => prev.map((m) => (m.id === id && m.kind === "answer" ? { ...m, ...patch } : m)));
@@ -378,8 +428,9 @@ export function AiStudyPanel({
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={quickQuiz}
-          className="rounded-full bg-accent px-4 py-1.5 text-sm font-bold text-white transition hover:brightness-95 active:scale-[.98]"
+          onClick={() => void quickQuiz()}
+          disabled={quizBusy}
+          className="rounded-full bg-accent px-4 py-1.5 text-sm font-bold text-white transition hover:brightness-95 active:scale-[.98] disabled:opacity-60"
         >
           {labels.quiz}
         </button>
@@ -411,7 +462,14 @@ export function AiStudyPanel({
             )}
           </p>
         ) : (
-          messages.map((m) => <MessageBubble key={m.id} message={m} />)
+          messages.map((m) => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              chapterId={chapter.id}
+              onAnotherQuiz={quizBusy ? undefined : () => void quickQuiz()}
+            />
+          ))
         )}
       </div>
 
@@ -444,7 +502,15 @@ export function AiStudyPanel({
 
 /* ---------------------------------------------------------------- bubbles */
 
-function MessageBubble({ message }: { message: AiMessage }) {
+function MessageBubble({
+  message,
+  chapterId,
+  onAnotherQuiz,
+}: {
+  message: AiMessage;
+  chapterId: string;
+  onAnotherQuiz?: () => void;
+}) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
@@ -471,11 +537,72 @@ function MessageBubble({ message }: { message: AiMessage }) {
           </ul>
         ) : null}
         {message.kind === "quiz" ? (
-          <div className="mt-3 space-y-3">
-            {message.questions.map((q, i) => (
-              <QuizItem key={i} index={i + 1} question={q} />
-            ))}
-          </div>
+          message.loading ? (
+            <Writing />
+          ) : (
+            <Quiz questions={message.questions} chapterId={chapterId} onAnother={onAnotherQuiz} />
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function Writing() {
+  const { tt } = useT();
+  return (
+    <p className="mt-2 flex items-center gap-1.5 py-1 text-sm text-muted">
+      <span className="size-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.2s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-accent [animation-delay:-0.1s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-accent" />
+      <span className="ml-1">{tt("Writing questions from this chapter…", "กำลังออกข้อสอบจากเนื้อหาบทนี้…")}</span>
+    </p>
+  );
+}
+
+function Quiz({
+  questions,
+  chapterId,
+  onAnother,
+}: {
+  questions: QuizQuestion[];
+  chapterId: string;
+  onAnother?: () => void;
+}) {
+  const { tt } = useT();
+  const [picks, setPicks] = useState<(number | null)[]>(() => questions.map(() => null));
+  const answered = picks.filter((p) => p !== null).length;
+  const score = picks.filter((p, i) => p === questions[i]?.answerIndex).length;
+  const done = answered === questions.length;
+
+  return (
+    <div className="mt-3 space-y-3">
+      {questions.map((q, i) => (
+        <QuizItem
+          key={i}
+          index={i + 1}
+          question={q}
+          picked={picks[i] ?? null}
+          chapterId={chapterId}
+          onPick={(o) => setPicks((p) => p.map((x, k) => (k === i && x === null ? o : x)))}
+        />
+      ))}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <p className={cn("text-sm", done ? "font-bold text-ink" : "text-muted")}>
+          {done
+            ? score === questions.length
+              ? tt(`All ${score} right — well done!`, `ถูกครบ ${score} ข้อ เยี่ยมมาก!`)
+              : tt(`${score} of ${questions.length} right`, `ถูก ${score} จาก ${questions.length} ข้อ`)
+            : tt(`${answered} of ${questions.length} answered`, `ตอบแล้ว ${answered} จาก ${questions.length} ข้อ`)}
+        </p>
+        {done && onAnother ? (
+          <button
+            type="button"
+            onClick={onAnother}
+            className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink transition hover:border-brand hover:text-brand"
+          >
+            <RotateCcw size={12} /> {tt("Another set", "ทำชุดใหม่")}
+          </button>
         ) : null}
       </div>
     </div>
@@ -485,53 +612,73 @@ function MessageBubble({ message }: { message: AiMessage }) {
 function QuizItem({
   index,
   question,
+  picked,
+  chapterId,
+  onPick,
 }: {
   index: number;
   question: QuizQuestion;
+  picked: number | null;
+  chapterId: string;
+  onPick: (option: number) => void;
 }) {
   const { tt } = useT();
-  const [picked, setPicked] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState(false);
+  const answered = picked !== null;
+  const right = picked === question.answerIndex;
+  const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
   return (
     <div className="rounded-lg border border-line bg-surface/60 p-3">
       <p className="text-sm font-medium text-ink">
-        Q{index}. {question.stem}
+        {index}. {question.stem}
       </p>
       <div className="mt-2 space-y-1.5">
         {question.options.map((o, i) => {
-          const correct = revealed && i === question.answerIndex;
-          const wrong = revealed && picked === i && i !== question.answerIndex;
+          const isAnswer = answered && i === question.answerIndex;
+          const isWrongPick = answered && picked === i && !right;
           return (
             <button
               key={i}
               type="button"
-              onClick={() => !revealed && setPicked(i)}
+              disabled={answered}
+              onClick={() => onPick(i)}
               className={cn(
-                "block w-full rounded-md border px-3 py-2 text-left text-xs transition-colors",
-                correct && "border-success bg-success/10 text-ink",
-                wrong && "border-accent bg-accent/10 text-ink",
-                !correct && !wrong && picked === i && "border-brand bg-brand-tint",
-                !correct && !wrong && picked !== i && "border-line bg-white text-muted hover:border-line-2",
+                "flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                isAnswer && "border-success bg-success/10 text-ink",
+                isWrongPick && "border-accent bg-accent/10 text-ink",
+                !isAnswer && !isWrongPick && answered && "border-line bg-white text-muted opacity-70",
+                !answered && "border-line bg-white text-ink hover:border-brand hover:bg-brand-tint",
               )}
             >
-              {String.fromCharCode(65 + i)}. {o}
+              <span className="shrink-0 font-bold">{String.fromCharCode(65 + i)}.</span>
+              <span className="min-w-0 flex-1">{o}</span>
+              {isAnswer ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" /> : null}
+              {isWrongPick ? <XCircle size={16} className="mt-0.5 shrink-0 text-accent" /> : null}
             </button>
           );
         })}
       </div>
-      <button
-        type="button"
-        onClick={() => setRevealed((r) => !r)}
-        className="mt-2 text-xs font-medium text-brand hover:underline"
-      >
-        {revealed ? tt("Hide answer", "ซ่อนเฉลย") : tt("Reveal answer", "ดูเฉลย")}
-      </button>
-      {revealed ? (
-        <p className="mt-1 text-xs text-muted">
-          {tt("Correct", "คำตอบที่ถูก")}: {String.fromCharCode(65 + question.answerIndex)} —{" "}
-          {question.options[question.answerIndex]}
-        </p>
+      {answered ? (
+        <div className="mt-2 text-xs leading-relaxed">
+          <p className={cn("font-bold", right ? "text-success" : "text-accent")}>
+            {right
+              ? tt("Correct!", "ถูกต้อง!")
+              : tt(
+                  `Not quite — the answer is ${String.fromCharCode(65 + question.answerIndex)}.`,
+                  `ยังไม่ถูก — คำตอบคือข้อ ${String.fromCharCode(65 + question.answerIndex)}`,
+                )}
+          </p>
+          {question.explain ? <p className="mt-0.5 text-muted">{question.explain}</p> : null}
+          {question.sec != null ? (
+            <button
+              type="button"
+              onClick={() => seekTo(chapterId, question.sec!)}
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-bold text-brand transition hover:bg-brand hover:text-white"
+            >
+              <PlayCircle size={12} /> {tt(`Rewatch at ${clock(question.sec)}`, `ดูช่วงนี้อีกครั้ง ${clock(question.sec)}`)}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
