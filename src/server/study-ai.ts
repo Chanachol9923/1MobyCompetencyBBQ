@@ -59,11 +59,14 @@ export async function summarizeTranscript(transcriptId: string) {
     return;
   }
   const lines = t.cues.map((c) => `[${mmss(c.startMs)}] ${c.text}`).join("\n");
-  try {
+  const context = await contextOf(t.mediaUrl);
+  // JSON mode keeps the reply to the shape; one retry covers a bad sample
+  const ask = async () => {
     const res = await typhoon().chat.completions.create({
       model: TYPHOON_CHAT_MODEL,
       temperature: 0.2,
       max_tokens: 2000,
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
@@ -72,11 +75,13 @@ export async function summarizeTranscript(transcriptId: string) {
             'Reply with JSON only, exactly this shape: {"summary_th": string, "summary_en": string, "key_points_th": string[], "key_points_en": string[]}. ' +
             "Summaries are 2-4 sentences. Give 3-6 key points, each one short sentence, in the order they come up.",
         },
-        { role: "user", content: `${await contextOf(t.mediaUrl)}\n\nTranscript:\n${lines.slice(0, 60_000)}` },
+        { role: "user", content: `${context}\n\nTranscript:\n${lines.slice(0, 60_000)}` },
       ],
     });
-    const raw = res.choices[0]?.message?.content ?? "";
-    const j = firstJson(raw) as Record<string, unknown>;
+    return firstJson(res.choices[0]?.message?.content ?? "") as Record<string, unknown>;
+  };
+  try {
+    const j = await ask().catch(ask);
     const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
     const list = (v: unknown) =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 8) : [];
