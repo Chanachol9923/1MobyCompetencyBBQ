@@ -66,7 +66,7 @@ async function readWindow(url: string, start: number, length: number) {
     "-vn",
     "-ac", "1",
     "-ar", String(RATE),
-    "-af", "silencedetect=noise=-35dB:d=0.3",
+    "-af", "silencedetect=noise=-30dB:d=0.25",
     "-f", "s16le",
     "pipe:1",
   ]);
@@ -85,8 +85,32 @@ async function readWindow(url: string, start: number, length: number) {
   return { pcm: out, silences };
 }
 
+/**
+ * The quietest 40 ms between two points — where to cut when there is no clear
+ * pause (music under the voice, a fast speaker), so a word is not split.
+ */
+function quietestPoint(pcm: Buffer, from: number, to: number): number {
+  const frame = Math.round(RATE * 0.04);
+  let best = (from + to) / 2;
+  let bestEnergy = Infinity;
+  for (let start = Math.floor(from * RATE); start + frame < Math.floor(to * RATE); start += frame) {
+    let e = 0;
+    for (let i = start; i < start + frame; i++) {
+      const at = i * 2;
+      if (at + 1 >= pcm.length) break;
+      const v = pcm.readInt16LE(at);
+      e += v * v;
+    }
+    if (e < bestEnergy) {
+      bestEnergy = e;
+      best = (start + frame / 2) / RATE;
+    }
+  }
+  return best;
+}
+
 /** Where to cut a window: in the middle of a pause, about every 13 seconds. */
-function planCuts(length: number, silences: Silence[]): [number, number][] {
+function planCuts(length: number, silences: Silence[], pcm: Buffer): [number, number][] {
   const mids = silences.map((s) => (s.start + s.end) / 2);
   const cuts: [number, number][] = [];
   let at = 0;
@@ -98,7 +122,7 @@ function planCuts(length: number, silences: Silence[]): [number, number][] {
     const candidates = mids.filter((m) => m >= at + MIN_CUE && m <= at + MAX_CUE);
     const next = candidates.length
       ? candidates.reduce((a, b) => (Math.abs(b - (at + TARGET_CUE)) < Math.abs(a - (at + TARGET_CUE)) ? b : a))
-      : at + TARGET_CUE + 2;
+      : quietestPoint(pcm, at + MIN_CUE + 2, at + MAX_CUE);
     cuts.push([at, next]);
     at = next;
   }
@@ -242,7 +266,7 @@ export async function runTranscriptJobs(budgetMs: number): Promise<{ remaining: 
         const length = Math.min(WINDOW_SEC, duration - cursor);
         const { pcm, silences } = await readWindow(job.mediaUrl, cursor, length);
         const realLength = pcm.length / 2 / RATE;
-        const clips = planCuts(realLength, silences).map(([a, b]) => ({
+        const clips = planCuts(realLength, silences, pcm).map(([a, b]) => ({
           a,
           b,
           pcm: pcm.subarray(Math.floor(a * RATE) * 2, Math.floor(b * RATE) * 2),
