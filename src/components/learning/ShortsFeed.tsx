@@ -304,7 +304,11 @@ function Slide({
             onTimeUpdate={onTime}
             onClick={toggle}
             className="absolute inset-0 h-full w-full cursor-pointer object-cover"
-          />
+          >
+            {short.captionsId ? (
+              <track kind="subtitles" src={`/api/captions/${short.captionsId}`} srcLang="th" label="ไทย" default />
+            ) : null}
+          </video>
         ) : null}
 
         {/* paused indicator */}

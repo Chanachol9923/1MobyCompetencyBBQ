@@ -22,6 +22,7 @@ import {
 } from "./model";
 import type { PlayerChapter } from "@/server/learning";
 import { PdfReader } from "./PdfReader";
+import { SEEK_EVENT, takePendingSeek, type SeekRequest } from "./lesson-seek";
 
 /* ------------------------------------------------------------ kind badges */
 
@@ -96,37 +97,154 @@ const WATCHED = 0.9;
 
 function UploadedVideoPanel({ course, chapter, index, complete, onComplete }: PanelProps) {
   const { tt, lang } = useT();
+  const video = useRef<HTMLVideoElement>(null);
   const finished = useRef(complete);
+  const [now, setNow] = useState(0);
+  const transcript = chapter.transcript;
+  const cues = transcript?.cues ?? [];
   const finish = () => {
     if (finished.current) return;
     finished.current = true;
     onComplete();
   };
 
+  const jump = (sec: number) => {
+    const v = video.current;
+    // a citation of the chapter's text, not of a moment in the video
+    if (!v || sec < 0) return;
+    v.currentTime = sec;
+    void v.play().catch(() => {});
+    v.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+
+  // a transcript line or an assistant citation asked for a moment in this video
+  useEffect(() => {
+    const onSeek = (e: Event) => {
+      const d = (e as CustomEvent<SeekRequest>).detail;
+      if (d.chapterId === chapter.id && takePendingSeek(chapter.id) !== null) jump(d.sec);
+    };
+    window.addEventListener(SEEK_EVENT, onSeek);
+    return () => window.removeEventListener(SEEK_EVENT, onSeek);
+  }, [chapter.id]);
+
   return (
-    <div className="relative w-full overflow-hidden rounded-xl bg-ink">
-      <video
-        src={chapter.mediaUrl ?? undefined}
-        controls
-        playsInline
-        preload="metadata"
-        className="aspect-video w-full bg-black"
-        onTimeUpdate={(e) => {
-          const v = e.currentTarget;
-          if (v.duration && v.currentTime / v.duration >= WATCHED) finish();
-        }}
-        onEnded={finish}
-      >
-        {tt("Your browser cannot play this video.", "เบราว์เซอร์ของคุณเล่นวิดีโอนี้ไม่ได้")}
-      </video>
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-white">
-        <p className="min-w-0 truncate text-xs text-white/75">
-          {pick(lang, course.titleEn, course.titleTh)} · {tt("Chapter", "บทที่")} {index + 1}
-        </p>
-        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-white/70">
-          <Clock size={12} /> {chapter.minutes} {tt("min", "นาที")}
-        </span>
+    <div>
+      <div className="relative w-full overflow-hidden rounded-xl bg-ink">
+        <video
+          ref={video}
+          src={chapter.mediaUrl ?? undefined}
+          controls
+          playsInline
+          preload="metadata"
+          className="aspect-video w-full bg-black"
+          onLoadedMetadata={() => {
+            const sec = takePendingSeek(chapter.id);
+            if (sec !== null) jump(sec);
+          }}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            setNow(v.currentTime);
+            if (v.duration && v.currentTime / v.duration >= WATCHED) finish();
+          }}
+          onEnded={finish}
+        >
+          {transcript?.status === "READY" ? (
+            <track kind="subtitles" src={`/api/captions/${transcript.id}`} srcLang="th" label="ไทย" default />
+          ) : null}
+          {tt("Your browser cannot play this video.", "เบราว์เซอร์ของคุณเล่นวิดีโอนี้ไม่ได้")}
+        </video>
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-white">
+          <p className="min-w-0 truncate text-xs text-white/75">
+            {pick(lang, course.titleEn, course.titleTh)} · {tt("Chapter", "บทที่")} {index + 1}
+          </p>
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-white/70">
+            <Clock size={12} /> {chapter.minutes} {tt("min", "นาที")}
+          </span>
+        </div>
       </div>
+
+      {transcript && transcript.status !== "READY" && transcript.status !== "FAILED" ? (
+        <p className="mt-2 flex items-center gap-2 text-xs text-muted">
+          <span className="size-3 animate-spin rounded-full border-2 border-brand/25 border-t-brand" />
+          {tt(
+            `Making subtitles for this video… ${transcript.percent}%`,
+            `กำลังสร้างคำบรรยายของวิดีโอนี้… ${transcript.percent}%`,
+          )}
+        </p>
+      ) : null}
+
+      {cues.length ? <TranscriptList cues={cues} now={now} onJump={jump} /> : null}
+    </div>
+  );
+}
+
+/** What is said in the video, line by line; the line playing now is lit, and any line plays from there. */
+function TranscriptList({
+  cues,
+  now,
+  onJump,
+}: {
+  cues: { startMs: number; endMs: number; text: string }[];
+  now: number;
+  onJump: (sec: number) => void;
+}) {
+  const { tt } = useT();
+  const [open, setOpen] = useState(false);
+  const list = useRef<HTMLOListElement>(null);
+  const ms = now * 1000;
+  const current = cues.findIndex((c) => ms >= c.startMs && ms < c.endMs);
+
+  // keep the line being spoken in view while the list is open
+  useEffect(() => {
+    if (!open || current < 0) return;
+    const el = list.current?.children[current] as HTMLElement | undefined;
+    const box = list.current;
+    if (el && box && (el.offsetTop < box.scrollTop || el.offsetTop > box.scrollTop + box.clientHeight - 40)) {
+      box.scrollTo({ top: el.offsetTop - 40, behavior: "smooth" });
+    }
+  }, [current, open]);
+
+  const clock = (msv: number) => {
+    const s = Math.floor(msv / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-line/70 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-bold text-ink max-lg:min-h-11"
+      >
+        <span className="inline-flex items-center gap-2">
+          <FileText size={15} className="text-brand" />
+          {tt("Transcript", "ข้อความในวิดีโอ")}
+          <span className="text-xs font-normal text-muted">
+            {tt(`${cues.length} lines`, `${cues.length} ท่อน`)}
+          </span>
+        </span>
+        <ChevronRight size={16} className={cn("text-muted transition-transform", open && "rotate-90")} />
+      </button>
+      {open ? (
+        <ol ref={list} className="scroll-thin relative max-h-72 overflow-y-auto border-t border-line/70 px-2 py-2">
+          {cues.map((c, i) => (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => onJump(c.startMs / 1000)}
+                className={cn(
+                  "flex w-full gap-3 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                  i === current ? "bg-brand-tint text-ink" : "text-muted hover:bg-surface hover:text-ink",
+                )}
+              >
+                <span className="w-10 shrink-0 font-mono text-xs leading-6 text-brand">{clock(c.startMs)}</span>
+                <span className="leading-6">{c.text}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </div>
   );
 }

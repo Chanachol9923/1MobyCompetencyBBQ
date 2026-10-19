@@ -5,11 +5,12 @@ import { Send, Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { pick } from "./model";
+import { seekTo } from "./lesson-seek";
 import type { PlayerChapter, PlayerView } from "@/server/learning";
 
 /** The assistant only ever reads the chapter rows it was handed. */
 type Chapter = PlayerChapter;
-type Course = Pick<PlayerView, "titleEn" | "titleTh" | "chapters">;
+type Course = Pick<PlayerView, "courseId" | "titleEn" | "titleTh" | "chapters">;
 
 /* ---------------------------------------------------------------- message */
 
@@ -29,7 +30,26 @@ type AiMessage =
       kind: "quiz";
       text: string;
       questions: QuizQuestion[];
+    }
+  | {
+      id: string;
+      role: "ai";
+      kind: "answer";
+      /** streamed in as it is written */
+      text: string;
+      sources: AnswerSource[];
+      streaming: boolean;
     };
+
+/** A passage the answer may cite as [S1], [S2]... */
+type AnswerSource = {
+  id: string;
+  chapterId: string;
+  chapterNo: number;
+  chapterTitle: string;
+  /** seconds into the chapter video; null for the chapter's written text */
+  sec: number | null;
+};
 
 let seq = 0;
 const nextId = () => `m${++seq}`;
@@ -168,6 +188,23 @@ export function AiStudyPanel({
   };
 
   const summarize = () => {
+    const t = chapter.transcript;
+    const aiSummary = t ? (lang === "th" ? (t.summaryTh ?? t.summaryEn) : (t.summaryEn ?? t.summaryTh)) : null;
+    if (t && aiSummary) {
+      const points =
+        lang === "th" && t.keyPointsTh.length ? t.keyPointsTh : t.keyPointsEn.length ? t.keyPointsEn : t.keyPointsTh;
+      push(
+        { id: nextId(), role: "user", kind: "text", text: labels.summarize },
+        {
+          id: nextId(),
+          role: "ai",
+          kind: "bullets",
+          text: tt(`Summary of the video in chapter ${chapterNo}: ${aiSummary}`, `สรุปจากวิดีโอบทที่ ${chapterNo}: ${aiSummary}`),
+          bullets: points,
+        },
+      );
+      return;
+    }
     push(
       { id: nextId(), role: "user", kind: "text", text: labels.summarize },
       {
@@ -206,12 +243,85 @@ export function AiStudyPanel({
     );
   };
 
-  const send = () => {
+  const [busy, setBusy] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  const scrollDown = () =>
+    window.requestAnimationFrame(() => {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    });
+
+  const update = (id: string, patch: Partial<Extract<AiMessage, { kind: "answer" }>>) =>
+    setMessages((prev) => prev.map((m) => (m.id === id && m.kind === "answer" ? { ...m, ...patch } : m)));
+
+  /** Ask the real assistant; false when it is not switched on. */
+  const askAi = async (question: string): Promise<boolean> => {
+    const history = messages
+      .filter((m) => m.kind === "text" || m.kind === "answer")
+      .slice(-6)
+      .map((m) => ({ role: m.role === "user" ? ("user" as const) : ("assistant" as const), content: m.text }));
+    const id = nextId();
+    setBusy(true);
+    try {
+      const res = await fetch("/api/learn/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ courseId: course.courseId, chapterId: chapter.id, question, lang, history }),
+      });
+      if (res.status === 503) return false;
+      if (!res.ok || !res.body) {
+        const msg = await res.text().catch(() => "");
+        push({ id, role: "ai", kind: "text", text: msg || tt("Something went wrong.", "เกิดข้อผิดพลาด") });
+        return true;
+      }
+      push({ id, role: "ai", kind: "answer", text: "", sources: [], streaming: true });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let gotMeta = false;
+      let answer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        if (!gotMeta) {
+          const nl = buffer.indexOf("\n");
+          if (nl < 0) continue;
+          try {
+            const meta = JSON.parse(buffer.slice(0, nl)) as { sources: AnswerSource[]; remaining: number };
+            update(id, { sources: meta.sources });
+            setRemaining(meta.remaining);
+          } catch {
+            /* no sources: the answer still shows */
+          }
+          gotMeta = true;
+          buffer = buffer.slice(nl + 1);
+        }
+        answer += buffer;
+        buffer = "";
+        update(id, { text: answer });
+        scrollDown();
+      }
+      update(id, { streaming: false });
+      return true;
+    } catch {
+      push({ id, role: "ai", kind: "text", text: tt("The assistant could not be reached. Try again.", "ติดต่อผู้ช่วยไม่ได้ ลองใหม่อีกครั้ง") });
+      return true;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = async () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || busy) return;
     setDraft("");
-    const hit = bestBullet(text, chBullets);
     push({ id: nextId(), role: "user", kind: "text", text });
+    scrollDown();
+    if (await askAi(text)) return;
+
+    // the assistant is not switched on: answer from the chapter's own points
+    const hit = bestBullet(text, chBullets);
     if (hit) {
       push({
         id: nextId(),
@@ -252,9 +362,15 @@ export function AiStudyPanel({
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-ink">{tt("Ask AI", "ถาม AI")}</h2>
           <p className="text-xs text-muted">
-            {tt("Built-in assistant — answers come from this chapter's own content.",
-              "ผู้ช่วยในตัว — คำตอบมาจากเนื้อหาของบทเรียนนี้",
+            {tt(
+              "Answers come from this course's videos and text, with links to the exact moment. AI can make mistakes.",
+              "ตอบจากวิดีโอและเนื้อหาของคอร์สนี้ พร้อมลิงก์ไปยังช่วงเวลาที่พูดถึง — AI อาจผิดพลาดได้",
             )}
+            {remaining !== null ? (
+              <span className="ml-1 text-line-2">
+                · {tt(`${remaining} questions left today`, `เหลือ ${remaining} คำถามวันนี้`)}
+              </span>
+            ) : null}
           </p>
         </div>
       </div>
@@ -315,7 +431,7 @@ export function AiStudyPanel({
         />
         <button
           type="submit"
-          disabled={!draft.trim()}
+          disabled={!draft.trim() || busy}
           aria-label={tt("Send", "ส่ง")}
           className="grid size-11 shrink-0 place-items-center rounded-full bg-amber text-white transition hover:brightness-95 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
         >
@@ -342,7 +458,11 @@ function MessageBubble({ message }: { message: AiMessage }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-line bg-white px-4 py-3">
-        <p className="text-sm text-ink">{message.text}</p>
+        {message.kind === "answer" ? (
+          <AnswerText message={message} />
+        ) : (
+          <p className="text-sm text-ink">{message.text}</p>
+        )}
         {message.kind === "bullets" ? (
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm font-light text-muted">
             {message.bullets.map((b, i) => (
@@ -414,5 +534,49 @@ function QuizItem({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------- answers */
+
+/** The answer as it streams, with each [S2] turned into a jump to its source. */
+function AnswerText({ message }: { message: Extract<AiMessage, { kind: "answer" }> }) {
+  const { tt } = useT();
+  const byId = new Map(message.sources.map((s) => [s.id, s]));
+  const parts = message.text.split(/(\[S\d+\])/g);
+  const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+  if (!message.text && message.streaming) {
+    return (
+      <p className="flex items-center gap-1.5 py-1 text-sm text-muted">
+        <span className="size-1.5 animate-bounce rounded-full bg-brand [animation-delay:-0.2s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-brand [animation-delay:-0.1s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-brand" />
+        <span className="ml-1">{tt("Reading the course…", "กำลังอ่านเนื้อหาคอร์ส…")}</span>
+      </p>
+    );
+  }
+  return (
+    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+      {parts.map((part, i) => {
+        const m = /^\[(S\d+)\]$/.exec(part);
+        if (!m) return <span key={i}>{part}</span>;
+        const src = byId.get(m[1]!);
+        if (!src) return null;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => seekTo(src.chapterId, src.sec ?? -1)}
+            title={src.chapterTitle}
+            className="mx-0.5 inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 align-baseline text-[11px] font-bold text-brand transition hover:bg-brand hover:text-white"
+          >
+            {tt(`Ch ${src.chapterNo}`, `บทที่ ${src.chapterNo}`)}
+            {src.sec != null ? ` · ${clock(src.sec)}` : ""}
+          </button>
+        );
+      })}
+      {message.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-middle" /> : null}
+    </p>
   );
 }

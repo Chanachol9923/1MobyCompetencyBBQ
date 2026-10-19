@@ -22,6 +22,8 @@ export type ShortCard = {
   likes: number;
   liked: boolean;
   completed: boolean;
+  /** the transcript behind the subtitles, once it is ready */
+  captionsId: string | null;
 };
 
 export type DocumentCard = {
@@ -42,7 +44,7 @@ export type DocumentCard = {
 
 export type MediaStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
-export type AdminShortRow = Omit<ShortCard, "liked" | "completed" | "likes"> & {
+export type AdminShortRow = Omit<ShortCard, "liked" | "completed" | "likes" | "captionsId"> & {
   status: MediaStatus;
   videoBytes: number;
   competencyId: string | null;

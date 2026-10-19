@@ -56,6 +56,7 @@ model User {
   problemReports   ProblemReport[] @relation("ProblemReporter")
   problemsResolved ProblemReport[] @relation("ProblemResolver")
   problemClaims    ProblemClaim[]
+  aiQuestions      AiQuestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1019,4 +1020,75 @@ model DocumentRead {
 
   @@unique([documentId, employeeId])
   @@index([employeeId])
+}
+
+/* ------------------------------------------------------ transcripts and AI */
+
+enum TranscriptStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// A video's speech as timed text: the subtitles, and what the study
+/// assistant reads. Made once per file - keyed by the file's URL, so it serves
+/// a course chapter and a short alike, and a replaced file gets a fresh one.
+model MediaTranscript {
+  id          String           @id @default(cuid())
+  mediaUrl    String           @unique
+  status      TranscriptStatus @default(PENDING)
+  language    String           @default("th")
+  durationSec Float?
+  /// how far transcription has got, so a long video resumes where it stopped
+  cursorSec   Float            @default(0)
+  attempts    Int              @default(0)
+  error       String?
+  /// a runner holds the job until then; another runner leaves it alone
+  lockedUntil DateTime?
+
+  /// written once the transcript is ready
+  summaryTh    String?
+  summaryEn    String?
+  keyPointsTh  String[] @default([])
+  keyPointsEn  String[] @default([])
+  summaryError String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  cues TranscriptCue[]
+
+  @@index([status, updatedAt])
+}
+
+/// One subtitle line.
+model TranscriptCue {
+  id           String  @id @default(cuid())
+  transcriptId String
+  startMs      Int
+  endMs        Int
+  text         String
+  /// corrected by hand; never overwritten by a re-run
+  edited       Boolean @default(false)
+
+  transcript MediaTranscript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+
+  @@index([transcriptId, startMs])
+}
+
+/// Every question put to the study assistant: the daily allowance is counted
+/// from here, and an admin can see what people ask.
+model AiQuestion {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String?
+  question  String
+  answer    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

@@ -36,6 +36,8 @@ import type {
   MediaResult,
   ShortCard,
 } from "@/components/learning/media-types";
+import { enqueueTranscript } from "@/server/transcribe";
+import { kickTranscription } from "@/server/transcript-kick";
 
 /* ---------------------------------------------------------------- plumbing */
 
@@ -100,6 +102,14 @@ export async function getShortsFeed(): Promise<{ shorts: ShortCard[] }> {
       _count: { select: { views: { where: { liked: true } } } },
     },
   });
+  const captions = new Map(
+    (
+      await db.mediaTranscript.findMany({
+        where: { mediaUrl: { in: rows.map((r) => r.videoUrl) }, status: "READY" },
+        select: { id: true, mediaUrl: true },
+      })
+    ).map((t) => [t.mediaUrl, t.id]),
+  );
   const shorts = rows.map((r) => ({
     id: r.id,
     titleEn: r.titleEn,
@@ -114,6 +124,7 @@ export async function getShortsFeed(): Promise<{ shorts: ShortCard[] }> {
     likes: r._count.views,
     liked: r.views[0]?.liked ?? false,
     completed: Boolean(r.views[0]?.completedAt),
+    captionsId: captions.get(r.videoUrl) ?? null,
   }));
   // what you have not finished first, newest first within each group
   shorts.sort((a, b) => Number(a.completed) - Number(b.completed));
@@ -445,6 +456,10 @@ export async function saveShort(input: z.input<typeof shortSchema>): Promise<Med
     const row = existing
       ? await db.shortVideo.update({ where: { id: existing.id }, data, select: { id: true } })
       : await db.shortVideo.create({ data: { ...data, createdById: viewer.userId }, select: { id: true } });
+
+    // subtitles and a summary for the video, made once per file
+    await enqueueTranscript(d.videoUrl);
+    await kickTranscription();
 
     // a replaced video or poster is no longer referenced by anything
     if (existing) {

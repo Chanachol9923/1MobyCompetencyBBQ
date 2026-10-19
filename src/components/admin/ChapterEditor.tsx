@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type MutableRefObject } from "react";
+import { useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -27,6 +27,7 @@ import type { AdminChapterRow, Bilingual, ChapterKindValue } from "@/components/
 import { discardUpload } from "@/server/learning-media";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { TranscriptBadge, useTranscriptStates } from "@/components/admin/TranscriptControls";
 
 /* ------------------------------------------------------------------ model */
 
@@ -321,6 +322,10 @@ export function ChapterEditor({
     update((chs) => chs.filter((c) => c.uid !== ch.uid));
   }
 
+  // subtitles for the videos that are already saved with this course
+  const videoUrls = chapters.filter((c) => c.kind === "VIDEO" && c.media).map((c) => c.media!.url);
+  const { states: subtitles, refresh: refreshSubtitles } = useTranscriptStates(videoUrls);
+
   const totalMinutes = chapters.reduce((a, c) => a + (Number(c.minutes) || 0), 0);
   const needFile = chapters.filter((c) => c.kind !== "ARTICLE");
   const withFile = needFile.filter((c) => c.media).length;
@@ -444,6 +449,11 @@ export function ChapterEditor({
               patch(ch.uid, { media: null });
             }}
             onRetry={uploader.canRetry(ch.uid) ? () => uploader.retry(ch.uid) : undefined}
+            subtitles={
+              ch.kind === "VIDEO" && ch.media ? (
+                <TranscriptBadge url={ch.media.url} state={subtitles[ch.media.url]} onChanged={() => void refreshSubtitles()} />
+              ) : null
+            }
           />
         ))}
       </ol>
@@ -478,7 +488,9 @@ function ChapterRow({
   onPickFile,
   onRemoveFile,
   onRetry,
+  subtitles,
 }: {
+  subtitles?: ReactNode;
   ch: ChapterDraft;
   index: number;
   last: boolean;
@@ -656,6 +668,7 @@ function ChapterRow({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">{ch.media.name}</p>
                     <p className="text-[11px] text-muted">{formatBytes(ch.media.bytes)}</p>
+                    {subtitles ? <div className="mt-1">{subtitles}</div> : null}
                   </div>
                   <a
                     href={ch.media.url}

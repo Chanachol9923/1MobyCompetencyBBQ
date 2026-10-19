@@ -60,6 +60,8 @@ import type {
   RedemptionQueueRow,
   RewardAdminData,
 } from "@/components/admin/content-types";
+import { enqueueTranscript } from "@/server/transcribe";
+import { kickTranscription } from "@/server/transcript-kick";
 
 /* ------------------------------------------------------------------ plumbing */
 
@@ -2590,6 +2592,12 @@ export async function saveCourse(
     const kept = new Set(
       chapters.filter((c) => c.kind !== "ARTICLE" && c.mediaUrl).map((c) => c.mediaUrl),
     );
+    // every chapter video gets subtitles and a summary, made once per file
+    const videos = chapters.filter((c) => c.kind === "VIDEO" && c.mediaUrl).map((c) => c.mediaUrl);
+    if (videos.length) {
+      await Promise.all(videos.map((u) => enqueueTranscript(u)));
+      await kickTranscription();
+    }
     await removeBlobs(before.map((b) => b.mediaUrl).filter((u): u is string => !!u && !kept.has(u)));
 
     await recordActivity({

@@ -1,5 +1,6 @@
 import "server-only";
 import { del } from "@vercel/blob";
+import { db } from "@/lib/db";
 
 /** Files we accept on a record: only ones from our own public Blob store. */
 export const BLOB_URL = /^https:\/\/[a-z0-9]+\.public\.blob\.vercel-storage\.com\//i;
@@ -10,7 +11,10 @@ export const BLOB_URL = /^https:\/\/[a-z0-9]+\.public\.blob\.vercel-storage\.com
  */
 export async function removeBlobs(urls: (string | null | undefined)[]) {
   const list = [...new Set(urls.filter((u): u is string => Boolean(u) && BLOB_URL.test(u!)))];
-  if (!list.length || !process.env.BLOB_READ_WRITE_TOKEN) return;
+  if (!list.length) return;
+  // a deleted file's subtitles and summary go with it
+  await db.mediaTranscript.deleteMany({ where: { mediaUrl: { in: list } } }).catch(() => {});
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
   try {
     await del(list);
   } catch (err) {

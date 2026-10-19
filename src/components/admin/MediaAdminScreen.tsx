@@ -54,6 +54,7 @@ import {
   setShortPublished,
 } from "@/server/learning-media";
 import { useT } from "@/lib/i18n";
+import { TranscriptBadge, useTranscriptStates } from "@/components/admin/TranscriptControls";
 
 /* ------------------------------------------------------------- plumbing */
 
@@ -222,6 +223,7 @@ export function ShortsAdmin({ data }: { data: MediaAdminData }) {
   const posterInput = useRef<HTMLInputElement>(null);
 
   const { shorts } = data;
+  const { states: subtitles, refresh: refreshSubtitles } = useTranscriptStates(shorts.map((s) => s.videoUrl));
   const title = (s: { titleEn: string; titleTh: string | null }) =>
     lang === "th" ? (s.titleTh ?? s.titleEn) : s.titleEn;
   const visible = useMemo(() => {
@@ -369,6 +371,13 @@ export function ShortsAdmin({ data }: { data: MediaAdminData }) {
                         <span className="block font-bold">{title(s)}</span>
                         <span className="block text-[11px] text-muted">
                           {formatDuration(s.durationSec)} · {formatBytes(s.videoBytes)}
+                        </span>
+                        <span className="mt-1 block">
+                          <TranscriptBadge
+                            url={s.videoUrl}
+                            state={subtitles[s.videoUrl]}
+                            onChanged={() => void refreshSubtitles()}
+                          />
                         </span>
                       </span>
                     </div>

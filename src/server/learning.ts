@@ -247,7 +247,21 @@ export type PlayerChapter = {
   pages: number | null;
   /** the uploaded video or PDF; without one the chapter plays its built-in preview */
   mediaUrl: string | null;
+  /** the video's subtitles and summary, once they exist */
+  transcript: ChapterTranscript | null;
   done: boolean;
+};
+
+export type ChapterTranscript = {
+  id: string;
+  status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
+  /** 0-100 while it is being made */
+  percent: number;
+  summaryTh: string | null;
+  summaryEn: string | null;
+  keyPointsTh: string[];
+  keyPointsEn: string[];
+  cues: { startMs: number; endMs: number; text: string }[];
 };
 
 export type PlayerCertificate = {
@@ -386,6 +400,45 @@ export async function getPlayerView(
   ]);
 
   const done = new Set(enrollment?.chapters.map((c) => c.chapterId) ?? []);
+
+  // subtitles and summaries for the chapter videos, one query for the course
+  const videoUrls = course.chapters.filter((c) => c.kind === "VIDEO" && c.mediaUrl).map((c) => c.mediaUrl!);
+  const transcripts = videoUrls.length
+    ? await db.mediaTranscript.findMany({
+        where: { mediaUrl: { in: videoUrls } },
+        select: {
+          id: true,
+          mediaUrl: true,
+          status: true,
+          durationSec: true,
+          cursorSec: true,
+          summaryTh: true,
+          summaryEn: true,
+          keyPointsTh: true,
+          keyPointsEn: true,
+          cues: { orderBy: { startMs: "asc" }, select: { startMs: true, endMs: true, text: true } },
+        },
+      })
+    : [];
+  // without the AI key nothing is being made, so a queued video says nothing
+  const aiOn = Boolean(process.env.TYPHOON_API_KEY);
+  const transcriptByUrl = new Map(
+    transcripts.filter((t) => aiOn || t.status === "READY").map((t): [string, ChapterTranscript] => [
+      t.mediaUrl,
+      {
+        id: t.id,
+        status: t.status,
+        percent:
+          t.status === "READY" ? 100 : t.durationSec ? Math.min(99, Math.round((t.cursorSec / t.durationSec) * 100)) : 0,
+        summaryTh: t.summaryTh,
+        summaryEn: t.summaryEn,
+        keyPointsTh: t.keyPointsTh,
+        keyPointsEn: t.keyPointsEn,
+        cues: t.status === "READY" ? t.cues : [],
+      },
+    ]),
+  );
+
   const progress = courseProgress(
     done.size,
     course.chapters.length,
@@ -402,7 +455,11 @@ export async function getPlayerView(
     category: course.category,
     hours: course.hours,
     cover: course.cover,
-    chapters: course.chapters.map((ch) => ({ ...ch, done: done.has(ch.id) })),
+    chapters: course.chapters.map((ch) => ({
+      ...ch,
+      transcript: ch.mediaUrl ? (transcriptByUrl.get(ch.mediaUrl) ?? null) : null,
+      done: done.has(ch.id),
+    })),
     progress,
     complete: progress >= 100,
     preScore: tests.find((t) => t.kind === "PRE")?.score ?? null,

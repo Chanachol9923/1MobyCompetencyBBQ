@@ -173,6 +173,20 @@ muted with one-tap sound, likes, a link to the full course, and 5 points for wat
 reaching the last page is worth 20 points. Administrators upload all three from one screen, which
 reads a video's length, grabs its cover frame and counts a PDF's pages for them.
 
+**Subtitles and the AI tutor (Typhoon)** — every chapter video and short is transcribed once,
+in the cloud, when it is saved: a Vercel function pulls the audio straight from Blob with ffmpeg
+five minutes at a time, cuts it at pauses into 8–18-second lines and sends each to Typhoon's Thai
+speech recognition (`typhoon-asr-realtime`), which gives timed subtitle lines. Progress is saved
+after every window and the runner hands over to a fresh call of itself, so any length finishes;
+a daily cron sweeps up anything left. The lines become subtitles under the video, a clickable
+transcript, and the material for a Thai/English summary written once by
+`typhoon-v2.5-30b-a3b-instruct`. The study assistant answers questions by retrieval: Typhoon
+widens the question into Thai and English search terms, the course's passages (chapter text plus
+video speech) are ranked with BM25 over words split by Node's built-in Thai segmenter, and the
+answer streams back citing its sources — each citation jumps to that moment in the video.
+Admins see each video's subtitle status, can redo it, and can correct misheard lines (kept on
+re-runs; the summary is rewritten). Set `TYPHOON_API_KEY`; without it everything else still works.
+
 **Problem reports** — a small “Report a problem” link under Log out sends a report (category,
 description, screenshots — paste with Ctrl+V — plus the page and browser, attached automatically).
 Everyone holding `manage_problems` is notified and sees every report under Problem reports: filter

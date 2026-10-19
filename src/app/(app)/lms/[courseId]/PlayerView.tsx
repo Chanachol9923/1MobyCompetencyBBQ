@@ -42,6 +42,7 @@ import {
   skipPreTestAction,
   type LmsError,
 } from "../actions";
+import { SEEK_EVENT, type SeekRequest } from "@/components/learning/lesson-seek";
 
 export function PlayerView({ view }: { view: PlayerData }) {
   return (
@@ -80,6 +81,17 @@ function Player({ view }: { view: PlayerData }) {
   const chapters = view.chapters;
 
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // a citation or transcript line for another chapter: open that chapter;
+  // its video picks up the time as soon as it loads
+  useEffect(() => {
+    const onSeek = (e: Event) => {
+      const { chapterId } = (e as CustomEvent<SeekRequest>).detail;
+      if (view.chapters.some((c) => c.id === chapterId)) setActiveId(chapterId);
+    };
+    window.addEventListener(SEEK_EVENT, onSeek);
+    return () => window.removeEventListener(SEEK_EVENT, onSeek);
+  }, [view.chapters]);
   const [testOpen, setTestOpen] = useState<TestVariant | null>(null);
   /** chapters this visit finished, so the tick does not wait for the refresh */
   const [justDone, setJustDone] = useState<string[]>([]);
