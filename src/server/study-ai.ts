@@ -128,6 +128,10 @@ function plausibleFix(heard: string, fixed: string) {
 
 const BATCH = 40;
 
+/** The recogniser writes sara am as two marks (ํ + า); everything else uses one (ำ). */
+const SARA_AM_SPLIT = new RegExp(String.fromCharCode(0x0e4d, 0x0e32), "g");
+const thaiForm = (s: string) => s.replace(SARA_AM_SPLIT, String.fromCharCode(0x0e33));
+
 /**
  * Fix the words speech recognition misheard, using what the video is about.
  * Runs once after transcription, before the summary. What was heard is kept in
@@ -143,7 +147,9 @@ export async function correctTranscript(transcriptId: string) {
     },
   });
   if (!t) return;
-  const lines = t.cues.filter((c) => !c.edited).map((c) => ({ id: c.id, heard: c.rawText ?? c.text, now: c.text }));
+  const lines = t.cues
+    .filter((c) => !c.edited)
+    .map((c) => ({ id: c.id, heard: thaiForm(c.rawText ?? c.text), now: c.text }));
   const ref = await referenceOf(t.mediaUrl);
   const glossary = ref.glossary.length ? `\nGlossary (spell these exactly so): ${ref.glossary.join(", ")}` : "";
 
@@ -161,7 +167,8 @@ export async function correctTranscript(transcriptId: string) {
             "The recogniser often mishears English loanwords and technical terms as Thai words that sound alike " +
             '(for example "คุด" for "โค้ด", "คอนเฟิร์ต" for "conflict"). ' +
             "Using the reference text and glossary, fix only words that are clearly misheard. " +
-            "Keep everything else exactly as it is: do not rephrase, translate, summarise, reorder or add words. " +
+            "A Thai word that makes sense where it stands is not a mistake, even if another word would also fit. " +
+            "Keep everything else exactly as it is: do not rephrase, translate, summarise, reorder or add words, and do not change spacing. " +
             "Write a term the way the reference or glossary writes it (Thai or English). If unsure, leave the line alone. " +
             'Reply with JSON only: {"fixes": [{"n": number, "text": string}]} listing only the lines you changed, with n the line number. ' +
             'If nothing needs fixing reply {"fixes": []}.',
@@ -187,9 +194,11 @@ export async function correctTranscript(transcriptId: string) {
       const batch = lines.slice(i, i + BATCH);
       const fixes = await ask(batch).catch(() => ask(batch));
       batch.forEach((l, k) => {
-        const fixed = fixes.get(k);
-        const text = fixed && plausibleFix(l.heard, fixed) ? fixed : l.heard;
-        if (text !== l.now) updates.push({ id: l.id, text, rawText: text === l.heard ? null : l.heard });
+        const fixed = fixes.get(k) && thaiForm(fixes.get(k)!);
+        // a reply that only moves spaces about is not a fix
+        const real = fixed && fixed.replace(/\s+/g, "") !== l.heard.replace(/\s+/g, "") && plausibleFix(l.heard, fixed);
+        const text = real ? fixed : l.heard;
+        if (text !== l.now) updates.push({ id: l.id, text, rawText: real ? l.heard : null });
       });
     }
     await db.$transaction([
