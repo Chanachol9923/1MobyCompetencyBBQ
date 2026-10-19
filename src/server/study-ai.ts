@@ -38,7 +38,13 @@ function firstJson(text: string): unknown {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("No JSON in the reply.");
-  return JSON.parse(text.slice(start, end + 1));
+  const body = text.slice(start, end + 1);
+  try {
+    return JSON.parse(body);
+  } catch {
+    // the commonest slip: a trailing comma before a closing bracket
+    return JSON.parse(body.replace(/,\s*([}\]])/g, "$1"));
+  }
 }
 
 /**
@@ -81,7 +87,8 @@ export async function summarizeTranscript(transcriptId: string) {
     return firstJson(res.choices[0]?.message?.content ?? "") as Record<string, unknown>;
   };
   try {
-    const j = await ask().catch(ask);
+    // an occasional reply is malformed even in JSON mode: three tries
+    const j = await ask().catch(ask).catch(ask);
     const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
     const list = (v: unknown) =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 8) : [];
