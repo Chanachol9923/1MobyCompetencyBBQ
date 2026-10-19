@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { CheckCircle2, PlayCircle, RotateCcw, Send, Sparkles, XCircle } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, CheckCircle2, FileText, Info, PlayCircle, RotateCcw, Send, Sparkles, XCircle } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { pick } from "./model";
@@ -44,6 +45,8 @@ type AiMessage =
       /** streamed in as it is written */
       text: string;
       sources: AnswerSource[];
+      /** other courses that may cover a question this one does not */
+      related: RelatedCourse[];
       streaming: boolean;
     };
 
@@ -55,7 +58,16 @@ type AnswerSource = {
   chapterTitle: string;
   /** seconds into the chapter video; null for the chapter's written text */
   sec: number | null;
+  /** the page, when the source is a PDF */
+  page?: number | null;
+  /** a document from the library, when the source is one */
+  documentId?: string | null;
 };
+
+type RelatedCourse = { slug: string; title: string };
+
+/** What the assistant writes first when the course does not cover the question. */
+const OUTSIDE = "[[OUTSIDE]]";
 
 let seq = 0;
 const nextId = () => `m${++seq}`;
@@ -324,7 +336,7 @@ export function AiStudyPanel({
         push({ id, role: "ai", kind: "text", text: msg || tt("Something went wrong.", "เกิดข้อผิดพลาด") });
         return true;
       }
-      push({ id, role: "ai", kind: "answer", text: "", sources: [], streaming: true });
+      push({ id, role: "ai", kind: "answer", text: "", sources: [], related: [], streaming: true });
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -338,8 +350,12 @@ export function AiStudyPanel({
           const nl = buffer.indexOf("\n");
           if (nl < 0) continue;
           try {
-            const meta = JSON.parse(buffer.slice(0, nl)) as { sources: AnswerSource[]; remaining: number };
-            update(id, { sources: meta.sources });
+            const meta = JSON.parse(buffer.slice(0, nl)) as {
+              sources: AnswerSource[];
+              remaining: number;
+              related?: RelatedCourse[];
+            };
+            update(id, { sources: meta.sources, related: meta.related ?? [] });
             setRemaining(meta.remaining);
           } catch {
             /* no sources: the answer still shows */
@@ -362,10 +378,20 @@ export function AiStudyPanel({
     }
   };
 
-  const send = async () => {
+  /** questions about this chapter, offered when a question falls outside the course */
+  const followUps = chBullets.slice(0, 2).map((b) =>
+    tt(`What does "${b.replace(/[.。]$/, "")}" mean in practice?`, `"${b.replace(/[.。]$/, "")}" ในทางปฏิบัติคืออะไร`),
+  );
+
+  const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft("");
+    void ask(text);
+  };
+
+  const ask = async (text: string) => {
+    if (busy) return;
     push({ id: nextId(), role: "user", kind: "text", text });
     scrollDown();
     if (await askAi(text)) return;
@@ -468,6 +494,8 @@ export function AiStudyPanel({
               message={m}
               chapterId={chapter.id}
               onAnotherQuiz={quizBusy ? undefined : () => void quickQuiz()}
+              suggestions={followUps}
+              onAsk={busy ? undefined : (q) => void ask(q)}
             />
           ))
         )}
@@ -506,10 +534,14 @@ function MessageBubble({
   message,
   chapterId,
   onAnotherQuiz,
+  suggestions,
+  onAsk,
 }: {
   message: AiMessage;
   chapterId: string;
   onAnotherQuiz?: () => void;
+  suggestions: string[];
+  onAsk?: (question: string) => void;
 }) {
   if (message.role === "user") {
     return (
@@ -525,7 +557,7 @@ function MessageBubble({
     <div className="flex justify-start">
       <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-line bg-white px-4 py-3">
         {message.kind === "answer" ? (
-          <AnswerText message={message} />
+          <AnswerText message={message} suggestions={suggestions} onAsk={onAsk} />
         ) : (
           <p className="text-sm text-ink">{message.text}</p>
         )}
@@ -686,13 +718,17 @@ function QuizItem({
 
 /* -------------------------------------------------------------- answers */
 
-/** **bold** in an answer is shown bold, not with asterisks. */
+/** **bold** and `code` in an answer are shown as such, not as asterisks and backticks. */
 function withBold(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((t, i) =>
+  return text.split(/(\*\*[^*]+\*\*|`[^`\n]+`)/g).map((t, i) =>
     t.startsWith("**") && t.endsWith("**") && t.length > 4 ? (
       <strong key={i} className="font-bold">
         {t.slice(2, -2)}
       </strong>
+    ) : t.startsWith("`") && t.endsWith("`") && t.length > 2 ? (
+      <code key={i} className="rounded bg-surface px-1 py-0.5 font-mono text-[0.85em] text-ink">
+        {t.slice(1, -1)}
+      </code>
     ) : (
       t
     ),
@@ -700,13 +736,30 @@ function withBold(text: string) {
 }
 
 /** The answer as it streams, with each [S2] turned into a jump to its source. */
-function AnswerText({ message }: { message: Extract<AiMessage, { kind: "answer" }> }) {
+function AnswerText({
+  message,
+  suggestions,
+  onAsk,
+}: {
+  message: Extract<AiMessage, { kind: "answer" }>;
+  suggestions: string[];
+  onAsk?: (question: string) => void;
+}) {
   const { tt } = useT();
   const byId = new Map(message.sources.map((s) => [s.id, s]));
-  const parts = message.text.split(/(\[S\d+\])/g);
   const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
-  if (!message.text && message.streaming) {
+  // "[[OUTSIDE]]" opens a reply the course does not cover; hide it, and any
+  // half of it that has streamed in so far
+  const raw = message.text.trimStart();
+  const outside = raw.startsWith(OUTSIDE);
+  const pending = !outside && raw.length < OUTSIDE.length && OUTSIDE.startsWith(raw);
+  const text = outside ? raw.slice(OUTSIDE.length).trimStart() : pending ? "" : message.text;
+  // only the courses the assistant itself judged a fit, by naming them
+  const related = message.related.filter((r) => text.includes(r.title));
+  const parts = text.split(/(\[S\d+\])/g);
+
+  if (!text && message.streaming) {
     return (
       <p className="flex items-center gap-1.5 py-1 text-sm text-muted">
         <span className="size-1.5 animate-bounce rounded-full bg-brand [animation-delay:-0.2s]" />
@@ -716,27 +769,89 @@ function AnswerText({ message }: { message: Extract<AiMessage, { kind: "answer" 
       </p>
     );
   }
+
+  const chip =
+    "mx-0.5 inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 align-baseline text-[11px] font-bold text-brand transition hover:bg-brand hover:text-white";
+
   return (
-    <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-      {parts.map((part, i) => {
-        const m = /^\[(S\d+)\]$/.exec(part);
-        if (!m) return <span key={i}>{withBold(part)}</span>;
-        const src = byId.get(m[1]!);
-        if (!src) return null;
-        return (
-          <button
-            key={i}
-            type="button"
-            onClick={() => seekTo(src.chapterId, src.sec ?? -1)}
-            title={src.chapterTitle}
-            className="mx-0.5 inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 align-baseline text-[11px] font-bold text-brand transition hover:bg-brand hover:text-white"
-          >
-            {tt(`Ch ${src.chapterNo}`, `บทที่ ${src.chapterNo}`)}
-            {src.sec != null ? ` · ${clock(src.sec)}` : ""}
-          </button>
-        );
-      })}
-      {message.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-middle" /> : null}
-    </p>
+    <div>
+      {outside ? (
+        <p className="mb-2 flex items-start gap-1.5 rounded-lg bg-amber/10 px-3 py-2 text-xs font-medium text-ink">
+          <Info size={14} className="mt-0.5 shrink-0 text-amber" />
+          {tt(
+            "Not covered in this course — anything general below is not from the course material.",
+            "เรื่องนี้ไม่อยู่ในเนื้อหาคอร์สนี้ — คำตอบทั่วไปด้านล่างไม่ได้มาจากเนื้อหาคอร์ส",
+          )}
+        </p>
+      ) : null}
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+        {parts.map((part, i) => {
+          const m = /^\[(S\d+)\]$/.exec(part);
+          if (!m) return <span key={i}>{withBold(part)}</span>;
+          const src = byId.get(m[1]!);
+          if (!src) return null;
+          if (src.documentId) {
+            return (
+              <Link key={i} href={`/lms/documents/${src.documentId}?page=${src.page ?? 1}`} title={src.chapterTitle} className={chip}>
+                <FileText size={11} />
+                {tt(`Doc · p.${src.page}`, `เอกสาร · หน้า ${src.page}`)}
+              </Link>
+            );
+          }
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => seekTo(src.chapterId, src.sec ?? -1)}
+              title={src.chapterTitle}
+              className={chip}
+            >
+              {tt(`Ch ${src.chapterNo}`, `บทที่ ${src.chapterNo}`)}
+              {src.sec != null ? ` · ${clock(src.sec)}` : ""}
+              {src.page != null ? tt(` · p.${src.page}`, ` · หน้า ${src.page}`) : ""}
+            </button>
+          );
+        })}
+        {message.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-middle" /> : null}
+      </p>
+
+      {outside && !message.streaming ? (
+        <div className="mt-3 space-y-2 border-t border-line/70 pt-2.5">
+          {related.length ? (
+            <div>
+              <p className="text-[11px] font-medium text-muted">{tt("Courses that may cover it", "คอร์สที่อาจมีเรื่องนี้")}</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {related.map((r) => (
+                  <Link
+                    key={r.slug}
+                    href={`/lms/${r.slug}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-2.5 py-1 text-xs font-medium text-ink transition hover:border-brand hover:text-brand"
+                  >
+                    <BookOpen size={12} className="text-brand" /> {r.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {onAsk && suggestions.length ? (
+            <div>
+              <p className="text-[11px] font-medium text-muted">{tt("Or ask about this chapter", "หรือลองถามเรื่องในบทนี้")}</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {suggestions.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => onAsk(q)}
+                    className="rounded-full bg-surface px-2.5 py-1 text-left text-xs text-ink transition hover:bg-brand-tint hover:text-brand"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

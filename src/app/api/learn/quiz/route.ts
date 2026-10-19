@@ -132,6 +132,15 @@ export async function POST(request: Request) {
     : null;
   const speech =
     transcript?.status === "READY" ? transcript.cues.map((c) => `[${mmss(c.startMs)}] ${c.text}`).join("\n") : "";
+  // a PDF chapter: the pages the assistant has read
+  const pdf = chapter.mediaUrl
+    ? await db.documentText.findUnique({
+        where: { fileUrl: chapter.mediaUrl },
+        select: { status: true, pages: { orderBy: { page: "asc" }, select: { page: true, text: true } } },
+      })
+    : null;
+  const pdfText =
+    pdf?.status === "READY" ? pdf.pages.map((p) => `[page ${p.page}]\n${p.text}`).join("\n\n") : "";
 
   const material = [
     `Course: ${chapter.course.titleTh ?? ""} (${chapter.course.titleEn})`,
@@ -143,6 +152,7 @@ export async function POST(request: Request) {
     chapter.bodyTh ?? "",
     chapter.bodyEn ?? "",
     speech ? `Video transcript:\n${speech}` : "",
+    pdfText ? `PDF:\n${pdfText}` : "",
   ]
     .filter(Boolean)
     .join("\n")

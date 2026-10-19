@@ -14,6 +14,7 @@ export async function removeBlobs(urls: (string | null | undefined)[]) {
   if (!list.length) return;
   // a deleted file's subtitles and summary go with it
   await db.mediaTranscript.deleteMany({ where: { mediaUrl: { in: list } } }).catch(() => {});
+  await db.documentText.deleteMany({ where: { fileUrl: { in: list } } }).catch(() => {});
   if (!process.env.BLOB_READ_WRITE_TOKEN) return;
   try {
     await del(list);

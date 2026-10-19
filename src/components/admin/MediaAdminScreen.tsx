@@ -54,6 +54,7 @@ import {
   setShortPublished,
 } from "@/server/learning-media";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { TranscriptBadge, useTranscriptStates } from "@/components/admin/TranscriptControls";
 
 /* ------------------------------------------------------------- plumbing */
@@ -811,6 +812,20 @@ export function DocumentsAdmin({ data }: { data: MediaAdminData }) {
                         <span className="block font-bold">{title(d)}</span>
                         <span className="block text-[11px] text-muted">
                           {d.pages} {tt("pages", "หน้า")} · {formatBytes(d.fileBytes)}
+                        </span>
+                        <span
+                          className={cn(
+                            "mt-0.5 block text-[11px]",
+                            d.aiRead?.status === "READY" ? "text-success" : d.aiRead?.status === "FAILED" ? "text-accent" : "text-muted",
+                          )}
+                        >
+                          {!d.aiRead
+                            ? tt("AI has not read it yet", "AI ยังไม่ได้อ่านเอกสารนี้")
+                            : d.aiRead.status === "READY"
+                              ? tt("AI has read it — used in answers and quizzes", "AI อ่านแล้ว — ใช้ตอบคำถามและออกข้อสอบ")
+                              : d.aiRead.status === "FAILED"
+                                ? tt("AI could not read it", "AI อ่านเอกสารนี้ไม่สำเร็จ")
+                                : tt(`AI is reading… ${d.aiRead.pagesRead}/${d.pages} pages`, `AI กำลังอ่าน… ${d.aiRead.pagesRead}/${d.pages} หน้า`)}
                         </span>
                       </span>
                     </div>

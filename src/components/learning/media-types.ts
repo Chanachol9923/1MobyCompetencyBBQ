@@ -62,6 +62,8 @@ export type AdminDocumentRow = Omit<DocumentCard, "lastPage" | "completed"> & {
   readers: number;
   completions: number;
   updatedAt: string;
+  /** whether the study assistant has read the PDF yet */
+  aiRead: { status: "PENDING" | "PROCESSING" | "READY" | "FAILED"; pagesRead: number } | null;
 };
 
 export type MediaOption = { id: string; nameEn: string; nameTh: string | null };

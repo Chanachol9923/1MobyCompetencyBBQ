@@ -310,6 +310,10 @@ export type Passage = {
   chapterTitle: string;
   /** seconds into the chapter's video, when the passage is speech */
   sec: number | null;
+  /** the page, when the passage is from a PDF */
+  page?: number | null;
+  /** a document from the library (not a chapter), when it is from one */
+  documentId?: string | null;
   text: string;
 };
 
@@ -329,9 +333,22 @@ export async function coursePassages(courseId: string, lang: "th" | "en") {
       bodyEn: true,
       bodyTh: true,
       mediaUrl: true,
+      kind: true,
     },
   });
   const urls = chapters.map((c) => c.mediaUrl).filter((u): u is string => !!u);
+  // the course's own documents, and the company-wide ones (a handbook belongs
+  // to no single course but answers questions in all of them)
+  const documents = await db.learningDocument.findMany({
+    where: { OR: [{ courseId }, { courseId: null }], status: "PUBLISHED" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, titleEn: true, titleTh: true, fileUrl: true },
+  });
+  const pdfText = await db.documentText.findMany({
+    where: { fileUrl: { in: [...urls, ...documents.map((d) => d.fileUrl)] }, status: "READY" },
+    select: { fileUrl: true, pages: { orderBy: { page: "asc" }, select: { page: true, text: true } } },
+  });
+  const pagesOf = new Map(pdfText.map((d) => [d.fileUrl, d.pages]));
   const transcripts = urls.length
     ? await db.mediaTranscript.findMany({
         where: { mediaUrl: { in: urls }, status: "READY" },
@@ -367,7 +384,27 @@ export async function coursePassages(courseId: string, lang: "th" | "en") {
       group.push(cue);
     }
     flush();
+    // a chapter PDF, a page per passage
+    for (const p of c.kind === "PDF" && c.mediaUrl ? (pagesOf.get(c.mediaUrl) ?? []) : []) {
+      if (p.text.trim()) passages.push({ ...base, sec: null, page: p.page, text: p.text.slice(0, 4000) });
+    }
   });
+  // the course's documents from the library
+  for (const d of documents) {
+    const title = lang === "th" ? (d.titleTh ?? d.titleEn) : d.titleEn;
+    for (const p of pagesOf.get(d.fileUrl) ?? []) {
+      if (!p.text.trim()) continue;
+      passages.push({
+        chapterId: "",
+        chapterNo: 0,
+        chapterTitle: title,
+        sec: null,
+        page: p.page,
+        documentId: d.id,
+        text: `${title}\n${p.text.slice(0, 4000)}`,
+      });
+    }
+  }
   return passages;
 }
 
@@ -399,27 +436,111 @@ export function rank(passages: Omit<Passage, "id">[], query: string, k = 6) {
     .map((s, n) => ({ ...passages[s.i]!, id: `S${n + 1}` }));
 }
 
+export type RelatedCourse = { slug: string; title: string };
+
+/**
+ * Other published courses that may cover a question this course does not —
+ * ranked on what each course says about itself (titles, descriptions, chapter
+ * titles and summaries), which is cheap enough to read on every question.
+ */
+export async function relatedCourses(courseId: string, query: string, lang: "th" | "en", k = 3): Promise<RelatedCourse[]> {
+  const courses = await db.course.findMany({
+    where: { status: "PUBLISHED", id: { not: courseId } },
+    select: {
+      slug: true,
+      titleEn: true,
+      titleTh: true,
+      descriptionEn: true,
+      descriptionTh: true,
+      chapters: { select: { titleEn: true, titleTh: true, summaryEn: true, summaryTh: true } },
+    },
+  });
+  const passages = courses.map((c) => ({
+    chapterId: c.slug,
+    chapterNo: 0,
+    chapterTitle: lang === "th" ? (c.titleTh ?? c.titleEn) : c.titleEn,
+    sec: null,
+    text: [
+      c.titleEn,
+      c.titleTh ?? "",
+      c.descriptionEn ?? "",
+      c.descriptionTh ?? "",
+      ...c.chapters.flatMap((ch) => [ch.titleEn, ch.titleTh ?? "", ch.summaryEn ?? "", ch.summaryTh ?? ""]),
+    ].join("\n"),
+  }));
+  return rank(passages, query, k).map((p) => ({ slug: p.chapterId, title: p.chapterTitle }));
+}
+
 /** Turn a question into search terms in Thai and English. Falls back to the question. */
-export async function searchTerms(question: string, courseTitle: string): Promise<string> {
+export async function searchTerms(question: string, courseTitle: string) {
+  return (await analyseQuestion(question, courseTitle)).terms;
+}
+
+/**
+ * Read a question before answering it: search terms in Thai and English, and
+ * whether it is about this company's own facts (leave, pay, policies, people,
+ * internal tools) — which only the company's material can answer, so the
+ * assistant must not fill the gap with typical figures.
+ */
+export async function analyseQuestion(
+  question: string,
+  courseTitle: string,
+): Promise<{ terms: string; companySpecific: boolean }> {
   try {
     const res = await typhoon().chat.completions.create(
       {
         model: TYPHOON_CHAT_MODEL,
         temperature: 0,
-        max_tokens: 120,
+        max_tokens: 200,
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
             content:
-              "Rewrite the learner's question as search keywords for a course's transcripts. Give Thai and English keywords and close synonyms, separated by spaces, on one line. No explanation.",
+              "You prepare a learner's question for search over a company training course. " +
+              'Reply with JSON only: {"keywords": string, "company_specific": boolean}. ' +
+              "keywords: Thai and English search keywords and close synonyms, separated by spaces. " +
+              "company_specific: true only when the answer depends on this particular company's own facts — its policies, benefits, leave, pay, " +
+              "rules, people, org structure, internal systems or procedures — rather than general knowledge or skills.",
           },
           { role: "user", content: `Course: ${courseTitle}\nQuestion: ${question}` },
         ],
       },
       { timeout: 10_000, maxRetries: 0 },
     );
-    return `${question} ${res.choices[0]?.message?.content ?? ""}`;
+    const j = firstJson(res.choices[0]?.message?.content ?? "") as { keywords?: unknown; company_specific?: unknown };
+    return {
+      terms: `${question} ${typeof j.keywords === "string" ? j.keywords : ""}`,
+      companySpecific: j.company_specific === true,
+    };
   } catch {
-    return question;
+    return { terms: question, companySpecific: false };
+  }
+}
+
+/** Do these sources actually state the answer? Asked only before refusing to guess. */
+export async function sourcesAnswer(question: string, sourceText: string): Promise<boolean> {
+  try {
+    const res = await typhoon().chat.completions.create(
+      {
+        model: TYPHOON_CHAT_MODEL,
+        temperature: 0,
+        max_tokens: 30,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              'Decide whether the sources explicitly state the answer to the question. Reply with JSON only: {"answered": boolean}.',
+          },
+          { role: "user", content: `Sources:\n${sourceText || "(none)"}\n\nQuestion: ${question}` },
+        ],
+      },
+      { timeout: 10_000, maxRetries: 0 },
+    );
+    return (firstJson(res.choices[0]?.message?.content ?? "") as { answered?: unknown }).answered === true;
+  } catch {
+    // unsure: let the main answer decide, under its own rules
+    return true;
   }
 }

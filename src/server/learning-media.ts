@@ -38,6 +38,7 @@ import type {
 } from "@/components/learning/media-types";
 import { enqueueTranscript } from "@/server/transcribe";
 import { kickTranscription } from "@/server/transcript-kick";
+import { enqueueDocumentText } from "@/server/pdf-text";
 
 /* ---------------------------------------------------------------- plumbing */
 
@@ -356,6 +357,14 @@ export async function getMediaAdminData(): Promise<MediaAdminData> {
   const finished = new Map(completedShorts.map((g) => [g.shortId, g._count._all]));
   const docsFinished = new Map(completedDocs.map((g) => [g.documentId, g._count._all]));
 
+  const aiRead = new Map(
+    (
+      await db.documentText.findMany({
+        where: { fileUrl: { in: documents.map((d) => d.fileUrl) } },
+        select: { fileUrl: true, status: true, cursorPage: true },
+      })
+    ).map((t) => [t.fileUrl, { status: t.status, pagesRead: t.cursorPage }]),
+  );
   return {
     shorts: shorts.map(
       (s): AdminShortRow => ({
@@ -388,6 +397,7 @@ export async function getMediaAdminData(): Promise<MediaAdminData> {
         readers: d._count.reads,
         completions: docsFinished.get(d.id) ?? 0,
         updatedAt: d.updatedAt.toISOString(),
+        aiRead: aiRead.get(d.fileUrl) ?? null,
       }),
     ),
     competencies,
@@ -585,6 +595,9 @@ export async function saveDocument(input: z.input<typeof documentSchema>): Promi
       ? await db.learningDocument.update({ where: { id: existing.id }, data, select: { id: true } })
       : await db.learningDocument.create({ data: { ...data, createdById: viewer.userId }, select: { id: true } });
 
+    // the assistant reads the PDF, once per file
+    await enqueueDocumentText(d.fileUrl);
+    await kickTranscription();
     if (existing && existing.fileUrl !== d.fileUrl) {
       await removeBlobs([existing.fileUrl]);
       // a new file is a new document to read: nobody's old page applies to it

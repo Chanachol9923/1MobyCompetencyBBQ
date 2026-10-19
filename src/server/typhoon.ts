@@ -31,20 +31,25 @@ export function typhoon() {
 
 /* ---------------------------------------------------------- rate limiter */
 
-const ASR_PER_MINUTE = 90; // a margin under the published 100
-const recent: number[] = [];
-
-async function asrSlot() {
-  for (;;) {
-    const now = Date.now();
-    while (recent.length && now - recent[0]! > 60_000) recent.shift();
-    if (recent.length < ASR_PER_MINUTE) {
-      recent.push(now);
-      return;
+/** Requests per rolling minute, waited for rather than refused. */
+function limiter(perMinute: number) {
+  const recent: number[] = [];
+  return async function slot() {
+    for (;;) {
+      const now = Date.now();
+      while (recent.length && now - recent[0]! > 60_000) recent.shift();
+      if (recent.length < perMinute) {
+        recent.push(now);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 60_000 - (now - recent[0]!) + 50));
     }
-    await new Promise((r) => setTimeout(r, 60_000 - (now - recent[0]!) + 50));
-  }
+  };
 }
+
+const asrSlot = limiter(90); // a margin under the published 100
+// OCR has no published figure on the free tier: stay well clear
+const ocrSlot = limiter(Number(process.env.TYPHOON_OCR_PER_MINUTE || 20));
 
 /** Speech in one short WAV clip → its text. */
 export async function transcribeClip(wav: Buffer): Promise<string> {
@@ -54,4 +59,57 @@ export async function transcribeClip(wav: Buffer): Promise<string> {
     model: TYPHOON_ASR_MODEL,
   });
   return (res.text ?? "").replace(/\s+/g, " ").trim();
+}
+
+export const TYPHOON_OCR_MODEL = process.env.TYPHOON_OCR_MODEL || "typhoon-ocr-v1.5";
+
+/** The prompt Typhoon OCR v1.5 is trained on; it is meant to be used as is. */
+const OCR_PROMPT = `Extract all text from the image.
+
+
+Instructions:
+- Only return the clean Markdown.
+- Do not include any explanation or extra text.
+- You must include all information on the page.
+
+
+Formatting Rules:
+- Tables: Render tables using <table>...</table> in clean HTML format.
+- Equations: Render equations using LaTeX syntax with inline ($...$) and block ($$...$$).
+- Images/Charts/Diagrams: Wrap any clearly defined visual areas (e.g. charts, diagrams, pictures) in:
+
+
+<figure>
+Describe the image's main elements (people, objects, text), note any contextual clues (place, event, culture), mention visible text and its meaning, provide deeper analysis when relevant (especially for financial charts, graphs, or documents), comment on style or architecture if relevant, then give a concise overall summary. Describe in Thai.
+</figure>
+
+
+- Page Numbers: Wrap page numbers in <page_number>...</page_number> (e.g., <page_number>14</page_number>).
+- Checkboxes: Use ☐ for unchecked and ☑ for checked boxes.
+    `;
+
+/** One page image (PNG) → its text as Markdown, pictures described in Thai. */
+export async function ocrPage(png: Uint8Array): Promise<string> {
+  await ocrSlot();
+  const res = await typhoon().chat.completions.create(
+    {
+      model: TYPHOON_OCR_MODEL,
+      max_tokens: 8000,
+      temperature: 0.1,
+      top_p: 0.6,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: OCR_PROMPT },
+            { type: "image_url", image_url: { url: `data:image/png;base64,${Buffer.from(png).toString("base64")}` } },
+          ],
+        },
+      ],
+      // @ts-expect-error -- a Typhoon (vLLM) sampling option the OpenAI types do not list
+      repetition_penalty: 1.1,
+    },
+    { timeout: 90_000 },
+  );
+  return res.choices[0]?.message?.content ?? "";
 }

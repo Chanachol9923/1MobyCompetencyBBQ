@@ -12,12 +12,17 @@ export const metadata: Metadata = { title: "Document" };
  */
 export default async function DocumentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ documentId: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   await requireEmployee();
-  const { documentId } = await params;
+  const [{ documentId }, { page }] = await Promise.all([params, searchParams]);
   const doc = await getDocument(documentId);
   if (!doc) return <MissingCard kind="document" />;
-  return <DocumentReaderView doc={doc} />;
+  // the study assistant links to the page it quoted
+  const asked = Number(page);
+  const at = Number.isInteger(asked) && asked >= 1 && asked <= doc.pages ? asked : doc.lastPage;
+  return <DocumentReaderView key={at} doc={{ ...doc, lastPage: at }} />;
 }

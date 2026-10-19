@@ -62,6 +62,7 @@ import type {
 } from "@/components/admin/content-types";
 import { enqueueTranscript, recheckTranscripts } from "@/server/transcribe";
 import { kickTranscription } from "@/server/transcript-kick";
+import { enqueueDocumentText } from "@/server/pdf-text";
 
 /* ------------------------------------------------------------------ plumbing */
 
@@ -2617,6 +2618,12 @@ export async function saveCourse(
       if (existing && existing.glossary.join("\n") !== d.glossary.join("\n")) {
         await recheckTranscripts(videos);
       }
+      await kickTranscription();
+    }
+    // and every chapter PDF is read, once per file, for the assistant
+    const pdfs = chapters.filter((c) => c.kind === "PDF" && c.mediaUrl).map((c) => c.mediaUrl);
+    if (pdfs.length) {
+      await Promise.all(pdfs.map((u) => enqueueDocumentText(u)));
       await kickTranscription();
     }
     await removeBlobs(before.map((b) => b.mediaUrl).filter((u): u is string => !!u && !kept.has(u)));

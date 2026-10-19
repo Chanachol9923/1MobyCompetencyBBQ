@@ -1087,6 +1087,41 @@ model TranscriptCue {
   @@index([transcriptId, startMs])
 }
 
+/// The text of a PDF, read once per file so the study assistant can use it:
+/// every page is read by OCR (which also describes charts and pictures), and
+/// the PDF's own text layer stands in when OCR fails. Keyed by file, like
+/// subtitles, so a document and a chapter that share a file share its text.
+model DocumentText {
+  id          String           @id @default(cuid())
+  fileUrl     String           @unique
+  status      TranscriptStatus @default(PENDING)
+  pageCount   Int?
+  /// pages read so far; a run that stops mid-way carries on from here
+  cursorPage  Int              @default(0)
+  attempts    Int              @default(0)
+  error       String?
+  lockedUntil DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  completedAt DateTime?
+
+  pages DocumentPageText[]
+}
+
+/// One page of a PDF as text.
+model DocumentPageText {
+  id             String @id @default(cuid())
+  documentTextId String
+  page           Int
+  text           String
+  /// "ocr" or "text" (the PDF's own text layer)
+  source         String
+
+  documentText DocumentText @relation(fields: [documentTextId], references: [id], onDelete: Cascade)
+
+  @@unique([documentTextId, page])
+}
+
 /// Every question put to the study assistant: the daily allowance is counted
 /// from here, and an admin can see what people ask.
 model AiQuestion {

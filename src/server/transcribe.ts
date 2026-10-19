@@ -4,6 +4,7 @@ import ffmpegPath from "ffmpeg-static";
 import { db } from "@/lib/db";
 import { transcribeClip, typhoonConfigured } from "@/server/typhoon";
 import { correctTranscript, summarizeTranscript } from "@/server/study-ai";
+import { runDocumentJobs } from "@/server/pdf-text";
 
 /**
  * Turns a video's speech into timed subtitle lines, once per file.
@@ -366,6 +367,12 @@ export async function runTranscriptJobs(budgetMs: number): Promise<{ remaining: 
     }
   }
 
+  // PDFs waiting to be read
+  const documentsLeft = await runDocumentJobs(stopAt).catch((err) => {
+    console.error("document jobs failed", err);
+    return false;
+  });
+
   // corrections, then summaries, that are still missing
   while (Date.now() < stopAt - 30_000) {
     const c = await claimCorrection();
@@ -387,5 +394,5 @@ export async function runTranscriptJobs(budgetMs: number): Promise<{ remaining: 
       ],
     },
   });
-  return { remaining: left > 0, done };
+  return { remaining: left > 0 || documentsLeft, done };
 }

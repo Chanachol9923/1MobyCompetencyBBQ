@@ -2,7 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getViewer } from "@/server/session";
 import { typhoon, TYPHOON_CHAT_MODEL, typhoonConfigured } from "@/server/typhoon";
-import { coursePassages, rank, searchTerms, type Passage } from "@/server/study-ai";
+import { analyseQuestion, coursePassages, rank, relatedCourses, sourcesAnswer, type Passage } from "@/server/study-ai";
 
 /**
  * The study assistant's answers (retrieval-augmented).
@@ -62,8 +62,11 @@ export async function POST(request: Request) {
   }
 
   const courseTitle = lang === "th" ? (course.titleTh ?? course.titleEn) : course.titleEn;
-  const all = await coursePassages(course.id, lang);
-  let sources: Passage[] = rank(all, await searchTerms(question, courseTitle), 6);
+  const [all, { terms, companySpecific }] = await Promise.all([
+    coursePassages(course.id, lang),
+    analyseQuestion(question, courseTitle),
+  ]);
+  let sources: Passage[] = rank(all, terms, 6);
   // nothing matched: answer from the chapter being studied, so the reply is still grounded
   if (!sources.length) {
     sources = all
@@ -71,18 +74,30 @@ export async function POST(request: Request) {
       .slice(0, 4)
       .map((p, i) => ({ ...p, id: `S${i + 1}` }));
   }
+  // other courses that may cover it, offered when this one does not
+  const related = await relatedCourses(course.id, terms, lang);
 
-  const sourceText = sources
-    .map(
-      (s) =>
-        `[${s.id}] (${lang === "th" ? "บทที่" : "Chapter"} ${s.chapterNo}: ${s.chapterTitle}${s.sec != null ? ` · ${mmss(s.sec)}` : ""})\n${s.text.slice(0, 1800)}`,
-    )
-    .join("\n\n");
+  const where = (s: Passage) =>
+    s.documentId
+      ? `${lang === "th" ? "เอกสาร" : "Document"}: ${s.chapterTitle} · ${lang === "th" ? "หน้า" : "page"} ${s.page}`
+      : `${lang === "th" ? "บทที่" : "Chapter"} ${s.chapterNo}: ${s.chapterTitle}` +
+        (s.sec != null ? ` · ${mmss(s.sec)}` : "") +
+        (s.page != null ? ` · ${lang === "th" ? "หน้า" : "page"} ${s.page}` : "");
+  const sourceText = sources.map((s) => `[${s.id}] (${where(s)})\n${s.text.slice(0, 1800)}`).join("\n\n");
+  const relatedText = related.length
+    ? `\n\nOther 1Moby courses that may cover it:\n${related.map((r) => `- ${r.title}`).join("\n")}`
+    : "";
 
   const system =
     `You are the study assistant for the course "${courseTitle}" at 1Moby. ` +
-    "Answer only from the numbered sources given with the question. Cite each fact with its source id in square brackets, like [S2]. " +
-    "If the sources do not cover the question, say so plainly and suggest the chapter that comes closest; never invent facts. " +
+    "Answer from the numbered sources given with the question. Cite each fact with its source id in square brackets, like [S2]. " +
+    "Never invent facts about the course. " +
+    "If the sources do not answer the question, start your reply with the exact token [[OUTSIDE]] on its own line, then: " +
+    "(1) say in one short sentence that this course does not cover it; " +
+    "(2) if it is general workplace or technical knowledge, give a brief, useful general answer (2-4 sentences) and say plainly it is general knowledge, not from the course — do not cite sources for it; " +
+    "(3) for anything specific to the company (policies, benefits, leave, pay, numbers, people, internal tools or procedures) give no general answer, no typical figures and no ranges at all — only say who to ask, such as HR or their supervisor; " +
+    "(4) if one of the other courses listed clearly fits the question, suggest it by its exact name; if none fits, do not mention them. " +
+    "If the sources answer only part of it, answer that part with citations and say what is not covered. " +
     (lang === "th"
       ? "Reply in Thai, in a friendly, clear tone. "
       : "Reply in English, in a friendly, clear tone. ") +
@@ -101,8 +116,11 @@ export async function POST(request: Request) {
       chapterNo: s.chapterNo,
       chapterTitle: s.chapterTitle,
       sec: s.sec,
+      page: s.page ?? null,
+      documentId: s.documentId ?? null,
     })),
     remaining: Math.max(0, DAILY_LIMIT - used - 1),
+    related,
   };
 
   const stream = new ReadableStream({
@@ -110,6 +128,17 @@ export async function POST(request: Request) {
       controller.enqueue(encoder.encode(JSON.stringify(meta) + "\n"));
       let answer = "";
       try {
+        // the company's own facts are never guessed: without them in the
+        // material, the answer is where to ask, written here rather than by the model
+        if (companySpecific && !(await sourcesAnswer(question, sourceText))) {
+          answer =
+            "[[OUTSIDE]]\n" +
+            (lang === "th"
+              ? "เรื่องนี้เป็นข้อมูลเฉพาะของบริษัท ซึ่งไม่มีอยู่ในเนื้อหาคอร์สนี้ ผู้ช่วยจึงไม่ตอบแทน เพื่อไม่ให้ได้ข้อมูลที่อาจไม่ตรงกับนโยบายจริง\n\nสอบถามได้ที่ฝ่าย HR (HROD) หรือหัวหน้าของคุณ"
+              : "This is specific to the company and isn't in this course's material, so the assistant won't guess — the real policy may differ.\n\nPlease ask HR (HROD) or your supervisor.");
+          controller.enqueue(encoder.encode(answer));
+          return;
+        }
         const completion = await typhoon().chat.completions.create({
           model: TYPHOON_CHAT_MODEL,
           temperature: 0.3,
@@ -118,7 +147,7 @@ export async function POST(request: Request) {
           messages: [
             { role: "system", content: system },
             ...history.slice(-6).map((h) => ({ role: h.role, content: h.content.slice(0, 2000) })),
-            { role: "user", content: `Sources:\n${sourceText || "(none)"}\n\nQuestion: ${question}` },
+            { role: "user", content: `Sources:\n${sourceText || "(none)"}${relatedText}\n\nQuestion: ${question}` },
           ],
         });
         for await (const chunk of completion) {
