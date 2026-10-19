@@ -131,7 +131,16 @@ export function KpiEditor({
           {tt("Add KPI", "เพิ่ม KPI")}
         </Button>
 
-        {!valid ? (
+        {employee.selfSubmitted || employee.supervisorSubmitted ? (
+          <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-xs leading-relaxed text-ink">
+            {tt(
+              `${employee.name} has already submitted this cycle's assessment (${[employee.selfSubmitted && "self", employee.supervisorSubmitted && "supervisor"].filter(Boolean).join(", ")}). New KPIs stay unrated — and the KPI weight is shared among the other parts — until that assessment is reopened and the KPIs rated.`,
+              `${employee.name} ส่งการประเมินรอบนี้แล้ว (${[employee.selfSubmitted && "ตนเอง", employee.supervisorSubmitted && "หัวหน้า"].filter(Boolean).join(", ")}) KPI ที่เพิ่มใหม่จะยังไม่มีคะแนน และน้ำหนักส่วน KPI จะถูกแบ่งไปให้ส่วนอื่น จนกว่าจะเปิดการประเมินกลับมาแก้และให้คะแนน KPI`,
+            )}
+          </p>
+        ) : null}
+
+        {!valid && drafts.some((d) => d.name || d.target || d.weight) ? (
           <p className="text-xs text-accent">
             {!complete
               ? tt("Every KPI needs a name, a target and a weight.", "KPI ทุกข้อต้องมีชื่อ เป้าหมาย และน้ำหนัก")

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { can, PERMISSIONS } from "@/lib/permissions";
 import { requireEmployee } from "@/server/session";
 import { getPersonSummary } from "@/server/competency";
@@ -10,6 +11,8 @@ import {
   getTeamMatrix,
 } from "@/server/team";
 import { DashboardView, type TeamHeatRow } from "./DashboardView";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 /**
  * The dashboard is a server component: it resolves who is asking from the

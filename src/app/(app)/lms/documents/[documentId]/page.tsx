@@ -4,7 +4,7 @@ import { getDocument } from "@/server/learning-media";
 import { MissingCard } from "../../MissingCard";
 import { DocumentReaderView } from "./DocumentReaderView";
 
-export const metadata: Metadata = { title: "Document · 1Moby" };
+export const metadata: Metadata = { title: "Document" };
 
 /**
  * One document, opened at the page this person stopped on. Reading progress is

@@ -3,7 +3,7 @@ import { requireEmployee } from "@/server/session";
 import { getIdpView } from "@/server/learning";
 import { IdpView } from "./IdpView";
 
-export const metadata: Metadata = { title: "IDP · 1Moby" };
+export const metadata: Metadata = { title: "IDP" };
 
 /**
  * "แผนพัฒนารายบุคคล" — your own plan, and only ever your own.

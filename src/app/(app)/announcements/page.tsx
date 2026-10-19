@@ -12,7 +12,7 @@ import { AnnouncementsHeading } from "@/components/announcements/AnnouncementsHe
 import { AnnouncementAdmin } from "@/components/announcements/AnnouncementAdmin";
 import { AnnouncementsFrame } from "@/components/announcements/AnnouncementsFrame";
 
-export const metadata: Metadata = { title: "Announcements · 1Moby" };
+export const metadata: Metadata = { title: "Announcements" };
 
 /**
  * The company noticeboard, and — for anyone whose role can send

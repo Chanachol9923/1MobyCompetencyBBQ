@@ -4,7 +4,7 @@ import { getShortsFeed } from "@/server/learning-media";
 import { ShortsFeed } from "@/components/learning/ShortsFeed";
 import { ShortsEmpty } from "./ShortsEmpty";
 
-export const metadata: Metadata = { title: "Shorts · 1Moby" };
+export const metadata: Metadata = { title: "Shorts" };
 
 /** The Reels-style feed. `?s=<id>` opens it on one short (a shared link). */
 export default async function ShortsPage({

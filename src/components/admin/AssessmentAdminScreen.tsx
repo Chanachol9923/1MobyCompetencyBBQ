@@ -701,7 +701,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                       disabled={!cycle}
                       onClick={() => setKpiFor(p.id)}
                       title={tt("Set KPIs", "กำหนด KPI")}
-                      className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-brand-tint disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-brand-tint disabled:opacity-50"
                     >
                       <ListChecks size={14} className="shrink-0 text-brand" />
                       {p.kpis.length ? (

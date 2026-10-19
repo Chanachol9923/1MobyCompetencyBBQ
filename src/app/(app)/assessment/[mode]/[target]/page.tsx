@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { AssessmentWizard } from "@/components/assessment/AssessmentWizard";
 import { NoCycleNotice } from "@/components/assessment/NoCycleNotice";
 import { can, PERMISSIONS } from "@/lib/permissions";
 import { requireEmployee } from "@/server/session";
 import { getWizardData, isMode } from "@/server/assessment";
+
+export const metadata: Metadata = { title: "Assessment" };
 
 /**
  * One run of the 180° assessment.

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { requireEmployee } from "@/server/session";
 import {
   ensureEnrollment,
@@ -6,6 +7,8 @@ import {
 } from "@/server/learning";
 import { MissingCard } from "../MissingCard";
 import { PlayerView } from "./PlayerView";
+
+export const metadata: Metadata = { title: "Course" };
 
 /**
  * The course player.

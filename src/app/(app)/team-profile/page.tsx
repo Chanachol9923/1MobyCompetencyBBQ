@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { PERMISSIONS } from "@/lib/permissions";
 import { requirePermission } from "@/server/session";
 import { getTeamSummaries } from "@/server/competency";
@@ -13,6 +14,8 @@ import {
   type NamedGapRow,
 } from "@/server/team";
 import { TeamProfileView, type TeamProfileMember } from "./TeamProfileView";
+
+export const metadata: Metadata = { title: "Team profile" };
 
 /**
  * Team Profile is gated on the permission, not on a role name: anyone whose

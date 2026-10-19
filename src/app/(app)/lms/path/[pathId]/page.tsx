@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { requireEmployee } from "@/server/session";
 import { getPathView } from "@/server/learning";
 import { MissingCard } from "../../MissingCard";
 import { PathJourney } from "./PathJourney";
+
+export const metadata: Metadata = { title: "Learning path" };
 
 /**
  * One learning path. The route parameter is `LearningPath.slug`.

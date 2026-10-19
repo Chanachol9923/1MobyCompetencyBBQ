@@ -16,7 +16,8 @@ const geologica = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "1Moby · Comprehensive Assessment System",
+  // a page names itself ("IDP") and gets the suffix; pages without one show the product name
+  title: { template: "%s · 1Moby", default: "1Moby · Comprehensive Assessment System" },
   description:
     "1Moby competency assessment, individual development plans and learning.",
 };

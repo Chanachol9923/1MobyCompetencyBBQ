@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { can, PERMISSIONS } from "@/lib/permissions";
 import { requireViewer } from "@/server/session";
 import { getOrgFilters, getScopeReport, PEOPLE_LIMIT } from "@/server/team";
 import { ReportsView, type Scope } from "./ReportsView";
+
+export const metadata: Metadata = { title: "Reports" };
 
 /**
  * Gap Analysis Report.

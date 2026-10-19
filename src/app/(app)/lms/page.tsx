@@ -10,7 +10,7 @@ import {
 } from "@/components/learning/model";
 import { CatalogueView, type CatalogueQuery } from "./CatalogueView";
 
-export const metadata: Metadata = { title: "Learning · 1Moby" };
+export const metadata: Metadata = { title: "Learning" };
 
 const VIEWS = ["courses", "shorts", "documents", "journey"] as const;
 

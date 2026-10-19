@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { can, PERMISSIONS } from "@/lib/permissions";
 import { requireEmployee } from "@/server/session";
 import { getHubData } from "@/server/assessment";
 import { NoCycleNotice } from "@/components/assessment/NoCycleNotice";
 import { AssessmentHubView } from "./AssessmentHubView";
+
+export const metadata: Metadata = { title: "Assessment" };
 
 /**
  * The assessment hub, as a server component.
