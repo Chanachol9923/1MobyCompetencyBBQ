@@ -539,6 +539,19 @@ function QuizItem({
 
 /* -------------------------------------------------------------- answers */
 
+/** **bold** in an answer is shown bold, not with asterisks. */
+function withBold(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((t, i) =>
+    t.startsWith("**") && t.endsWith("**") && t.length > 4 ? (
+      <strong key={i} className="font-bold">
+        {t.slice(2, -2)}
+      </strong>
+    ) : (
+      t
+    ),
+  );
+}
+
 /** The answer as it streams, with each [S2] turned into a jump to its source. */
 function AnswerText({ message }: { message: Extract<AiMessage, { kind: "answer" }> }) {
   const { tt } = useT();
@@ -560,7 +573,7 @@ function AnswerText({ message }: { message: Extract<AiMessage, { kind: "answer" 
     <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
       {parts.map((part, i) => {
         const m = /^\[(S\d+)\]$/.exec(part);
-        if (!m) return <span key={i}>{part}</span>;
+        if (!m) return <span key={i}>{withBold(part)}</span>;
         const src = byId.get(m[1]!);
         if (!src) return null;
         return (
