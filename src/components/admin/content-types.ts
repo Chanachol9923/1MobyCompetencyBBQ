@@ -204,10 +204,22 @@ export type MatrixCompetency = {
 };
 
 /** One person's standing in the open cycle. */
+/** One KPI the company set for a person in the open cycle. */
+export type AdminKpi = {
+  id: string;
+  name: string;
+  target: string;
+  weight: number;
+  score: number | null;
+};
+
 export type CycleStatusRow = {
   id: string;
   name: string;
+  jobRoleId: string;
   jobRoleName: string;
+  /** KPIs set for this cycle; empty until HR sets them */
+  kpis: AdminKpi[];
   level: string;
   departmentName: string | null;
   assessedCount: number;

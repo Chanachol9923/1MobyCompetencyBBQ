@@ -2865,10 +2865,22 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
   const scored: Record<string, number> = {};
   for (const [key, people] of scoredPairs) scored[key] = people.size;
 
+  const kpiRows = cycle
+    ? await db.kpiItem.findMany({
+        where: { cycleId: cycle.id },
+        orderBy: { id: "asc" },
+        select: { id: true, employeeId: true, name: true, target: true, weight: true, score: true },
+      })
+    : [];
+  const kpisOf = new Map<string, CycleStatusRow["kpis"]>();
+  for (const { employeeId, ...k } of kpiRows) kpisOf.set(employeeId, [...(kpisOf.get(employeeId) ?? []), k]);
+
   const employees: CycleStatusRow[] = workforce.rows.map((r) => ({
     id: r.id,
     name: r.name,
+    jobRoleId: r.jobRoleId,
     jobRoleName: r.jobRoleName,
+    kpis: kpisOf.get(r.id) ?? [],
     level: r.level,
     departmentName: r.departmentName,
     assessedCount: r.assessedCount,
@@ -2898,6 +2910,126 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
       notAssessedCells: jobRoles.length * competencies.length - assessedCells,
     },
   };
+}
+
+const employeeKpiSchema = z.object({
+  employeeId: z.string().min(1).max(64),
+  items: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(200),
+        target: z.string().trim().min(1).max(300),
+        weight: z.number().int().min(1).max(100),
+      }),
+    )
+    .max(20),
+  /** give everyone in the same career role this set too */
+  applyToRole: z.boolean().optional().default(false),
+});
+
+/**
+ * Set a person's KPIs for the open cycle. KPIs belong to the company: HR sets
+ * them here, and the assessment only scores them. The weights must total 100
+ * (an empty set clears them). Rows are matched by name, so a score already
+ * given survives a change to the target or the weight; a KPI that is dropped
+ * goes with its score.
+ */
+export async function saveEmployeeKpis(
+  input: z.input<typeof employeeKpiSchema>,
+): Promise<ActionResult> {
+  return guarded(PERMISSIONS.MANAGE_CYCLE, async (viewer) => {
+    const parsed = employeeKpiSchema.safeParse(input);
+    if (!parsed.success) {
+      return fail(
+        "Every KPI needs a name, a target and a weight.",
+        "KPI ทุกข้อต้องมีชื่อ เป้าหมาย และน้ำหนัก",
+      );
+    }
+    const { employeeId, items, applyToRole } = parsed.data;
+    const total = items.reduce((a, i) => a + i.weight, 0);
+    if (items.length && total !== 100) {
+      return fail(`The weights add up to ${total}% — they must total 100%.`, `น้ำหนักรวม ${total}% ต้องรวมได้ 100%`);
+    }
+    if (new Set(items.map((i) => i.name.toLowerCase())).size !== items.length) {
+      return fail("Two KPIs have the same name.", "มี KPI ชื่อซ้ำกัน");
+    }
+
+    const cycle = await currentCycleRow();
+    if (!cycle) return fail("There is no assessment cycle yet.", "ยังไม่มีรอบการประเมิน");
+
+    const employee = await db.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true, name: true, jobRoleId: true, jobRole: { select: { name: true } } },
+    });
+    if (!employee) return fail("That employee no longer exists.", "ไม่พบพนักงานคนนี้แล้ว");
+
+    const people = applyToRole
+      ? await db.employee.findMany({ where: { active: true, jobRoleId: employee.jobRoleId }, select: { id: true } })
+      : [{ id: employee.id }];
+    const ids = people.map((p) => p.id);
+
+    const existing = await db.kpiItem.findMany({
+      where: { cycleId: cycle.id, employeeId: { in: ids } },
+      select: { id: true, employeeId: true, name: true },
+    });
+
+    const writes = ids.flatMap((personId) => {
+      const theirs = new Map(
+        existing.filter((e) => e.employeeId === personId).map((e) => [e.name.toLowerCase(), e.id]),
+      );
+      const keep = new Set<string>();
+      const upserts = items.map((item) => {
+        const id = theirs.get(item.name.toLowerCase());
+        if (id) {
+          keep.add(id);
+          return db.kpiItem.update({ where: { id }, data: { name: item.name, target: item.target, weight: item.weight } });
+        }
+        return db.kpiItem.create({
+          data: { cycleId: cycle.id, employeeId: personId, name: item.name, target: item.target, weight: item.weight },
+        });
+      });
+      const removed = [...theirs.values()].filter((id) => !keep.has(id));
+      return [...(removed.length ? [db.kpiItem.deleteMany({ where: { id: { in: removed } } })] : []), ...upserts];
+    });
+
+    await db.$transaction([
+      ...writes,
+      // the people whose KPIs were set hear about it
+      ...(items.length
+        ? [
+            db.notification.createMany({
+              data: ids.map((id) => ({
+                employeeId: id,
+                kind: "ASSESSMENT" as const,
+                channel: "IN_APP" as const,
+                titleEn: "Your KPIs are set",
+                titleTh: "บริษัทกำหนด KPI ของคุณแล้ว",
+                bodyEn: `${items.length} KPI(s) for ${cycle.nameEn}. Rate them in your self assessment.`,
+                bodyTh: `KPI ${items.length} ข้อสำหรับรอบ ${cycle.nameTh} ให้คะแนนได้ในการประเมินตนเอง`,
+                href: "/assessment",
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
+    await recordActivity({
+      viewer,
+      action: "Set KPIs",
+      targetType: "employee",
+      targetId: employee.id,
+      targetLabel: applyToRole ? `${employee.jobRole.name} (${ids.length})` : employee.name,
+      detail: `${cycle.nameEn} · ${items.length} KPI · ${total}%`,
+    });
+    revalidatePath("/assessment");
+    revalidatePath("/admin/assessment");
+    return applyToRole
+      ? done(
+          `KPIs set for ${ids.length} people in ${employee.jobRole.name}.`,
+          `กำหนด KPI ให้ ${ids.length} คนในบทบาท ${employee.jobRole.name} แล้ว`,
+        )
+      : done(`KPIs set for ${employee.name}.`, `กำหนด KPI ให้ ${employee.name} แล้ว`);
+  });
 }
 
 const cycleSchema = z.object({

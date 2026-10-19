@@ -30,12 +30,10 @@ import {
 import type { WizardData } from "@/server/assessment";
 import {
   reopenAssessmentAction,
-  saveKpiItemsAction,
   saveKpiScoreAction,
   saveScoreAction,
   submitAssessmentAction,
   type ActionError,
-  type KpiItemInput,
 } from "@/app/(app)/assessment/actions";
 
 /**
@@ -167,18 +165,6 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
         setKpiScores((s) => ({ ...s, [kpiItemId]: previous }));
         setError(result.error);
       }
-    });
-  };
-
-  const saveKpiItems = (items: KpiItemInput[]) => {
-    setError(null);
-    startTransition(async () => {
-      const result = await saveKpiItemsAction({
-        mode,
-        targetId: subject.id,
-        items,
-      });
-      if (!result.ok) setError(result.error);
     });
   };
 
@@ -382,8 +368,6 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
             items={kpis}
             scores={kpiScores}
             onScore={rateKpi}
-            onSaveItems={saveKpiItems}
-            saving={pending}
           />
         ) : isComplete ? (
           resultStep

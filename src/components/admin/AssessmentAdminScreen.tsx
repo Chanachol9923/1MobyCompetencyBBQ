@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
   CalendarDays,
+  ListChecks,
   Download,
   Mail,
   Save,
@@ -30,6 +31,8 @@ import {
   formatDate,
 } from "@/components/admin/shared";
 import { ResultBanner } from "@/components/admin/rbac-shared";
+import { KpiEditor } from "@/components/admin/KpiEditor";
+import { useUi } from "@/lib/ui-state";
 import type {
   ActionResult,
   AssessmentAdminData,
@@ -127,6 +130,15 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   const canEditFramework = can(PERMISSIONS.MANAGE_FRAMEWORK);
 
   const [result, setResult] = useState<ActionResult | null>(null);
+  const { notify } = useUi();
+  const [kpiFor, setKpiFor] = useState<string | null>(null);
+  const roleHeadcount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of employees) m.set(e.jobRoleId, (m.get(e.jobRoleId) ?? 0) + 1);
+    return m;
+  }, [employees]);
+  const kpiEmployee = employees.find((e) => e.id === kpiFor) ?? null;
+  const withoutKpi = employees.filter((e) => !e.kpis.length).length;
   const [busy, startTransition] = useTransition();
 
   const [nameEn, setNameEn] = useState(cycle?.nameEn ?? "");
@@ -634,6 +646,11 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                 `Self ${counts.selfSubmitted}/${counts.headcount} · Supervisor ${counts.supervisorSubmitted}/${counts.headcount}`,
                 `ประเมินตนเอง ${counts.selfSubmitted}/${counts.headcount} · หัวหน้าประเมิน ${counts.supervisorSubmitted}/${counts.headcount}`,
               )}
+              {withoutKpi ? (
+                <span className="text-accent">
+                  {tt(` · ${withoutKpi} without KPIs`, ` · ยังไม่กำหนด KPI ${withoutKpi} คน`)}
+                </span>
+              ) : null}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -660,6 +677,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               <tr className="border-y border-line/70 bg-surface/60">
                 <Th>{t("label.employee")}</Th>
                 <Th>{t("label.level")}</Th>
+                <Th>KPI</Th>
                 <Th>{t("mode.self")}</Th>
                 <Th>{t("mode.supervisor")}</Th>
                 <Th className="w-40">{t("label.progress")}</Th>
@@ -677,6 +695,24 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                     </span>
                   </Td>
                   <Td className="whitespace-nowrap text-muted">{lv(p.level)}</Td>
+                  <Td>
+                    <button
+                      type="button"
+                      disabled={!cycle}
+                      onClick={() => setKpiFor(p.id)}
+                      title={tt("Set KPIs", "กำหนด KPI")}
+                      className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-brand-tint disabled:opacity-50"
+                    >
+                      <ListChecks size={14} className="shrink-0 text-brand" />
+                      {p.kpis.length ? (
+                        <span className="font-medium text-ink">
+                          {tt(`${p.kpis.length} KPI`, `${p.kpis.length} ข้อ`)}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-accent">{tt("Not set", "ยังไม่กำหนด")}</span>
+                      )}
+                    </button>
+                  </Td>
                   <Td>
                     <Pill tone={p.selfSubmitted ? "success" : "danger"}>
                       {p.selfSubmitted ? t("status.completed") : t("status.incomplete")}
@@ -712,7 +748,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               ))}
               {visibleEmployees.length === 0 ? (
                 <tr>
-                  <Td colSpan={6} className="py-10 text-center text-muted">
+                  <Td colSpan={7} className="py-10 text-center text-muted">
                     {t("admin.noMatch")}
                   </Td>
                 </tr>
@@ -722,12 +758,24 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
         </TableWrap>
         <div className="border-t border-line/70 p-5">
           <Note>
-            {tt("Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app.",
-              "ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ",
+            {tt("KPIs are set by the company: click a person's KPI cell to set theirs, or the same set for their whole career role. Employees and supervisors only rate them. Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app.",
+              "KPI กำหนดโดยบริษัท: กดที่ช่อง KPI ของพนักงานเพื่อกำหนดรายบุคคล หรือใช้ชุดเดียวกันกับทั้งบทบาท พนักงานและหัวหน้ามีหน้าที่ให้คะแนนเท่านั้น ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ",
             )}
           </Note>
         </div>
       </Card>
+
+      {kpiEmployee ? (
+        <KpiEditor
+          employee={kpiEmployee}
+          roleHeadcount={roleHeadcount.get(kpiEmployee.jobRoleId) ?? 1}
+          onClose={() => setKpiFor(null)}
+          onDone={(r) => {
+            setResult(r);
+            notify(r.ok ? (lang === "th" ? r.message.th : r.message.en) : lang === "th" ? r.error.th : r.error.en, r.ok ? undefined : "error");
+          }}
+        />
+      ) : null}
 
       {/* ---------------------------------------- confirm a matrix edit */}
       <Modal

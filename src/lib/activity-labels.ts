@@ -94,6 +94,7 @@ const ACTION_TH: Record<string, string> = {
   "Revoked permission": "ถอดสิทธิ์",
   "Saved coaching note": "บันทึกการโค้ช",
   "Sent assessment reminder": "ส่งการเตือนให้ประเมิน",
+  "Set KPIs": "กำหนด KPI",
   "Sent bulk assessment reminder": "ส่งการเตือนให้ประเมินหลายคน",
   "Set expected level": "กำหนดระดับที่คาดหวัง",
   "Skipped pre-test": "ข้ามแบบทดสอบก่อนเรียน",
