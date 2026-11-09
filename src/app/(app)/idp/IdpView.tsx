@@ -303,6 +303,9 @@ export function IdpView({
                           {course.inPlan
                             ? " · " + tt("in your plan", "อยู่ในแผนของคุณ")
                             : ""}
+                          {course.assigned
+                            ? " · " + tt("assigned from your assessment", "มอบหมายจากผลประเมิน")
+                            : ""}
                         </span>
                       ) : null}
                     </span>

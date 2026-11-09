@@ -743,6 +743,8 @@ export type GoalCourseOption = {
   progress: number;
   /** true for the course the manager actually put in the plan */
   inPlan: boolean;
+  /** true when the assessment assigned it (a gap on this competency) */
+  assigned: boolean;
 };
 
 export type IdpGoalView = GoalRow & {
@@ -770,10 +772,11 @@ const GROUP_ORDER: CourseCategory[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
  * of `in` queries whatever the plan size.
  */
 export async function getIdpView(employeeId: string): Promise<IdpView> {
-  const [goals, dict, gapRows] = await Promise.all([
+  const [goals, dict, gapRows, assignments] = await Promise.all([
     getGoalRows(employeeId),
     getCompetencyDictionary(),
     getGapRows(employeeId),
+    getAssignments(employeeId),
   ]);
 
   const competencyIds = [...new Set(goals.map((g) => g.competencyId))];
@@ -878,10 +881,12 @@ export async function getIdpView(employeeId: string): Promise<IdpView> {
     const pool = allCourses.filter(
       (c) => c.competencyId === g.competencyId || c.id === g.courseId,
     );
-    // the course in the plan leads the pager, then the rest of the catalogue
+    // the course in the plan leads the pager, then what the assessment
+    // assigned, then the rest of the catalogue
     const ordered = [
       ...pool.filter((c) => c.id === g.courseId),
-      ...pool.filter((c) => c.id !== g.courseId),
+      ...pool.filter((c) => c.id !== g.courseId && assignments.has(c.id)),
+      ...pool.filter((c) => c.id !== g.courseId && !assignments.has(c.id)),
     ];
     return {
       ...g,
@@ -896,6 +901,7 @@ export async function getIdpView(employeeId: string): Promise<IdpView> {
         chapterCount: c._count.chapters,
         progress: progressOf(c.id, c._count.chapters),
         inPlan: c.id === g.courseId,
+        assigned: assignments.has(c.id),
       })),
     };
   });
