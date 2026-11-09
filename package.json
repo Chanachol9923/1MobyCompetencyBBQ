@@ -33,10 +33,12 @@
     "prisma": "7.10.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "read-excel-file": "9.3.12",
     "recharts": "^2.15.0",
     "server-only": "^0.0.1",
     "tailwind-merge": "^2.6.0",
     "unpdf": "^1.9.1",
+    "write-excel-file": "4.1.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {

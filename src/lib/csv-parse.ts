@@ -1,0 +1,37 @@
+/**
+ * CSV text → rows of cells, as Excel and Google Sheets write it: commas,
+ * double-quoted cells that may hold commas, quotes ("") and line breaks, CRLF
+ * or LF line ends, and an optional byte-order mark. Blank lines are dropped.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  const s = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]!;
+    if (quoted) {
+      if (ch === '"') {
+        if (s[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else quoted = false;
+      } else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && s[i + 1] === "\n") i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else cell += ch;
+  }
+  row.push(cell);
+  rows.push(row);
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}

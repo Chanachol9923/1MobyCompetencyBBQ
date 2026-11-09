@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Download, KeyRound, Pencil, Power, PowerOff, Plus } from "lucide-react";
+import { Download, FileDown, KeyRound, Pencil, Power, PowerOff, Plus, Upload } from "lucide-react";
 import { Avatar, Button, Field, Input, Modal, Pill, Select, Textarea } from "@/components/ui";
 import {
   IconAction,
@@ -9,8 +9,8 @@ import {
   TableWrap,
   Td,
   Th,
-  downloadCsv,
 } from "@/components/admin/shared";
+import { EmployeeImport, downloadTemplate, exportEmployeesXlsx } from "@/components/admin/EmployeeImport";
 import type {
   ActionResult,
   AdminEmployeeRow,
@@ -88,6 +88,7 @@ export function EmployeesTab({
   const { t, tt, lv } = useT();
   const { employees, departments, divisions, positions, jobRoles, counts } = data;
   const [query, setQuery] = useState("");
+  const [importing, setImporting] = useState(false);
   const [filter, setFilter] = useState("all");
   const [showInactive, setShowInactive] = useState(false);
   const [mode, setMode] = useState<"closed" | "add" | "edit">("closed");
@@ -191,40 +192,9 @@ export function EmployeesTab({
     });
   }
 
+  // the brief's data-set columns, as a real Excel file that imports back as is
   function exportList() {
-    downloadCsv(
-      "1moby-employee-list.csv",
-      [
-        t("label.employeeId"),
-        t("label.name"),
-        t("label.nickname"),
-        t("label.email"),
-        t("label.level"),
-        t("label.role"),
-        t("label.position"),
-        t("label.grade"),
-        t("label.businessUnit"),
-        t("label.department"),
-        t("label.division"),
-        t("label.reportTo"),
-        t("label.remark"),
-      ],
-      visible.map((p) => [
-        p.employeeCode,
-        p.name,
-        p.nickname ?? "",
-        p.email,
-        p.level,
-        p.jobRoleName,
-        p.positionName ?? "",
-        p.grade ?? "",
-        p.businessUnit ?? "",
-        p.departmentName ?? "",
-        p.divisionName ?? "",
-        p.managerName ?? "",
-        p.remark ?? "",
-      ]),
-    );
+    void exportEmployeesXlsx(visible, employees);
   }
 
   const levelOfDraftRole =
@@ -265,9 +235,17 @@ export function EmployeesTab({
           )}
         </label>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => void downloadTemplate(data)}>
+            <FileDown size={14} className="text-muted" />
+            {tt("Template", "แม่แบบ")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+            <Upload size={14} className="text-brand" />
+            {tt("Import (Excel / Google Sheet)", "นำเข้า (Excel / Google Sheet)")}
+          </Button>
           <Button variant="outline" size="sm" onClick={exportList}>
             <Download size={14} className="text-brand" />
-            {t("action.exportCsv")}
+            {tt("Export Excel", "ส่งออก Excel")}
           </Button>
           <Button size="sm" onClick={openAdd} disabled={jobRoles.length === 0}>
             <Plus size={15} />
@@ -276,9 +254,11 @@ export function EmployeesTab({
         </div>
       </div>
 
+      <EmployeeImport open={importing} onClose={() => setImporting(false)} />
+
       <TableWrap>
         {/* six columns that fit a laptop screen; grade, business unit and
-            remarks live in each person's details and in the CSV export */}
+            remarks live in each person's details and in the Excel export */}
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-y border-line/70 bg-surface/60">
@@ -459,7 +439,7 @@ export function EmployeesTab({
           </Field>
           <Field
             label={`${t("label.employeeId")} *`}
-            hint={tt("3–4 letters or digits", "ตัวอักษรหรือตัวเลข 3–4 ตัว")}
+            hint={tt("3–4 digits", "ตัวเลข 3–4 หลักเท่านั้น")}
           >
             <Input
               maxLength={4}

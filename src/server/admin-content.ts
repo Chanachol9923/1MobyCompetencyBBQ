@@ -1621,8 +1621,8 @@ export async function getEmployeeAdminData(): Promise<EmployeeAdminData> {
 }
 
 const employeeFields = z.object({
-  // Employee_ID in the HR data set: 3 to 4 letters or digits (also a CHECK in the database)
-  employeeCode: z.string().trim().regex(/^[A-Za-z0-9]{3,4}$/, "bad-code"),
+  // Employee_ID in the HR data set: 3 to 4 digits only (brief §4; also a CHECK in the database)
+  employeeCode: z.string().trim().regex(/^[0-9]{3,4}$/, "bad-code"),
   name: shortText,
   nickname: z.string().trim().max(60).optional().default(""),
   email: z.string().trim().email().max(160),
@@ -1644,8 +1644,8 @@ const BAD_EMPLOYEE = fail(
   "ต้องระบุชื่อ รหัสพนักงาน อีเมลที่ถูกต้อง และบทบาทสายอาชีพ",
 );
 const BAD_CODE = fail(
-  "The employee ID must be 3 to 4 letters or digits.",
-  "รหัสพนักงานต้องเป็นตัวอักษรหรือตัวเลข 3–4 ตัว",
+  "The employee ID must be 3 to 4 digits.",
+  "รหัสพนักงานต้องเป็นตัวเลข 3–4 หลักเท่านั้น",
 );
 
 function badEmployee(error: z.ZodError) {
