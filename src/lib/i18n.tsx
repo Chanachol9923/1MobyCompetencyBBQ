@@ -38,7 +38,6 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "group.core": { en: "Core", th: "สมรรถนะหลัก" },
   "group.functional": { en: "Functional", th: "สมรรถนะตามสายงาน" },
   "group.managerial": { en: "Managerial", th: "สมรรถนะการบริหาร" },
-  "group.kpi": { en: "KPI", th: "KPI" },
 
   // rating scale
   "rating.1": { en: "Needs improvement", th: "ต้องปรับปรุง" },

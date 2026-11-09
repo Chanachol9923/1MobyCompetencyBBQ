@@ -8,7 +8,6 @@ import { getActiveCycle } from "@/server/competency";
 import {
   dbMode,
   getCompetencyQuestions,
-  getKpiItems,
   type Mode,
 } from "@/server/assessment";
 import {
@@ -44,8 +43,7 @@ export type ActionError =
   | "not_assessed"
   | "already_submitted"
   | "not_submitted"
-  | "incomplete"
-  | "bad_weights";
+  | "incomplete";
 
 export type ActionResult<T = unknown> =
   | ({ ok: true } & T)
@@ -192,66 +190,6 @@ export async function saveScoreAction(
   return { ok: true };
 }
 
-/* ------------------------------------------------------- score one KPI */
-
-const kpiScoreSchema = z.object({
-  mode: z.enum(MODE),
-  targetId: z.string().min(1),
-  kpiItemId: z.string().min(1),
-  score: SCORE,
-});
-
-/**
- * `KpiItem.score` is a single column, so it is the cycle's agreed KPI result
- * rather than a per-mode opinion: the employee proposes it in their self
- * assessment and the supervisor review — the official record — overwrites it.
- */
-export async function saveKpiScoreAction(
-  input: z.infer<typeof kpiScoreSchema>,
-): Promise<ActionResult> {
-  const parsed = kpiScoreSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "invalid" };
-  const { mode, targetId, kpiItemId, score } = parsed.data;
-
-  let who: Guarded;
-  try {
-    who = await guard(mode, targetId);
-  } catch {
-    return { ok: false, error: "not_authorised" };
-  }
-
-  const open = await openCycle();
-  if (!open.cycle) return { ok: false, error: open.error };
-  const { cycle } = open;
-
-  const item = await db.kpiItem.findUnique({
-    where: { id: kpiItemId },
-    select: { id: true, cycleId: true, employeeId: true },
-  });
-  // the KPI has to belong to this person, in this cycle
-  if (!item || item.employeeId !== who.subjectId || item.cycleId !== cycle.id) {
-    return { ok: false, error: "not_found" };
-  }
-
-  const assessment = await db.assessment.findUnique({
-    where: {
-      cycleId_subjectId_reviewerId_mode: {
-        cycleId: cycle.id,
-        subjectId: who.subjectId,
-        reviewerId: who.reviewerId,
-        mode: dbMode(mode),
-      },
-    },
-    select: { submittedAt: true },
-  });
-  if (assessment?.submittedAt) return { ok: false, error: "already_submitted" };
-
-  await db.kpiItem.update({ where: { id: item.id }, data: { score } });
-
-  revalidatePath("/assessment");
-  return { ok: true };
-}
-
 /* ----------------------------------------------------------------- submit */
 
 const submitSchema = z.object({
@@ -281,10 +219,7 @@ export async function submitAssessmentAction(
   if (!open.cycle) return { ok: false, error: open.error };
   const { cycle } = open;
 
-  const [questions, kpis] = await Promise.all([
-    getCompetencyQuestions(who.subjectId),
-    getKpiItems(cycle.id, who.subjectId),
-  ]);
+  const questions = await getCompetencyQuestions(who.subjectId);
 
   const assessment = await db.assessment.findUnique({
     where: {
@@ -305,11 +240,9 @@ export async function submitAssessmentAction(
   if (assessment.submittedAt) return { ok: false, error: "already_submitted" };
 
   // completeness is checked here, not only in the browser: every competency the
-  // role is assessed on, and every KPI that has been defined
+  // role is assessed on
   const rated = new Set(assessment.scores.map((s) => s.competencyId));
-  const missing =
-    questions.filter((q) => !rated.has(q.id)).length +
-    kpis.filter((k) => k.score === null).length;
+  const missing = questions.filter((q) => !rated.has(q.id)).length;
   if (missing > 0) return { ok: false, error: "incomplete" };
 
   const submittedAt = new Date();
@@ -370,7 +303,7 @@ export async function submitAssessmentAction(
     targetType: "Assessment",
     targetId: assessment.id,
     targetLabel: subject?.name ?? who.subjectId,
-    detail: `${cycle.nameEn} · ${questions.length} competencies · ${kpis.length} KPI`,
+    detail: `${cycle.nameEn} · ${questions.length} competencies`,
   });
 
   revalidateResultViews(mode, targetId);

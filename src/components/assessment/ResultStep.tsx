@@ -12,7 +12,6 @@ import {
   signed,
   weightedTotal,
   type CompetencyQuestion,
-  type KpiRow,
   type Mode,
   type Weights,
 } from "./lib";
@@ -38,16 +37,12 @@ export function ResultStep({
   weights,
   competencies,
   scores,
-  kpis,
-  kpiScores,
   counterpart,
 }: {
   mode: Mode;
   weights: Weights;
   competencies: CompetencyQuestion[];
   scores: Record<string, number | undefined>;
-  kpis: KpiRow[];
-  kpiScores: Record<string, number | null>;
   /** the other half of the 180°, when it has been submitted */
   counterpart: { scores: Record<string, number>; submittedAt: string } | null;
 }) {
@@ -57,8 +52,6 @@ export function ResultStep({
     weights,
     competencies,
     scores,
-    kpis,
-    kpiScores,
   });
 
   const rows = competencies.map((c) => {
@@ -88,8 +81,8 @@ export function ResultStep({
         <CardHeader
           title={tt("Weighted result", "ผลคะแนนถ่วงน้ำหนัก")}
           subtitle={tt(
-            "KPI (results) plus competency (behaviour), combined with the weights set by HR on this cycle.",
-            "คะแนน KPI (ผลลัพธ์) รวมกับสมรรถนะ (พฤติกรรม) ตามน้ำหนักที่ฝ่ายบุคคลกำหนดไว้ในรอบนี้",
+            "The competency groups combined with the weights set by HR on this cycle.",
+            "คะแนนสมรรถนะแต่ละกลุ่ม รวมกันตามน้ำหนักที่ฝ่ายบุคคลกำหนดไว้ในรอบนี้",
           )}
           right={
             <Pill tone={result.total === null ? "neutral" : "brand"}>
@@ -145,8 +138,8 @@ export function ResultStep({
             </div>
             {redistributed ? (
               <p className="mt-2 break-words text-xs leading-relaxed text-muted">
-                {tt(`Weights for this cycle: KPI ${weights.kpi}% / Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}%. Parts this career role is not assessed on are left out and their weight is shared among the rest.`,
-                  `น้ำหนักของรอบนี้: KPI ${weights.kpi}% / สมรรถนะหลัก ${weights.core}% / สมรรถนะตามสายงาน ${weights.functional}% / สมรรถนะการบริหาร ${weights.managerial}% ส่วนที่บทบาทนี้ไม่ได้ประเมินจะถูกตัดออก และแบ่งน้ำหนักให้ส่วนที่เหลือตามสัดส่วน`,
+                {tt(`Weights for this cycle: Core ${weights.core}% / Functional ${weights.functional}% / Managerial ${weights.managerial}%. Groups this career role is not assessed on are left out and their weight is shared among the rest.`,
+                  `น้ำหนักของรอบนี้: สมรรถนะหลัก ${weights.core}% / สมรรถนะตามสายงาน ${weights.functional}% / สมรรถนะการบริหาร ${weights.managerial}% กลุ่มที่บทบาทนี้ไม่ได้ประเมินจะถูกตัดออก และแบ่งน้ำหนักให้กลุ่มที่เหลือตามสัดส่วน`,
                 )}
               </p>
             ) : null}
@@ -304,62 +297,6 @@ export function ResultStep({
         ) : null}
       </Card>
 
-      {/* -------------------------------------------------------- KPI recap */}
-      {kpis.length ? (
-        <Card>
-          <CardHeader
-            title={tt("KPI detail", "รายละเอียด KPI")}
-            subtitle={tt(
-              "The results half of the score.",
-              "ส่วนของผลลัพธ์การทำงาน",
-            )}
-          />
-          <ResponsiveTable className="px-5 pb-5">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-muted">
-                  <th className="py-2 font-medium">{tt("KPI", "ตัวชี้วัด")}</th>
-                  <th className="py-2 font-medium">{tt("Target", "เป้าหมาย")}</th>
-                  <th className="py-2 text-right font-medium">
-                    {t("label.weight")}
-                  </th>
-                  <th className="py-2 text-center font-medium">
-                    {tt("Score", "คะแนน")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {kpis.map((item) => {
-                  const value = kpiScores[item.id] ?? item.score;
-                  return (
-                    <tr
-                      key={item.id}
-                      className="border-b border-line/60 align-top last:border-0"
-                    >
-                      <td className="py-2.5 pr-3 font-medium leading-relaxed text-ink">
-                        {item.name}
-                      </td>
-                      <td className="py-2.5 pr-3 leading-relaxed text-muted">
-                        {item.target}
-                      </td>
-                      <td className="py-2.5 text-right text-muted">
-                        {item.weight}%
-                      </td>
-                      <td className="py-2.5 text-center">
-                        {value ? (
-                          <b className="text-ink">{value}</b>
-                        ) : (
-                          <span className="text-line-2">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </ResponsiveTable>
-        </Card>
-      ) : null}
     </div>
   );
 }

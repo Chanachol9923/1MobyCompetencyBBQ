@@ -231,7 +231,6 @@ model Employee {
 
   assessmentsAbout    Assessment[] @relation("Subject")
   assessmentsBy       Assessment[] @relation("Reviewer")
-  kpiItems            KpiItem[]
   idpGoals            IdpGoal[]        @relation("GoalOwner")
   idpGoalsAssigned    IdpGoal[]        @relation("GoalAuthor")
   enrollments         Enrollment[]
@@ -336,14 +335,15 @@ model AssessmentCycle {
   endsAt    DateTime
   status    CycleStatus @default(OPEN)
 
-  // weighting, as whole percentages summing to 100
-  weightKpi        Int @default(40)
-  weightCore       Int @default(20)
-  weightFunctional Int @default(25)
-  weightManagerial Int @default(15)
+  // weighting of the competency groups, as whole percentages summing to 100.
+  // KPIs are run outside this system and are not part of the score (the old
+  // weightKpi column and KpiItem table stay in the database, unused, until
+  // they are dropped on purpose)
+  weightCore       Int @default(35)
+  weightFunctional Int @default(40)
+  weightManagerial Int @default(25)
 
   assessments Assessment[]
-  kpiItems    KpiItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -386,22 +386,6 @@ model AssessmentScore {
 
   @@id([assessmentId, competencyId])
   @@index([competencyId])
-}
-
-/// The "results" half of the score: KPIs carry their own weights.
-model KpiItem {
-  id         String @id @default(cuid())
-  cycleId    String
-  employeeId String
-  name       String
-  target     String
-  weight     Int
-  score      Int?
-
-  cycle    AssessmentCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  employee Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@index([cycleId, employeeId])
 }
 
 /* ------------------------------------------------------------------- idp */

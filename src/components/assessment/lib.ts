@@ -16,7 +16,6 @@ import type {
   CompetencyGroup,
   CompetencyQuestion,
   CycleSummary,
-  KpiRow,
   LevelDetail,
   Mode,
 } from "@/server/assessment";
@@ -28,7 +27,6 @@ export type {
   CompetencyGroup,
   CompetencyQuestion,
   CycleSummary,
-  KpiRow,
   LevelDetail,
   Mode,
 };
@@ -60,10 +58,9 @@ export const groupDictKey = (group: CompetencyGroup) =>
 
 /* ------------------------------------------------------------------- steps */
 
-export type StepKey = "kpi" | CompetencyGroup | "complete";
+export type StepKey = CompetencyGroup | "complete";
 
 export function stepDictKey(step: StepKey): string {
-  if (step === "kpi") return "group.kpi";
   if (step === "complete") return "label.complete";
   return groupDictKey(step);
 }
@@ -78,7 +75,7 @@ export function stepsFor(competencies: { group: CompetencyGroup }[]): StepKey[] 
   const groups = GROUP_ORDER.filter((g) =>
     competencies.some((c) => c.group === g),
   );
-  return ["kpi", ...groups, "complete"];
+  return [...groups, "complete"];
 }
 
 /* ------------------------------------------------------------------ levels */
@@ -116,38 +113,11 @@ export const LEVEL_DESC_EN: Record<number, string> = {
   1: "Does not yet show this behaviour, or acts against it.",
 };
 
-/* --------------------------------------------------------------------- KPI */
-
-export function kpiWeightTotal(items: { weight: number }[]): number {
-  return items.reduce((a, i) => a + i.weight, 0);
-}
-
-/**
- * Weighted 1–4 KPI score. Null until at least one KPI is rated; the divisor is
- * the weight of the KPIs that *have* been rated, so a half-finished step still
- * reads as a score out of 4 rather than a score dragged toward zero.
- */
-export function kpiScore(
-  items: KpiRow[],
-  scores: Record<string, number | null>,
-): number | null {
-  let sum = 0;
-  let used = 0;
-  for (const item of items) {
-    const score = scores[item.id] ?? item.score;
-    if (!score) continue;
-    sum += score * item.weight;
-    used += item.weight;
-  }
-  return used ? Number((sum / used).toFixed(2)) : null;
-}
-
 /* ------------------------------------------------------------------ scores */
 
-export type PartKey = "kpi" | "core" | "functional" | "managerial";
+export type PartKey = "core" | "functional" | "managerial";
 
 export const PART_DICT_KEY: Record<PartKey, string> = {
-  kpi: "group.kpi",
   core: "group.core",
   functional: "group.functional",
   managerial: "group.managerial",
@@ -197,13 +167,10 @@ export function weightedTotal(input: {
   weights: Weights;
   competencies: { id: string; group: CompetencyGroup }[];
   scores: Record<string, number | undefined>;
-  kpis: KpiRow[];
-  kpiScores: Record<string, number | null>;
 }): WeightedResult {
   const { weights, competencies, scores } = input;
 
   const raw: { key: PartKey; weight: number; score: number | null }[] = [
-    { key: "kpi", weight: weights.kpi, score: kpiScore(input.kpis, input.kpiScores) },
     { key: "core", weight: weights.core, score: groupScore(competencies, "CORE", scores) },
     {
       key: "functional",
@@ -217,11 +184,7 @@ export function weightedTotal(input: {
     },
   ];
 
-  const applicable = raw.filter(
-    (r) =>
-      r.key === "kpi" ||
-      competencies.some((c) => c.group === r.key.toUpperCase()),
-  );
+  const applicable = raw.filter((r) => competencies.some((c) => c.group === r.key.toUpperCase()));
 
   const denom = applicable
     .filter((r) => r.score !== null)
@@ -254,14 +217,11 @@ export function weightedFromParts(
   groups: CompetencyGroup[],
 ): WeightedResult {
   const weightOf: Record<PartKey, number> = {
-    kpi: weights.kpi,
     core: weights.core,
     functional: weights.functional,
     managerial: weights.managerial,
   };
-  const applicable = parts.filter(
-    (p) => p.key === "kpi" || groups.includes(p.key.toUpperCase() as CompetencyGroup),
-  );
+  const applicable = parts.filter((p) => groups.includes(p.key.toUpperCase() as CompetencyGroup));
   const denom = applicable
     .filter((p) => p.score !== null)
     .reduce((a, p) => a + weightOf[p.key], 0);

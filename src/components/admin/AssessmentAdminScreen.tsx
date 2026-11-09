@@ -31,8 +31,6 @@ import {
   formatDate,
 } from "@/components/admin/shared";
 import { ResultBanner } from "@/components/admin/rbac-shared";
-import { KpiEditor } from "@/components/admin/KpiEditor";
-import { useUi } from "@/lib/ui-state";
 import type {
   ActionResult,
   AssessmentAdminData,
@@ -52,8 +50,8 @@ import { usePermission } from "@/lib/viewer";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type WeightKey = "kpi" | "core" | "functional" | "managerial";
-const WEIGHT_KEYS: WeightKey[] = ["kpi", "core", "functional", "managerial"];
+type WeightKey = "core" | "functional" | "managerial";
+const WEIGHT_KEYS: WeightKey[] = ["core", "functional", "managerial"];
 type Weights = Record<WeightKey, number>;
 
 const GROUPS: CompetencyGroupValue[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
@@ -130,15 +128,6 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   const canEditFramework = can(PERMISSIONS.MANAGE_FRAMEWORK);
 
   const [result, setResult] = useState<ActionResult | null>(null);
-  const { notify } = useUi();
-  const [kpiFor, setKpiFor] = useState<string | null>(null);
-  const roleHeadcount = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of employees) m.set(e.jobRoleId, (m.get(e.jobRoleId) ?? 0) + 1);
-    return m;
-  }, [employees]);
-  const kpiEmployee = employees.find((e) => e.id === kpiFor) ?? null;
-  const withoutKpi = employees.filter((e) => !e.kpis.length).length;
   const [busy, startTransition] = useTransition();
 
   const [nameEn, setNameEn] = useState(cycle?.nameEn ?? "");
@@ -148,10 +137,9 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   const [status, setStatus] = useState<CycleStatusValue>(cycle?.status ?? "OPEN");
 
   const [weights, setWeights] = useState<Weights>({
-    kpi: cycle?.weightKpi ?? 40,
-    core: cycle?.weightCore ?? 20,
-    functional: cycle?.weightFunctional ?? 25,
-    managerial: cycle?.weightManagerial ?? 15,
+    core: cycle?.weightCore ?? 35,
+    functional: cycle?.weightFunctional ?? 40,
+    managerial: cycle?.weightManagerial ?? 25,
   });
 
   const [pending, setPending] = useState<PendingCell | null>(null);
@@ -161,8 +149,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   const weightTotal = WEIGHT_KEYS.reduce((a, k) => a + weights[k], 0);
   const weightsDirty =
     cycle !== null &&
-    (weights.kpi !== cycle.weightKpi ||
-      weights.core !== cycle.weightCore ||
+    (weights.core !== cycle.weightCore ||
       weights.functional !== cycle.weightFunctional ||
       weights.managerial !== cycle.weightManagerial);
 
@@ -187,7 +174,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   }
 
   function weightLabel(k: WeightKey) {
-    return k === "kpi" ? t("group.kpi") : t(`group.${k}`);
+    return t(`group.${k}`);
   }
 
   function requestCellChange(
@@ -353,14 +340,13 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               {t("label.total")} {weightTotal}%
             </Pill>
           </div>
-          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+          <div className="mt-4 grid gap-6 sm:grid-cols-3">
             {WEIGHT_KEYS.map((k) => (
               <label key={k} className="block">
                 <span className="mb-1.5 flex items-center justify-between gap-3 text-sm font-medium text-ink">
                   <span>{weightLabel(k)}</span>
                   <span
                     className={cn(
-                      k === "kpi" && "text-brand",
                       k === "core" && "text-amber",
                       k === "functional" && "text-success",
                       k === "managerial" && "text-accent",
@@ -381,7 +367,6 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                   }
                   className={cn(
                     "w-full",
-                    k === "kpi" && "accent-[#006bff]",
                     k === "core" && "accent-[#faa21b]",
                     k === "functional" && "accent-[#00b916]",
                     k === "managerial" && "accent-[#f05123]",
@@ -391,7 +376,6 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
             ))}
           </div>
           <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-surface">
-            <div className="bg-brand" style={{ width: `${weights.kpi}%` }} />
             <div className="bg-amber" style={{ width: `${weights.core}%` }} />
             <div className="bg-success" style={{ width: `${weights.functional}%` }} />
             <div className="bg-accent" style={{ width: `${weights.managerial}%` }} />
@@ -399,8 +383,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-xl text-xs leading-relaxed text-muted">
               {tt(
-                "Moving one slider adjusts the others, so the four sections always add up to 100%.",
-                "เมื่อเลื่อนแถบหนึ่ง ระบบจะปรับแถบอื่นให้ผลรวมเท่ากับ 100% เสมอ",
+                "Moving one slider adjusts the others, so the three competency groups always add up to 100%. KPIs are run outside this system and are not part of the score.",
+                "เมื่อเลื่อนแถบหนึ่ง ระบบจะปรับแถบอื่นให้ผลรวมของสมรรถนะทั้งสามกลุ่มเท่ากับ 100% เสมอ (KPI ประเมินนอกระบบนี้ จึงไม่รวมในคะแนน)",
               )}
             </p>
             <Button
@@ -411,7 +395,6 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                 run(() =>
                   updateCycleWeights({
                     cycleId: cycle.id,
-                    kpi: weights.kpi,
                     core: weights.core,
                     functional: weights.functional,
                     managerial: weights.managerial,
@@ -646,11 +629,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                 `Self ${counts.selfSubmitted}/${counts.headcount} · Supervisor ${counts.supervisorSubmitted}/${counts.headcount}`,
                 `ประเมินตนเอง ${counts.selfSubmitted}/${counts.headcount} · หัวหน้าประเมิน ${counts.supervisorSubmitted}/${counts.headcount}`,
               )}
-              {withoutKpi ? (
-                <span className="text-accent">
-                  {tt(` · ${withoutKpi} without KPIs`, ` · ยังไม่กำหนด KPI ${withoutKpi} คน`)}
-                </span>
-              ) : null}
+
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -677,7 +656,6 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               <tr className="border-y border-line/70 bg-surface/60">
                 <Th>{t("label.employee")}</Th>
                 <Th>{t("label.level")}</Th>
-                <Th>KPI</Th>
                 <Th>{t("mode.self")}</Th>
                 <Th>{t("mode.supervisor")}</Th>
                 <Th className="w-40">{t("label.progress")}</Th>
@@ -695,24 +673,6 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                     </span>
                   </Td>
                   <Td className="whitespace-nowrap text-muted">{lv(p.level)}</Td>
-                  <Td>
-                    <button
-                      type="button"
-                      disabled={!cycle}
-                      onClick={() => setKpiFor(p.id)}
-                      title={tt("Set KPIs", "กำหนด KPI")}
-                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-brand-tint disabled:opacity-50"
-                    >
-                      <ListChecks size={14} className="shrink-0 text-brand" />
-                      {p.kpis.length ? (
-                        <span className="font-medium text-ink">
-                          {tt(`${p.kpis.length} KPI`, `${p.kpis.length} ข้อ`)}
-                        </span>
-                      ) : (
-                        <span className="font-medium text-accent">{tt("Not set", "ยังไม่กำหนด")}</span>
-                      )}
-                    </button>
-                  </Td>
                   <Td>
                     <Pill tone={p.selfSubmitted ? "success" : "danger"}>
                       {p.selfSubmitted ? t("status.completed") : t("status.incomplete")}
@@ -748,7 +708,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               ))}
               {visibleEmployees.length === 0 ? (
                 <tr>
-                  <Td colSpan={7} className="py-10 text-center text-muted">
+                  <Td colSpan={6} className="py-10 text-center text-muted">
                     {t("admin.noMatch")}
                   </Td>
                 </tr>
@@ -758,24 +718,12 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
         </TableWrap>
         <div className="border-t border-line/70 p-5">
           <Note>
-            {tt("KPIs are set by the company: click a person's KPI cell to set theirs, or the same set for their whole career role. Employees and supervisors only rate them. Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app.",
-              "KPI กำหนดโดยบริษัท: กดที่ช่อง KPI ของพนักงานเพื่อกำหนดรายบุคคล หรือใช้ชุดเดียวกันกับทั้งบทบาท พนักงานและหัวหน้ามีหน้าที่ให้คะแนนเท่านั้น ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ",
+            {tt("Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app.",
+              "ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ",
             )}
           </Note>
         </div>
       </Card>
-
-      {kpiEmployee ? (
-        <KpiEditor
-          employee={kpiEmployee}
-          roleHeadcount={roleHeadcount.get(kpiEmployee.jobRoleId) ?? 1}
-          onClose={() => setKpiFor(null)}
-          onDone={(r) => {
-            setResult(r);
-            notify(r.ok ? (lang === "th" ? r.message.th : r.message.en) : lang === "th" ? r.error.th : r.error.en, r.ok ? undefined : "error");
-          }}
-        />
-      ) : null}
 
       {/* ---------------------------------------- confirm a matrix edit */}
       <Modal

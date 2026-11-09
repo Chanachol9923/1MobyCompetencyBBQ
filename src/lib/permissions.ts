@@ -60,8 +60,8 @@ export const PERMISSION_CATALOGUE: PermissionMeta[] = [
     nameEn: "Run self assessment",
     nameTh: "ประเมินตนเอง",
     category: "own",
-    descEn: "KPI plus the competencies their role is assessed on.",
-    descTh: "KPI และสมรรถนะตามที่บทบาทของตนถูกประเมิน",
+    descEn: "The competencies their role is assessed on.",
+    descTh: "สมรรถนะตามที่บทบาทของตนถูกประเมิน",
     source: "1.1",
   },
   {

@@ -146,9 +146,8 @@ Browser ─ server actions ────┘        │
 
 **Assessment** — 180°: self and supervisor. The steps are derived from the target's career role,
 so an Executive never sees a Managerial step. Each 1–4 option shows that level's own description
-and a worked example from the framework, with the expected level marked on the scale. KPIs are set by
-the company (HR, in the assessment admin — per person or for a whole career role) with weights that
-total 100%; the employee and supervisor only rate them. The result page shows the weighted total as a readable formula, the full
+and a worked example from the framework, with the expected level marked on the scale. The score is competencies only, weighted by group (Core / Functional / Managerial) as HR sets them
+on the cycle; KPIs are run outside this system. The result page shows the weighted total as a readable formula, the full
 gap table, and a side-by-side of self against supervisor.
 
 **IDP** — a plan seeded from that person's own worst gaps. Goals read "raise Take Ownership from

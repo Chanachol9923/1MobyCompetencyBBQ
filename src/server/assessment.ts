@@ -6,9 +6,9 @@ import { getActiveCycle, verdictFor, type GapVerdict } from "@/server/competency
 /**
  * Everything the 180° assessment reads out of Postgres.
  *
- * The screen used to keep its answers in `localStorage`; it now keeps them in
- * `Assessment` / `AssessmentScore` / `KpiItem`, and this module is the only
- * place that knows how those three tables fit together.
+ * The answers live in `Assessment` / `AssessmentScore`, and this module is the
+ * only place that knows how those tables fit together. The score is
+ * competencies only: KPIs are run outside this system.
  *
  * Three rules are enforced here so no screen can get them wrong:
  *
@@ -51,9 +51,8 @@ export type CycleSummary = {
   startsAt: string;
   endsAt: string;
   status: "DRAFT" | "OPEN" | "REVIEW" | "CLOSED";
-  /** whole percentages as configured by HR; they sum to 100 */
+  /** whole percentages of the competency groups, set by HR; they sum to 100 */
   weights: {
-    kpi: number;
     core: number;
     functional: number;
     managerial: number;
@@ -72,7 +71,6 @@ export function toCycleSummary(cycle: CycleRow): CycleSummary {
     endsAt: cycle.endsAt.toISOString(),
     status: cycle.status,
     weights: {
-      kpi: cycle.weightKpi,
       core: cycle.weightCore,
       functional: cycle.weightFunctional,
       managerial: cycle.weightManagerial,
@@ -199,58 +197,6 @@ export async function getAssessedIdsByJobRole(
   return out;
 }
 
-/* -------------------------------------------------------------------- KPI */
-
-export type KpiRow = {
-  id: string;
-  name: string;
-  target: string;
-  weight: number;
-  score: number | null;
-};
-
-/**
- * The KPI half of the score for one person in one cycle.
- *
- * `KpiItem.score` is a single column, which makes it the cycle's agreed KPI
- * result rather than a per-mode opinion: the employee proposes it in the self
- * assessment and the supervisor review — the official record — overwrites it.
- */
-export async function getKpiItems(
-  cycleId: string,
-  employeeId: string,
-): Promise<KpiRow[]> {
-  return db.kpiItem.findMany({
-    where: { cycleId, employeeId },
-    orderBy: [{ weight: "desc" }, { name: "asc" }],
-    select: { id: true, name: true, target: true, weight: true, score: true },
-  });
-}
-
-/** The same thing for a whole team, still one query. */
-export async function getKpiItemsForMany(
-  cycleId: string,
-  employeeIds: string[],
-): Promise<Map<string, KpiRow[]>> {
-  const out = new Map<string, KpiRow[]>();
-  for (const id of employeeIds) out.set(id, []);
-  if (employeeIds.length === 0) return out;
-  const rows = await db.kpiItem.findMany({
-    where: { cycleId, employeeId: { in: employeeIds } },
-    orderBy: [{ weight: "desc" }, { name: "asc" }],
-    select: {
-      id: true,
-      employeeId: true,
-      name: true,
-      target: true,
-      weight: true,
-      score: true,
-    },
-  });
-  for (const { employeeId, ...row } of rows) out.get(employeeId)?.push(row);
-  return out;
-}
-
 /* ------------------------------------------------------------ assessments */
 
 export type AssessmentRecord = {
@@ -368,7 +314,6 @@ export type WizardData = {
   cycle: CycleSummary;
   subject: WizardSubject;
   competencies: CompetencyQuestion[];
-  kpis: KpiRow[];
   /** competencyId → 1..4, the answers already saved for *this* assessment */
   scores: Record<string, number>;
   submittedAt: string | null;
@@ -408,9 +353,8 @@ export async function getWizardData(input: {
   });
   if (!subject) return null;
 
-  const [competencies, kpis, mine, counterpart] = await Promise.all([
+  const [competencies, mine, counterpart] = await Promise.all([
     getCompetencyQuestions(subject.id),
-    getKpiItems(cycle.id, subject.id),
     findAssessment({
       cycleId: cycle.id,
       subjectId: subject.id,
@@ -434,7 +378,6 @@ export async function getWizardData(input: {
       level: subject.jobRole.level,
     },
     competencies,
-    kpis,
     scores: mine ? Object.fromEntries(mine.scores) : {},
     submittedAt: mine?.submittedAt?.toISOString() ?? null,
     counterpart: counterpart
@@ -450,9 +393,9 @@ export async function getWizardData(input: {
 
 export type HubProgress = {
   status: AssessmentStatus;
-  /** competencies rated plus KPI items scored */
+  /** competencies rated */
   answered: number;
-  /** competencies assessed plus KPI items defined */
+  /** competencies this person's career role is assessed on */
   required: number;
   submittedAt: string | null;
 };
@@ -482,14 +425,14 @@ export type HubResult = {
   rows: HubResultRow[];
   counts: Record<GapVerdict, number>;
   /** the parts of the weighted total, already scored on the server */
-  parts: { key: "kpi" | "core" | "functional" | "managerial"; score: number | null }[];
+  parts: { key: "core" | "functional" | "managerial"; score: number | null }[];
 };
 
 export type HubData = {
   cycle: CycleSummary | null;
   /** the competency groups the viewer's own role is assessed on */
   groups: CompetencyGroup[];
-  self: HubProgress & { competencyCount: number; kpiCount: number };
+  self: HubProgress & { competencyCount: number };
   reports: HubReport[];
   result: HubResult | null;
 };
@@ -504,7 +447,7 @@ const EMPTY_PROGRESS: HubProgress = {
 /**
  * The hub in a fixed number of queries no matter how many direct reports the
  * viewer has: the people, their career roles' assessed competencies, every
- * relevant assessment with its scores, and every KPI item, each read in bulk.
+ * and every relevant assessment with its scores, each read in bulk.
  */
 export async function getHubData(input: {
   employeeId: string;
@@ -516,7 +459,7 @@ export async function getHubData(input: {
     return {
       cycle: null,
       groups: [],
-      self: { ...EMPTY_PROGRESS, competencyCount: 0, kpiCount: 0 },
+      self: { ...EMPTY_PROGRESS, competencyCount: 0 },
       reports: [],
       result: null,
     };
@@ -525,7 +468,7 @@ export async function getHubData(input: {
   const me = input.employeeId;
   const everyone = [me, ...input.reportIds.filter((id) => id !== me)];
 
-  const [people, myCompetencies, assessments, kpiByPerson] = await Promise.all([
+  const [people, myCompetencies, assessments] = await Promise.all([
     db.employee.findMany({
       where: { id: { in: everyone } },
       orderBy: { name: "asc" },
@@ -557,7 +500,6 @@ export async function getHubData(input: {
         scores: { select: { competencyId: true, score: true } },
       },
     }),
-    getKpiItemsForMany(cycle.id, everyone),
   ]);
 
   const assessedByRole = await getAssessedIdsByJobRole([
@@ -566,7 +508,6 @@ export async function getHubData(input: {
 
   /** How much of an assessment is done, counting only what actually applies. */
   const progressOf = (
-    subjectId: string,
     jobRoleId: string,
     row:
       | {
@@ -576,17 +517,13 @@ export async function getHubData(input: {
       | undefined,
   ): HubProgress => {
     const assessed = assessedByRole.get(jobRoleId) ?? new Set<string>();
-    const kpis = kpiByPerson.get(subjectId) ?? [];
     const rated = (row?.scores ?? []).filter((s) =>
       assessed.has(s.competencyId),
     ).length;
-    const scoredKpis = kpis.filter((k) => k.score !== null).length;
     return {
-      status: statusOf(
-        row ? { submittedAt: row.submittedAt, answered: rated + scoredKpis } : null,
-      ),
-      answered: rated + scoredKpis,
-      required: assessed.size + kpis.length,
+      status: statusOf(row ? { submittedAt: row.submittedAt, answered: rated } : null),
+      answered: rated,
+      required: assessed.size,
       submittedAt: row?.submittedAt?.toISOString() ?? null,
     };
   };
@@ -596,9 +533,8 @@ export async function getHubData(input: {
 
   const selfRow = assessments.find((a) => a.mode === "SELF" && a.subjectId === me);
   const self = {
-    ...progressOf(me, mine?.jobRoleId ?? "", selfRow),
+    ...progressOf(mine?.jobRoleId ?? "", selfRow),
     competencyCount: myCompetencies.length,
-    kpiCount: (kpiByPerson.get(me) ?? []).length,
   };
 
   const reports: HubReport[] = input.reportIds
@@ -617,7 +553,7 @@ export async function getHubData(input: {
         position: p.position?.name ?? null,
         jobRole: p.jobRole.name,
         level: p.jobRole.level,
-        ...progressOf(p.id, p.jobRoleId, row),
+        ...progressOf(p.jobRoleId, row),
       };
     });
 
@@ -666,24 +602,11 @@ export async function getHubData(input: {
       );
     };
 
-    const kpis = kpiByPerson.get(me) ?? [];
-    let kpiSum = 0;
-    let kpiWeight = 0;
-    for (const k of kpis) {
-      if (k.score === null) continue;
-      kpiSum += k.score * k.weight;
-      kpiWeight += k.weight;
-    }
-
     result = {
       submittedAt: review.submittedAt.toISOString(),
       rows,
       counts,
       parts: [
-        {
-          key: "kpi",
-          score: kpiWeight ? Number((kpiSum / kpiWeight).toFixed(2)) : null,
-        },
         { key: "core", score: groupScore("CORE") },
         { key: "functional", score: groupScore("FUNCTIONAL") },
         { key: "managerial", score: groupScore("MANAGERIAL") },

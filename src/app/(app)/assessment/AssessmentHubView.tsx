@@ -87,8 +87,8 @@ export function AssessmentHubView({
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
       <PageHeading
         title={t("nav.assessment")}
-        subtitle={tt("180° assessment — by yourself and your supervisor, scored on KPIs and competencies.",
-          "การประเมินแบบ 180 องศา — ประเมินตนเองและประเมินโดยหัวหน้า คิดคะแนนจาก KPI และสมรรถนะ",
+        subtitle={tt("180° assessment — by yourself and your supervisor, scored on competencies.",
+          "การประเมินแบบ 180 องศา — ประเมินตนเองและประเมินโดยหัวหน้า คิดคะแนนจากสมรรถนะ",
         )}
       />
 
@@ -104,8 +104,8 @@ export function AssessmentHubView({
           <p className="break-words text-xs leading-relaxed text-muted">
             {groupsLabel
               ? tt(
-                  `Closes ${closes}. ${viewerName} is assessed as ${jobRoleName ?? ""} on ${groupsLabel} plus KPI.`,
-                  `ปิดรอบ ${closes} — ${viewerName} ถูกประเมินในฐานะ ${jobRoleName ?? ""} ในกลุ่ม ${groupsLabel} และ KPI`,
+                  `Closes ${closes}. ${viewerName} is assessed as ${jobRoleName ?? ""} on ${groupsLabel}.`,
+                  `ปิดรอบ ${closes} — ${viewerName} ถูกประเมินในฐานะ ${jobRoleName ?? ""} ในกลุ่ม ${groupsLabel}`,
                 )
               : tt(`Closes ${closes}. No competency has an expected level for this career role yet.`,
                   `ปิดรอบ ${closes} — บทบาทสายอาชีพนี้ยังไม่มีสมรรถนะที่กำหนดระดับที่คาดหวัง`,
@@ -158,8 +158,7 @@ export function AssessmentHubView({
                 </Button>
               </Link>
               <span className="self-center text-xs text-muted">
-                {self.competencyCount} {tt("competencies", "สมรรถนะ")} ·{" "}
-                {self.kpiCount} KPI
+                {self.competencyCount} {tt("competencies", "สมรรถนะ")}
                 {self.submittedAt
                   ? ` · ${tt("submitted", "ส่งเมื่อ")} ${formatDate(self.submittedAt, lang)}`
                   : ""}

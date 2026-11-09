@@ -13,7 +13,6 @@ import {
 import { Button, Card, Modal, PageHeading, Pill } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { CompetencyRatingCard } from "./CompetencyRatingCard";
-import { KpiStep } from "./KpiStep";
 import { ResultStep } from "./ResultStep";
 import { Stepper } from "./Stepper";
 import {
@@ -30,7 +29,6 @@ import {
 import type { WizardData } from "@/server/assessment";
 import {
   reopenAssessmentAction,
-  saveKpiScoreAction,
   saveScoreAction,
   submitAssessmentAction,
   type ActionError,
@@ -57,30 +55,22 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
   const [scores, setScores] = useState<Record<string, number | undefined>>(
     () => ({ ...data.scores }),
   );
-  const [kpiScores, setKpiScores] = useState<Record<string, number | null>>({});
   const [error, setError] = useState<ActionError | null>(null);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
 
-  const { competencies, kpis, cycle, subject, mode } = data;
+  const { competencies, cycle, subject, mode } = data;
   const steps = useMemo(() => stepsFor(competencies), [competencies]);
-
-  const kpiScoreOf = (id: string, fallback: number | null) =>
-    kpiScores[id] ?? fallback;
 
   const stepComplete = useMemo(
     () =>
       steps.map((key) => {
-        if (key === "kpi") {
-          return kpis.every((i) => kpiScoreOf(i.id, i.score) !== null);
-        }
         if (key === "complete") return true;
         return competencies
           .filter((c) => c.group === key)
           .every((c) => Boolean(scores[c.id]));
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [steps, kpis, kpiScores, competencies, scores],
+    [steps, competencies, scores],
   );
 
   const allDone = stepComplete.every(Boolean);
@@ -116,12 +106,8 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
       "แบบประเมินนี้ยังไม่ได้ถูกส่ง",
     ],
     incomplete: [
-      "Rate every KPI and competency before submitting.",
-      "ให้คะแนน KPI และสมรรถนะให้ครบก่อนส่ง",
-    ],
-    bad_weights: [
-      "KPI weights must total 100%.",
-      "น้ำหนักของ KPI ต้องรวมได้ 100%",
+      "Rate every competency before submitting.",
+      "ให้คะแนนสมรรถนะให้ครบทุกข้อก่อนส่ง",
     ],
   };
 
@@ -144,25 +130,6 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
         // the database refused it — put the scale back rather than leave the
         // browser showing an answer nobody saved
         setScores((s) => ({ ...s, [competencyId]: previous }));
-        setError(result.error);
-      }
-    });
-  };
-
-  const rateKpi = (kpiItemId: string, score: number) => {
-    const item = kpis.find((k) => k.id === kpiItemId);
-    const previous = kpiScoreOf(kpiItemId, item?.score ?? null);
-    setKpiScores((s) => ({ ...s, [kpiItemId]: score }));
-    setError(null);
-    startTransition(async () => {
-      const result = await saveKpiScoreAction({
-        mode,
-        targetId: subject.id,
-        kpiItemId,
-        score,
-      });
-      if (!result.ok) {
-        setKpiScores((s) => ({ ...s, [kpiItemId]: previous }));
         setError(result.error);
       }
     });
@@ -228,8 +195,6 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
       weights={cycle.weights}
       competencies={competencies}
       scores={scores}
-      kpis={kpis}
-      kpiScores={kpiScores}
       counterpart={data.counterpart}
     />
   );
@@ -363,13 +328,7 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
       <Stepper steps={stepItems} current={step} onJump={(i) => setStep(i)} />
 
       <div className="mt-8">
-        {currentKey === "kpi" ? (
-          <KpiStep
-            items={kpis}
-            scores={kpiScores}
-            onScore={rateKpi}
-          />
-        ) : isComplete ? (
+        {isComplete ? (
           resultStep
         ) : (
           <GroupStep
@@ -403,8 +362,8 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
               allDone
                 ? undefined
                 : tt(
-                    "Rate every KPI and competency before submitting",
-                    "ให้คะแนน KPI และสมรรถนะให้ครบก่อนส่ง",
+                    "Rate every competency before submitting",
+                    "ให้คะแนนสมรรถนะให้ครบทุกข้อก่อนส่ง",
                   )
             }
           >
@@ -437,15 +396,10 @@ export function AssessmentWizard({ data }: { data: WizardData }) {
 
       {!canAdvance && !isComplete ? (
         <p className="mt-3 break-words text-right text-xs text-muted">
-          {currentKey === "kpi"
-            ? tt(
-                "Score every KPI to continue.",
-                "ให้คะแนน KPI ให้ครบทุกข้อเพื่อไปต่อ",
-              )
-            : tt(
-                `Rate all ${groupCount} competencies to continue.`,
-                `ให้คะแนนสมรรถนะทั้ง ${groupCount} ข้อเพื่อไปต่อ`,
-              )}
+          {tt(
+            `Rate all ${groupCount} competencies to continue.`,
+            `ให้คะแนนสมรรถนะทั้ง ${groupCount} ข้อเพื่อไปต่อ`,
+          )}
         </p>
       ) : null}
 
