@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
-  SkipForward,
   Sparkles,
 } from "lucide-react";
 import { Button, Card, PageHeading, Pill, Progress } from "@/components/ui";
@@ -39,7 +38,6 @@ import type { PlayerView as PlayerData } from "@/server/learning";
 import {
   completeChapterAction,
   recordTestAction,
-  skipPreTestAction,
   type LmsError,
 } from "../actions";
 import { SEEK_EVENT, type SeekRequest } from "@/components/learning/lesson-seek";
@@ -95,8 +93,6 @@ function Player({ view }: { view: PlayerData }) {
   const [testOpen, setTestOpen] = useState<TestVariant | null>(null);
   /** chapters this visit finished, so the tick does not wait for the refresh */
   const [justDone, setJustDone] = useState<string[]>([]);
-  /** the pre-test gate is skippable for this visit without inventing a score */
-  const [skippedPre, setSkippedPre] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<LmsError | null>(null);
 
@@ -141,6 +137,14 @@ function Player({ view }: { view: PlayerData }) {
       not_complete: tt(
         "Finish every chapter before taking the post-test.",
         "กรุณาเรียนให้ครบทุกบทก่อนทำแบบทดสอบหลังเรียน",
+      ),
+      pretest_required: tt(
+        "Take the pre-test first — the chapters open once it is done.",
+        "กรุณาทำแบบทดสอบก่อนเรียนก่อน บทเรียนจะเปิดเมื่อทำเสร็จ",
+      ),
+      pretest_taken: tt(
+        "The pre-test has already been taken — it counts once, as your starting point.",
+        "ทำแบบทดสอบก่อนเรียนไปแล้ว ระบบนับครั้งแรกเป็นคะแนนตั้งต้นเพียงครั้งเดียว",
       ),
     })[code];
 
@@ -239,19 +243,6 @@ function Player({ view }: { view: PlayerData }) {
     });
   };
 
-  const skipPre = () => {
-    setSkippedPre(true);
-    setMessage(
-      tt(
-        "Pre-test skipped — your baseline will show as unknown",
-        "ข้ามแบบทดสอบก่อนเรียน คะแนนตั้งต้นจะแสดงเป็นไม่ทราบ",
-      ),
-    );
-    startTransition(async () => {
-      await skipPreTestAction({ slug: view.slug });
-    });
-  };
-
   /* -------------------------------------------------------------- render */
 
   const backLink = (
@@ -293,10 +284,10 @@ function Player({ view }: { view: PlayerData }) {
 
   /* ------------------------------------------------- pre-test gate screen */
 
-  /* The gate stands until the learner has a pre-test score, has skipped it for
-     this visit, or has already started the course. Skipping writes no
-     `TestResult`: there is no such thing as a score of "unknown". */
-  const settled = view.preScore !== null || skippedPre || progress > 0;
+  /* The gate stands until the learner has a pre-test score. It cannot be
+     skipped; the server refuses chapter progress without it too. Someone who
+     was already part-way through before it was required carries on. */
+  const settled = view.preScore !== null || progress > 0;
   if (!settled || testOpen === "pre") {
     return (
       <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
@@ -319,8 +310,8 @@ function Player({ view }: { view: PlayerData }) {
             </h2>
             <p className="mt-2 max-w-[62ch] text-sm font-light text-muted">
               {tt(
-                "Before chapter 1 opens, take a short multiple-choice pre-test. It records where you are starting from so the post-test can show how far you moved. You may skip it — the result panel will then show your baseline as unknown.",
-                "ก่อนเปิดบทเรียนที่ 1 กรุณาทำแบบทดสอบก่อนเรียนแบบปรนัยสั้น ๆ เพื่อบันทึกจุดเริ่มต้นของคุณ แบบทดสอบหลังเรียนจะได้แสดงพัฒนาการได้ คุณสามารถข้ามได้ แต่ผลสรุปจะแสดงคะแนนตั้งต้นเป็นไม่ทราบ",
+                "Before chapter 1 opens, take a short multiple-choice pre-test. It records where you are starting from, so the post-test can show how far you moved. It is required, and it counts once — there is no pass mark, just answer honestly.",
+                "ก่อนเปิดบทเรียนที่ 1 ต้องทำแบบทดสอบก่อนเรียนแบบปรนัยสั้น ๆ เพื่อบันทึกจุดเริ่มต้นของคุณ แบบทดสอบหลังเรียนจะได้แสดงพัฒนาการได้ แบบทดสอบนี้ทำได้ครั้งเดียวและไม่มีเกณฑ์ผ่าน ตอบตามที่รู้จริงได้เลย",
               )}
             </p>
             <ul className="mt-4 space-y-1.5 text-sm text-muted">
@@ -350,10 +341,6 @@ function Player({ view }: { view: PlayerData }) {
               <Button onClick={() => setTestOpen("pre")}>
                 <ClipboardCheck size={16} />{" "}
                 {tt("Start pre-test", "เริ่มทำแบบทดสอบก่อนเรียน")}
-              </Button>
-              <Button variant="outline" onClick={skipPre} disabled={pending}>
-                <SkipForward size={16} />{" "}
-                {tt("Skip pre-test", "ข้ามแบบทดสอบก่อนเรียน")}
               </Button>
             </div>
           </div>

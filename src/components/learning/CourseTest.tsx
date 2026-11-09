@@ -230,9 +230,9 @@ export function CourseTestModal({
 /* ------------------------------------------------------------ result panel */
 
 /**
- * The two scores side by side. `pre === null` means the learner skipped the
- * pre-test — there is no `TestResult` row for it, so the baseline is genuinely
- * unknown rather than a zero.
+ * The two scores side by side. `pre === null` only happens for someone who
+ * started the course before the pre-test was required — there is no
+ * `TestResult` row for it, so the baseline is genuinely unknown, not a zero.
  */
 export function TestResultPanel({
   pre,
@@ -268,8 +268,8 @@ export function TestResultPanel({
           hint={
             pre === null
               ? tt(
-                  "Baseline unknown — pre-test skipped",
-                  "ไม่ทราบคะแนนตั้งต้น เนื่องจากข้ามแบบทดสอบก่อนเรียน",
+                  "Baseline unknown — started before the pre-test was required",
+                  "ไม่ทราบคะแนนตั้งต้น เนื่องจากเริ่มเรียนก่อนที่ระบบจะบังคับทำแบบทดสอบก่อนเรียน",
                 )
               : undefined
           }

@@ -33,7 +33,9 @@ export type LmsError =
   | "not_authorised"
   | "invalid"
   | "not_found"
-  | "not_complete";
+  | "not_complete"
+  | "pretest_required"
+  | "pretest_taken";
 
 export type LmsResult<T> = { ok: true; data: T } | { ok: false; error: LmsError };
 
@@ -165,6 +167,17 @@ export async function completeChapterAction(
   // the chapter id came from the browser, so it is checked against the course
   if (!course.chapters.some((c) => c.id === chapterId)) return fail("not_found");
 
+  // the pre-test comes first: chapters open only once a baseline is on record.
+  // Someone who was already part-way through before it was required carries on.
+  const [pre, started] = await Promise.all([
+    db.testResult.findUnique({
+      where: { employeeId_courseId_kind: { employeeId, courseId: course.id, kind: "PRE" } },
+      select: { id: true },
+    }),
+    db.chapterProgress.count({ where: { enrollment: { employeeId, courseId: course.id } } }),
+  ]);
+  if (!pre && started === 0) return fail("pretest_required");
+
   const enrollment = await db.enrollment.upsert({
     where: { employeeId_courseId: { employeeId, courseId: course.id } },
     update: {},
@@ -288,9 +301,11 @@ export type TestOutcome = {
 /**
  * Records a pre- or post-test.
  *
- * `@@unique([employeeId, courseId, kind])` means a retake replaces the score
- * rather than stacking rows, and the certificate is issued at most once per
- * person and course however many times the post-test is passed.
+ * The pre-test is taken once, before chapter 1: it is the baseline, so a retake
+ * after studying would only make the improvement look bigger than it is. The
+ * post-test may be retaken (`@@unique([employeeId, courseId, kind])` replaces
+ * the score), and the certificate is issued at most once per person and course
+ * however many times it is passed.
  */
 export async function recordTestAction(
   input: z.infer<typeof testSchema>,
@@ -318,6 +333,17 @@ export async function recordTestAction(
     },
   });
   if (!course || course.status !== "PUBLISHED") return fail("not_found");
+
+  if (kind === "PRE") {
+    const [taken, started] = await Promise.all([
+      db.testResult.findUnique({
+        where: { employeeId_courseId_kind: { employeeId, courseId: course.id, kind: "PRE" } },
+        select: { id: true },
+      }),
+      db.chapterProgress.count({ where: { enrollment: { employeeId, courseId: course.id } } }),
+    ]);
+    if (taken || started > 0) return fail("pretest_taken");
+  }
 
   if (kind === "POST") {
     // the post-test only exists once the course itself is finished
@@ -414,42 +440,6 @@ export async function recordTestAction(
     ok: true,
     data: { score, passed, certificateIssued, certificateCode, pointsAwarded },
   };
-}
-
-const skipSchema = z.object({ slug: z.string().trim().min(1).max(200) });
-
-/**
- * The pre-test is optional. Skipping writes no `TestResult` — there is no such
- * thing as a score of "unknown" — it only leaves a trace in the audit log, and
- * the result panel goes on showing the baseline as unknown.
- */
-export async function skipPreTestAction(
-  input: z.infer<typeof skipSchema>,
-): Promise<LmsResult<null>> {
-  const parsed = skipSchema.safeParse(input);
-  if (!parsed.success) return fail("invalid");
-
-  let viewer;
-  try {
-    viewer = await assertEmployee();
-  } catch {
-    return fail("not_authorised");
-  }
-
-  const course = await db.course.findUnique({
-    where: { slug: parsed.data.slug },
-    select: { id: true, titleEn: true, status: true },
-  });
-  if (!course || course.status !== "PUBLISHED") return fail("not_found");
-
-  await recordActivity({
-    viewer,
-    action: "Skipped pre-test",
-    targetType: "Course",
-    targetId: course.id,
-    targetLabel: course.titleEn,
-  });
-  return { ok: true, data: null };
 }
 
 /* -------------------------------------------------------- learning journey */

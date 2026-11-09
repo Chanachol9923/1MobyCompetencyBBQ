@@ -83,6 +83,14 @@ export function PathJourney({ path }: { path: PathView }) {
         "Finish every course in the path before submitting the project.",
         "กรุณาเรียนให้จบทุกหลักสูตรในเส้นทางก่อนส่งโปรเจกต์",
       ),
+      pretest_required: tt(
+        "Take the pre-test first — the chapters open once it is done.",
+        "กรุณาทำแบบทดสอบก่อนเรียนก่อน บทเรียนจะเปิดเมื่อทำเสร็จ",
+      ),
+      pretest_taken: tt(
+        "The pre-test has already been taken — it counts once, as your starting point.",
+        "ทำแบบทดสอบก่อนเรียนไปแล้ว ระบบนับครั้งแรกเป็นคะแนนตั้งต้นเพียงครั้งเดียว",
+      ),
     })[code];
 
   const submitProject = () => {
