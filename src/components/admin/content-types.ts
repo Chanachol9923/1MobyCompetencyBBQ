@@ -294,6 +294,8 @@ export type AdminCourseRow = {
   status: PublishStatusValue;
   /** words the subtitle check should spell this way */
   glossary: string[];
+  /** the competency level (1-4) the course brings a learner up to */
+  level: number | null;
   chapters: AdminChapterRow[];
   enrolledCount: number;
   completedCount: number;

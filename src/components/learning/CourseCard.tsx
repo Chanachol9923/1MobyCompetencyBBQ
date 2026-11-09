@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Clock, PlayCircle } from "lucide-react";
+import { BookOpen, Clock, PlayCircle, Target } from "lucide-react";
 import { Button, Card, Progress } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,15 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
           <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-success">
             {tt("Completed", "เรียนจบแล้ว")}
           </span>
+        ) : course.assigned ? (
+          <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-accent">
+            {tt("Assigned", "ได้รับมอบหมาย")}
+          </span>
+        ) : null}
+        {course.level ? (
+          <span className="absolute bottom-3 left-3 rounded-full bg-black/25 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+            {tt(`Level ${course.level}`, `ระดับ ${course.level}`)}
+          </span>
         ) : null}
       </Link>
 
@@ -69,7 +78,17 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
           </span>
         </div>
 
-        {description ? (
+        {course.assigned ? (
+          <p className="mt-1.5 flex items-start gap-1.5 rounded-md bg-accent/5 px-2 py-1.5 text-[11px] leading-snug text-ink">
+            <Target size={12} className="mt-0.5 shrink-0 text-accent" />
+            <span>
+              {tt(
+                `From your assessment: ${course.assigned.competencyNameEn} is at ${course.assigned.score}, your position expects ${course.assigned.expected}`,
+                `จากผลประเมิน: ${course.assigned.competencyNameTh ?? course.assigned.competencyNameEn} ได้ระดับ ${course.assigned.score} ตำแหน่งของคุณคาดหวังระดับ ${course.assigned.expected}`,
+              )}
+            </span>
+          </p>
+        ) : description ? (
           <p className="mt-1.5 line-clamp-2 text-xs text-muted">{description}</p>
         ) : null}
 

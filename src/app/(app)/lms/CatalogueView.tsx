@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, Clapperboard, FileText, Route, Search } from "lucide-react";
+import { ArrowRight, BookOpen, Clapperboard, FileText, Route, Search, Target } from "lucide-react";
 import { DocumentsGrid, ShortsGrid } from "./MediaViews";
 import {
   Button,
@@ -98,6 +98,16 @@ export function CatalogueView({
       );
     });
   }, [courses, state.q, state.category, state.kind]);
+
+  // what the assessment asked for comes first, in the order of the gap it closes
+  const assigned = useMemo(
+    () =>
+      visibleCourses
+        .filter((c) => c.assigned && !c.complete)
+        .sort((a, b) => (a.level ?? 0) - (b.level ?? 0)),
+    [visibleCourses],
+  );
+  const rest = visibleCourses.filter((c) => !assigned.includes(c));
 
   const categoryOptions = [
     { value: "ALL" as const, label: t("label.all") },
@@ -245,13 +255,39 @@ export function CatalogueView({
               ))}
             </div>
 
-            {visibleCourses.length ? (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleCourses.map((c) => (
-                  <CourseCard key={c.id} course={c} />
-                ))}
-              </div>
-            ) : (
+            {assigned.length ? (
+              <section className="mb-8">
+                <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+                  <Target size={18} className="text-accent" />
+                  {tt("Assigned to you", "คอร์สที่ได้รับมอบหมาย")}
+                  <Pill tone="danger">{assigned.length}</Pill>
+                </h2>
+                <p className="mb-4 mt-1 text-xs text-muted">
+                  {tt(
+                    "From your latest assessment: where your supervisor's score is below what your position expects, the courses at the levels in between.",
+                    "จากผลประเมินล่าสุด: สมรรถนะที่หัวหน้าให้คะแนนต่ำกว่าระดับที่ตำแหน่งของคุณคาดหวัง ระบบมอบหมายคอร์สในระดับที่อยู่ระหว่างนั้นให้",
+                  )}
+                </p>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {assigned.map((c) => (
+                    <CourseCard key={c.id} course={c} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {rest.length ? (
+              <>
+                {assigned.length ? (
+                  <h2 className="mb-4 text-lg font-bold text-ink">{tt("All courses", "หลักสูตรทั้งหมด")}</h2>
+                ) : null}
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {rest.map((c) => (
+                    <CourseCard key={c.id} course={c} />
+                  ))}
+                </div>
+              </>
+            ) : assigned.length ? null : (
               <Card>
                 <EmptyState
                   title={tt(

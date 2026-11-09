@@ -77,6 +77,7 @@ type Draft = {
   hours: string;
   cover: string;
   glossary: string;
+  level: string;
   chapters: ChapterDraft[];
 };
 
@@ -90,6 +91,7 @@ const emptyDraft = (coverIndex: number): Draft => ({
   hours: "6",
   cover: COVERS[coverIndex % COVERS.length]!,
   glossary: "",
+  level: "",
   // a new course starts empty: dropping files is how most chapters arrive
   chapters: [],
 });
@@ -104,6 +106,7 @@ const fromCourse = (c: AdminCourseRow): Draft => ({
   hours: String(c.hours),
   cover: c.cover ?? COVERS[0]!,
   glossary: c.glossary.join(", "),
+  level: c.level ? String(c.level) : "",
   chapters: c.chapters.map(chapterFromRow),
 });
 
@@ -241,6 +244,7 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       hours: draft.hours,
       cover: draft.cover,
       glossary: draft.glossary,
+      level: draft.level,
       chapters: draft.chapters.filter((ch) => !isBlankChapter(ch)).map(chapterPayload),
     };
     runForm(() => saveCourse(payload));
@@ -560,6 +564,21 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                 placeholder={tt("Optional", "ไม่บังคับ")}
                 onChange={(e) => set("descriptionTh", e.target.value)}
               />
+            </Field>
+            <Field
+              label={tt("Course level", "ระดับของคอร์ส")}
+              hint={tt(
+                "The competency level it brings a learner up to. It is assigned automatically to people whose assessed score is below this level and whose position expects at least it.",
+                "ระดับสมรรถนะที่คอร์สนี้พาผู้เรียนไปถึง ระบบจะมอบหมายให้อัตโนมัติกับพนักงานที่ผลประเมินต่ำกว่าระดับนี้ และตำแหน่งคาดหวังอย่างน้อยระดับนี้",
+              )}
+            >
+              <Select value={draft.level} onChange={(e) => set("level", e.target.value)}>
+                <option value="">{tt("Not assigned automatically", "ไม่มอบหมายอัตโนมัติ")}</option>
+                <option value="1">{tt("Level 1 — getting started", "ระดับ 1 — เริ่มต้น")}</option>
+                <option value="2">{tt("Level 2 — foundation", "ระดับ 2 — พื้นฐาน")}</option>
+                <option value="3">{tt("Level 3 — meets the standard", "ระดับ 3 — ได้มาตรฐาน")}</option>
+                <option value="4">{tt("Level 4 — advanced", "ระดับ 4 — ขั้นสูง")}</option>
+              </Select>
             </Field>
             <Field label={tt("Hours", "ชั่วโมง")}>
               <Input

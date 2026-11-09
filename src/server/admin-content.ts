@@ -63,6 +63,7 @@ import type {
 import { enqueueTranscript, recheckTranscripts } from "@/server/transcribe";
 import { kickTranscription } from "@/server/transcript-kick";
 import { enqueueDocumentText } from "@/server/pdf-text";
+import { syncCourseAssignments } from "@/server/course-assignment";
 
 /* ------------------------------------------------------------------ plumbing */
 
@@ -2357,6 +2358,7 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
         cover: true,
         status: true,
         glossary: true,
+        level: true,
         competency: { select: { nameEn: true, nameTh: true } },
         chapters: {
           orderBy: { sortOrder: "asc" },
@@ -2410,6 +2412,7 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
     cover: c.cover,
     status: c.status,
     glossary: c.glossary,
+    level: c.level,
     chapters: c.chapters,
     enrolledCount: c._count.enrollments,
     completedCount: completedByCourse.get(c.id) ?? 0,
@@ -2465,6 +2468,12 @@ const courseFields = z.object({
   category: z.enum(["CORE", "FUNCTIONAL", "MANAGERIAL"]),
   competencyId: z.string().max(64).optional().default(""),
   hours: z.coerce.number().int().min(0).max(1000),
+  /** the competency level (1-4) the course brings a learner up to; "" for none */
+  level: z
+    .union([z.literal(""), z.coerce.number().int().min(1).max(4)])
+    .optional()
+    .default("")
+    .transform((v) => (v === "" ? null : v)),
   cover: z.string().trim().max(120).optional().default(""),
   /** comma- or line-separated words the subtitles should spell this way */
   glossary: z
@@ -2541,6 +2550,7 @@ export async function saveCourse(
       hours: d.hours,
       cover: d.cover || null,
       glossary: d.glossary,
+      level: d.level,
     };
 
     // files the course pointed at before this save, to tidy up afterwards
@@ -2625,6 +2635,8 @@ export async function saveCourse(
       await kickTranscription();
     }
     await removeBlobs(before.map((b) => b.mediaUrl).filter((u): u is string => !!u && !kept.has(u)));
+    // its level, competency or status may have moved what is assigned to whom
+    await syncCourseAssignments().catch((err) => console.error("course assignment failed", err));
 
     await recordActivity({
       viewer,
@@ -2693,6 +2705,8 @@ export async function setCourseStatus(
       targetLabel: course.titleEn,
       detail: `${course.status} → ${status}`,
     });
+    // publishing or withdrawing a course changes what can be assigned
+    await syncCourseAssignments().catch((err) => console.error("course assignment failed", err));
     revalidateContent("/lms");
 
     if (status === "PUBLISHED") {
@@ -3170,6 +3184,9 @@ export async function setExpectedLevel(
     targetLabel: `${jobRole.name} — ${competency.nameEn}`,
     detail: `${from ?? "not assessed"} → ${level ?? "not assessed"}, ${jobRole._count.employees} employee(s)`,
   });
+  // what the position expects moved: their assigned courses follow
+  const inRole = await db.employee.findMany({ where: { jobRoleId, active: true }, select: { id: true } });
+  await syncCourseAssignments(inRole.map((e) => e.id)).catch((err) => console.error("course assignment failed", err));
   revalidateContent("/assessment", "/dashboard", "/team-profile", "/reports", "/idp");
 
   const outcome: ExpectedLevelOutcome = {

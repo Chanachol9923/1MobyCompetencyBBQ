@@ -417,6 +417,54 @@ async function seedAssessments() {
   console.log(`  cycle ${cycle.nameEn}, assessment scores ${written}`);
 }
 
+/**
+ * The competency level (1-4) each course brings a learner up to: per
+ * competency a foundation course (2), the standard one (3) and an advanced one
+ * (4). Courses are assigned from the assessment by this.
+ */
+const COURSE_LEVELS: Record<string, number> = {
+  "learning-agility": 2,
+  "staying-steady-under-pressure": 3,
+  "adaptive-change-workshop": 4,
+  "end-to-end-ownership": 2,
+  "ownership-clinic-status": 3,
+  "blameless-problem-solving": 4,
+  "how-to-be-funny": 2,
+  "cross-team-collaboration": 3,
+  "team-charter-workshop": 4,
+  "measuring-your-work": 2,
+  "impact-prioritisation": 3,
+  "impact-case-dashboard": 4,
+  "design-system": 2,
+  "architecture-decision-lab": 3,
+  "advanced-aws": 4,
+  "prioritisation-and-time": 2,
+  "root-cause-analysis": 3,
+  "analytical-case-three-problems": 4,
+  "git-in-practice": 2,
+  "clean-code-and-reviews": 3,
+  "repo-rescue-lab": 4,
+  "network-security": 2,
+  "data-modelling-essentials": 3,
+  "query-tuning-lab": 4,
+  "programming101": 2,
+  "testing-fundamentals": 3,
+  "refactoring-lab": 3,
+  "nodejs-expert": 4,
+  "project-management-essentials": 2,
+  "coaching-and-feedback": 3,
+  "people-clinic-first-thirty-days": 4,
+  "strategy-to-daily-work": 2,
+  "delegation-and-decisions": 3,
+  "purpose-mandate-workshop": 4,
+  "goal-setting-and-kpis": 2,
+  "delivery-cadence": 3,
+  "result-case-green-dashboard": 4,
+  "leadership-team-dynamics": 2,
+  "process-improvement": 3,
+  "process-case-eleven-approvals": 4,
+};
+
 async function seedLearning() {
   const comps = await db.competency.findMany({ select: { id: true, key: true } });
   const compByKey = new Map(comps.map((c) => [c.key, c.id]));
@@ -434,6 +482,7 @@ async function seedLearning() {
         hours: c.hours,
         cover: c.cover,
         status: c.status === "Published" ? "PUBLISHED" : "DRAFT",
+        level: COURSE_LEVELS[c.id] ?? null,
       },
       create: {
         slug: c.id,
@@ -446,6 +495,7 @@ async function seedLearning() {
         hours: c.hours,
         cover: c.cover,
         status: c.status === "Published" ? "PUBLISHED" : "DRAFT",
+        level: COURSE_LEVELS[c.id] ?? null,
       },
     });
 

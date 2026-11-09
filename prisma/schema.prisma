@@ -234,6 +234,7 @@ model Employee {
   idpGoals            IdpGoal[]        @relation("GoalOwner")
   idpGoalsAssigned    IdpGoal[]        @relation("GoalAuthor")
   enrollments         Enrollment[]
+  courseAssignments   CourseAssignment[]
   testResults         TestResult[]
   certificates        Certificate[]
   badges              EmployeeBadge[]
@@ -282,6 +283,7 @@ model Competency {
   courses        Course[]
   shorts         ShortVideo[]
   documents      LearningDocument[]
+  assignments    CourseAssignment[]
 
   @@index([group])
 }
@@ -495,6 +497,10 @@ model Course {
   /// words the course uses (product names, English jargon) - helps the AI
   /// correct what speech recognition mishears
   glossary      String[]       @default([])
+  /// the competency level (1-4) this course brings a learner up to. Courses are
+  /// assigned to people whose assessed score is below it and whose position
+  /// expects at least it; null means it is never assigned automatically
+  level         Int?
 
   competency  Competency?        @relation(fields: [competencyId], references: [id], onDelete: SetNull)
   chapters    Chapter[]
@@ -505,12 +511,36 @@ model Course {
   pathSteps   LearningPathStep[]
   shorts      ShortVideo[]
   documents   LearningDocument[]
+  assignments CourseAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([competencyId])
   @@index([status])
+}
+
+/// A course given to someone because of their assessment: their supervisor's
+/// score on a competency is below what their position expects, and the
+/// course's level sits between the two. Recomputed whenever the inputs change;
+/// an assignment nobody has started is withdrawn once the gap closes.
+model CourseAssignment {
+  id           String   @id @default(cuid())
+  employeeId   String
+  courseId     String
+  competencyId String
+  /// the supervisor's score and the expected level it was assigned from
+  score        Int
+  expected     Int
+  cycleId      String?
+  createdAt    DateTime @default(now())
+
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  course     Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, courseId])
+  @@index([courseId])
 }
 
 model Chapter {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getActiveCycle } from "@/server/competency";
+import { syncCourseAssignments } from "@/server/course-assignment";
 import {
   dbMode,
   getCompetencyQuestions,
@@ -294,6 +295,8 @@ export async function submitAssessmentAction(
         href: "/assessment",
       },
     });
+    // the official result is in: courses for the gaps are assigned from it
+    await syncCourseAssignments([who.subjectId]).catch((err) => console.error("course assignment failed", err));
   }
 
   await recordActivity({

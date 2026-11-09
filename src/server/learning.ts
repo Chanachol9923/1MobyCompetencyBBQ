@@ -1,3 +1,4 @@
+import { getAssignments, type AssignedCourse } from "@/server/course-assignment";
 import "server-only";
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
@@ -98,6 +99,10 @@ export type CatalogueCourse = {
   progress: number;
   enrolled: boolean;
   complete: boolean;
+  /** the competency level (1-4) the course brings a learner up to */
+  level: number | null;
+  /** set when the course was assigned from this person's assessment */
+  assigned: AssignedCourse | null;
 };
 
 export type CatalogueStats = {
@@ -147,7 +152,7 @@ export async function getCatalogue(
       : {}),
   };
 
-  const [rows, enrolled, totalPublished] = await Promise.all([
+  const [rows, enrolled, totalPublished, assignments] = await Promise.all([
     db.course.findMany({
       where,
       orderBy: [{ category: "asc" }, { titleEn: "asc" }],
@@ -161,6 +166,7 @@ export async function getCatalogue(
         category: true,
         hours: true,
         cover: true,
+        level: true,
         // one join for the page, not one query per card
         chapters: { select: { kind: true } },
       },
@@ -177,6 +183,7 @@ export async function getCatalogue(
       },
     }),
     db.course.count({ where: { status: "PUBLISHED" } }),
+    getAssignments(employeeId),
   ]);
 
   const progressByCourse = new Map<string, number>();
@@ -205,6 +212,8 @@ export async function getCatalogue(
       progress,
       enrolled: progressByCourse.has(c.id),
       complete: progress >= 100,
+      level: c.level,
+      assigned: assignments.get(c.id) ?? null,
     };
   });
 
