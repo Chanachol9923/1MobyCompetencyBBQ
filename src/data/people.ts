@@ -231,16 +231,21 @@ export const POSITIONS = [...posCounts.entries()].map(([name, headcount], i) => 
   headcount,
 }));
 
-/** Career path from the 1Moby Careers chart in the requirement pack. */
+/**
+ * Career path from the 1Moby Careers chart in the requirement pack. Grades
+ * follow the chart: Specialist Lead is SP3-SP4 (the specialist track goes on
+ * from Specialist's SP1-SP2), Expertise spans EP1-EP4 across levels 4-5, and
+ * Director, which has no track code, takes the level-5 general grades G09-G10.
+ */
 export const JOB_ROLES = [
   { id: "r1", name: "Executive", level: "Level 1: Operation", grade: "EX1 - EX2", managerial: false },
   { id: "r2", name: "Senior", level: "Level 2: Senior Operation", grade: "SR1 - SR2", managerial: true },
   { id: "r3", name: "Specialist", level: "Level 2: Senior Operation", grade: "SP1 - SP2", managerial: true },
   { id: "r4", name: "Team Lead", level: "Level 3: Supervise", grade: "TL1 - TL2", managerial: true },
-  { id: "r5", name: "Specialist Lead", level: "Level 3: Supervise", grade: "SL1 - SL2", managerial: true },
+  { id: "r5", name: "Specialist Lead", level: "Level 3: Supervise", grade: "SP3 - SP4", managerial: true },
   { id: "r6", name: "Manager", level: "Level 4: Management", grade: "MG1 - MG2", managerial: true },
-  { id: "r7", name: "Expertise", level: "Level 5: Strategy", grade: "EP1 - EP2", managerial: true },
-  { id: "r8", name: "Director", level: "Level 5: Strategy", grade: "EP3 - EP4", managerial: true },
+  { id: "r7", name: "Expertise", level: "Level 5: Strategy", grade: "EP1 - EP4", managerial: true },
+  { id: "r8", name: "Director", level: "Level 5: Strategy", grade: "G09 - G10", managerial: true },
 ].map((r) => ({
   ...r,
   headcount: EMPLOYEES.filter((p) => p.jobRole === r.name).length,
