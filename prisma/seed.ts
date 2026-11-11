@@ -694,6 +694,7 @@ async function seedEngagement() {
         stock: r.stock,
         image: r.image,
         tone: r.tone,
+        active: r.active ?? true,
       },
       create: {
         key: r.id,
@@ -703,24 +704,15 @@ async function seedEngagement() {
         stock: r.stock,
         image: r.image,
         tone: r.tone,
+        active: r.active ?? true,
       },
     });
   }
 
-  // starting balance so the leaderboard is not empty on day one
-  const employees = await db.employee.findMany({ select: { id: true, employeeCode: true } });
-  for (const e of employees) {
-    const already = await db.pointLedger.count({
-      where: { employeeId: e.id, reason: "Opening balance" },
-    });
-    if (already) continue;
-    const seedPoints =
-      2000 + (Number(e.employeeCode.replace(/\D/g, "")) % 61) * 100;
-    await db.pointLedger.create({
-      data: { employeeId: e.id, delta: seedPoints, reason: "Opening balance" },
-    });
-  }
-  console.log(`  badges ${BADGES.length}, rewards ${REWARDS.length}, point ledgers ${employees.length}`);
+  // No opening balance: points are what people earn in the app (5-50 per
+  // activity). The old random 2,000-8,000 start dwarfed every real award and
+  // was offset by migration 0014.
+  console.log(`  badges ${BADGES.length}, rewards ${REWARDS.length}`);
 }
 
 async function seedComms() {

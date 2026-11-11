@@ -382,7 +382,8 @@ export const COURSES: Course[] = [
     hours: 6,
     lessons: 4,
     enrolled: 58,
-    status: "Published",
+    // a placeholder, not a real course: kept as a draft (migration 0014)
+    status: "Draft",
     cover: "from-[#faa21b] to-[#f05123]",
     description: "Humour as a team tool: timing, warmth, and knowing when not to.",
     descriptionTh:
@@ -2798,13 +2799,16 @@ export type Reward = {
   stock: number;
   image: string;
   tone: string;
+  /** false withdraws it from the catalogue without deleting it */
+  active?: boolean;
 };
 
+/** Priced against what activities earn: a course is 50 points. */
 export const REWARDS: Reward[] = [
-  { id: "starbucks", name: "Starbucks 100 THB Gift Voucher", nameTh: "บัตรกำนัลสตาร์บัคส์ 100 บาท", points: 500, stock: 50, image: "voucher", tone: "from-[#0b6b3a] to-[#00b916]" },
-  { id: "gold", name: "1 Baht Gold Necklaces", nameTh: "สร้อยคอทองคำ 1 บาท", points: 100000, stock: 2, image: "gold", tone: "from-[#faa21b] to-[#f7d488]" },
-  { id: "tshirt", name: "1 Moby T-shirt", nameTh: "เสื้อยืด 1 Moby", points: 900, stock: 100, image: "tshirt", tone: "from-[#006bff] to-[#0061c8]" },
-  { id: "tumbler", name: "Tumbler", nameTh: "แก้วเก็บความเย็น", points: 1500, stock: 15, image: "tumbler", tone: "from-[#9fd8dd] to-[#dff2f4]" },
+  { id: "starbucks", name: "Starbucks 100 THB Gift Voucher", nameTh: "บัตรกำนัลสตาร์บัคส์ 100 บาท", points: 150, stock: 50, image: "voucher", tone: "from-[#0b6b3a] to-[#00b916]" },
+  { id: "gold", name: "1 Baht Gold Necklaces", nameTh: "สร้อยคอทองคำ 1 บาท", points: 100000, stock: 2, active: false, image: "gold", tone: "from-[#faa21b] to-[#f7d488]" },
+  { id: "tshirt", name: "1 Moby T-shirt", nameTh: "เสื้อยืด 1 Moby", points: 300, stock: 100, image: "tshirt", tone: "from-[#006bff] to-[#0061c8]" },
+  { id: "tumbler", name: "Tumbler", nameTh: "แก้วเก็บความเย็น", points: 500, stock: 15, image: "tumbler", tone: "from-[#9fd8dd] to-[#dff2f4]" },
 ];
 
 export const POINT_RULES = [
