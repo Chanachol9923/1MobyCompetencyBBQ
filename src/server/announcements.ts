@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { effectiveChannel } from "@/lib/delivery";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   assertPermission,
@@ -408,7 +409,8 @@ const draftFields = z.object({
   bodyTh: z.string().trim().max(8000).nullable().default(null),
   audience: z.enum(AUDIENCES),
   audienceRef: z.string().trim().nullable().default(null),
-  channel: z.enum(CHANNELS),
+  // without a mailer an email channel would promise what never happens
+  channel: z.enum(CHANNELS).transform(effectiveChannel),
   pinned: z.boolean().default(false),
   /** value of a datetime-local input; ignored when publishNow is true */
   publishAt: z.string().trim().nullable().default(null),

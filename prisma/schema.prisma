@@ -535,6 +535,11 @@ model CourseAssignment {
   expected     Int
   cycleId      String?
   createdAt    DateTime @default(now())
+  /// when it should be finished: 30 days after it was assigned, set by the
+  /// database (migration 0016). The app never writes it, so assigning still
+  /// works on a database without the column; readers fall back to
+  /// createdAt + 30 days there (course-assignment.ts)
+  dueAt        DateTime @default(dbgenerated("(CURRENT_TIMESTAMP + '30 days'::interval)"))
 
   employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   course     Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -542,6 +547,7 @@ model CourseAssignment {
 
   @@unique([employeeId, courseId])
   @@index([courseId])
+  @@index([dueAt])
 }
 
 /// One question of a course's pre/post-test bank, written (or AI-drafted and

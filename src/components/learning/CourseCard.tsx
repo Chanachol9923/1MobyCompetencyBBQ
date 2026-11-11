@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Clock, PlayCircle, Target } from "lucide-react";
+import { BookOpen, CalendarClock, Clock, PlayCircle, Target } from "lucide-react";
 import { Button, Card, Progress } from "@/components/ui";
 import { useT } from "@/lib/i18n";
+import { formatDateLocale } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { KindBadge } from "./ChapterContent";
 import {
@@ -52,8 +53,15 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
             {tt("Completed", "เรียนจบแล้ว")}
           </span>
         ) : course.assigned ? (
-          <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-accent">
-            {tt("Assigned", "ได้รับมอบหมาย")}
+          <span
+            className={cn(
+              "absolute right-3 top-3 rounded-full px-2 py-0.5 text-[11px] font-bold",
+              course.assigned.overdue ? "bg-accent text-white" : "bg-white/90 text-accent",
+            )}
+          >
+            {course.assigned.overdue
+              ? tt("Overdue", "เลยกำหนด")
+              : tt("Assigned", "ได้รับมอบหมาย")}
           </span>
         ) : null}
         {course.level ? (
@@ -90,6 +98,26 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
           </p>
         ) : description ? (
           <p className="mt-1.5 line-clamp-2 text-xs text-muted">{description}</p>
+        ) : null}
+
+        {course.assigned && !done ? (
+          <p
+            className={cn(
+              "mt-1.5 flex items-center gap-1.5 text-[11px] font-medium",
+              course.assigned.overdue ? "text-accent" : "text-muted",
+            )}
+          >
+            <CalendarClock size={12} className="shrink-0" />
+            {course.assigned.overdue
+              ? tt(
+                  `Overdue — was due ${formatDateLocale(course.assigned.dueAt, "en-GB")}`,
+                  `เลยกำหนดแล้ว — ครบกำหนด ${formatDateLocale(course.assigned.dueAt, "th-TH")}`,
+                )
+              : tt(
+                  `Due ${formatDateLocale(course.assigned.dueAt, "en-GB")}`,
+                  `ครบกำหนด ${formatDateLocale(course.assigned.dueAt, "th-TH")}`,
+                )}
+          </p>
         ) : null}
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">

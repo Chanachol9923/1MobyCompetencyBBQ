@@ -107,7 +107,13 @@ export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ a
         : []),
       ...refresh.map((e) => {
         const d = desired.get(e.courseId)!;
-        return db.courseAssignment.update({ where: { id: e.id }, data: { score: d.score, expected: d.expected } });
+        // `select` keeps the returned row to columns that exist before 0016;
+        // the due date stays what it was when the course was first assigned
+        return db.courseAssignment.update({
+          where: { id: e.id },
+          data: { score: d.score, expected: d.expected },
+          select: { id: true },
+        });
       }),
     ]);
     added += create.length;
@@ -123,8 +129,8 @@ export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ a
         channel: "IN_APP" as const,
         titleEn: "New courses assigned to you",
         titleTh: "มีคอร์สที่ได้รับมอบหมายใหม่",
-        bodyEn: `${n.count} course(s) from your assessment result, to close the gap to your position's expected level.`,
-        bodyTh: `${n.count} คอร์สจากผลการประเมินของคุณ เพื่อปิดช่องว่างให้ถึงระดับที่ตำแหน่งของคุณคาดหวัง`,
+        bodyEn: `${n.count} course(s) from your assessment result, to close the gap to your position's expected level. Please finish within ${ASSIGNMENT_DUE_DAYS} days.`,
+        bodyTh: `${n.count} คอร์สจากผลการประเมินของคุณ เพื่อปิดช่องว่างให้ถึงระดับที่ตำแหน่งของคุณคาดหวัง กรุณาเรียนให้จบภายใน ${ASSIGNMENT_DUE_DAYS} วัน`,
         href: "/lms",
       })),
     });
@@ -140,13 +146,59 @@ export type AssignedCourse = {
   score: number;
   expected: number;
   assignedAt: string;
+  /** when it should be finished (ISO) */
+  dueAt: string;
+  /** decided on the server, so both renders of the page agree */
+  overdue: boolean;
 };
+
+/** An assignment is due this long after it was made. */
+export const ASSIGNMENT_DUE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether `CourseAssignment.dueAt` exists yet (migration 0016), asked once
+ * rather than per query; an absence is re-checked after a minute.
+ */
+let dueColumnSeen: { exists: boolean; at: number } | null = null;
+async function dueColumnExists(): Promise<boolean> {
+  if (dueColumnSeen && (dueColumnSeen.exists || Date.now() - dueColumnSeen.at < 60_000)) {
+    return dueColumnSeen.exists;
+  }
+  const rows = await db.$queryRaw<{ exists: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'CourseAssignment' AND column_name = 'dueAt'
+    ) AS "exists"`;
+  dueColumnSeen = { exists: Boolean(rows[0]?.exists), at: Date.now() };
+  return dueColumnSeen.exists;
+}
+
+/**
+ * The due date of each assignment, by id. Read with raw SQL so the typed
+ * queries never name a column the database may not have yet; without it the
+ * date is the rule itself, `createdAt` + 30 days — the same value 0016 stores.
+ */
+export async function dueDatesOf(
+  rows: { id: string; createdAt: Date }[],
+): Promise<Map<string, Date>> {
+  const out = new Map<string, Date>();
+  for (const r of rows) {
+    out.set(r.id, new Date(r.createdAt.getTime() + ASSIGNMENT_DUE_DAYS * DAY_MS));
+  }
+  if (!rows.length || !(await dueColumnExists())) return out;
+  const stored = await db.$queryRaw<{ id: string; dueAt: Date }[]>`
+    SELECT "id", "dueAt" FROM "CourseAssignment" WHERE "id" = ANY(${rows.map((r) => r.id)})`;
+  for (const s of stored) out.set(s.id, s.dueAt);
+  return out;
+}
 
 /** What one person has been assigned, by course. */
 export async function getAssignments(employeeId: string): Promise<Map<string, AssignedCourse>> {
   const rows = await db.courseAssignment.findMany({
     where: { employeeId },
     select: {
+      id: true,
       courseId: true,
       competencyId: true,
       score: true,
@@ -155,18 +207,25 @@ export async function getAssignments(employeeId: string): Promise<Map<string, As
       competency: { select: { nameEn: true, nameTh: true } },
     },
   });
+  const due = await dueDatesOf(rows);
+  const now = Date.now();
   return new Map(
-    rows.map((r) => [
-      r.courseId,
-      {
-        courseId: r.courseId,
-        competencyId: r.competencyId,
-        competencyNameEn: r.competency.nameEn,
-        competencyNameTh: r.competency.nameTh,
-        score: r.score,
-        expected: r.expected,
-        assignedAt: r.createdAt.toISOString(),
-      },
-    ]),
+    rows.map((r) => {
+      const dueAt = due.get(r.id)!;
+      return [
+        r.courseId,
+        {
+          courseId: r.courseId,
+          competencyId: r.competencyId,
+          competencyNameEn: r.competency.nameEn,
+          competencyNameTh: r.competency.nameTh,
+          score: r.score,
+          expected: r.expected,
+          assignedAt: r.createdAt.toISOString(),
+          dueAt: dueAt.toISOString(),
+          overdue: dueAt.getTime() < now,
+        },
+      ];
+    }),
   );
 }

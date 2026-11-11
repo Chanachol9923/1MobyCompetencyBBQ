@@ -31,6 +31,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { IconAction, Note, SearchInput } from "@/components/admin/shared";
+import { EMAIL_DELIVERY, effectiveChannel } from "@/lib/delivery";
 import { useT } from "@/lib/i18n";
 import { useUi } from "@/lib/ui-state";
 import { cn } from "@/lib/utils";
@@ -70,7 +71,8 @@ import {
  */
 
 const AUDIENCES: Audience[] = ["ALL", "DEPARTMENT", "DIVISION", "JOB_ROLE", "PERSON"];
-const CHANNELS: Channel[] = ["IN_APP", "EMAIL", "BOTH"];
+// email channels are offered only once email is really sent (lib/delivery)
+const CHANNELS: Channel[] = EMAIL_DELIVERY ? ["IN_APP", "EMAIL", "BOTH"] : ["IN_APP"];
 
 type Draft = {
   id: string | null;
@@ -195,7 +197,7 @@ export function AnnouncementAdmin({
       bodyTh: row.bodyTh ?? "",
       audience: row.audience,
       audienceRef: row.audienceRef ?? "",
-      channel: row.channel,
+      channel: effectiveChannel(row.channel),
       pinned: row.pinned,
       publishNow: row.status === "PUBLISHED",
       publishAt: toLocalInput(row.publishAt),
@@ -325,7 +327,7 @@ export function AnnouncementAdmin({
       )}
 
       <Card className="p-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className={cn("grid gap-3", CHANNELS.length > 1 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
           <div>
             <span className="mb-1.5 block text-sm font-medium text-ink">
               {t("action.search")}
@@ -344,6 +346,7 @@ export function AnnouncementAdmin({
               <option value="DRAFT">{t("status.draft")}</option>
             </Select>
           </Field>
+          {CHANNELS.length > 1 ? (
           <Field label={t("label.channel")}>
             <Select value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)}>
               <option value="all">{tt("All channels", "ทุกช่องทาง")}</option>
@@ -354,6 +357,7 @@ export function AnnouncementAdmin({
               ))}
             </Select>
           </Field>
+          ) : null}
         </div>
       </Card>
 
@@ -690,6 +694,7 @@ export function AnnouncementAdmin({
               )}
             </div>
 
+            {CHANNELS.length > 1 ? (
             <fieldset>
               <legend className="mb-1.5 text-sm font-medium text-ink">
                 {t("label.channel")}
@@ -710,6 +715,14 @@ export function AnnouncementAdmin({
                 ))}
               </div>
             </fieldset>
+            ) : (
+              <p className="text-xs text-muted">
+                {tt(
+                  "Delivered in the app: email is not set up yet.",
+                  "ส่งในแอป: ยังไม่ได้ตั้งค่าการส่งอีเมล",
+                )}
+              </p>
+            )}
 
             <label className="flex items-center gap-2 text-sm text-ink">
               <input

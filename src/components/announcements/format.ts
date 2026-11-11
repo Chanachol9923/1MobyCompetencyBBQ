@@ -1,4 +1,5 @@
 import type { Lang } from "@/lib/i18n";
+import { effectiveChannel } from "@/lib/delivery";
 import type { Audience, Channel, AnnouncementStatus } from "./types";
 
 /**
@@ -78,7 +79,9 @@ const CHANNEL_COPY: Record<Channel, { en: string; th: string }> = {
   BOTH: { en: "In-app + email", th: "ในแอปและอีเมล" },
 };
 
-export const channelLabel = (channel: Channel, lang: Lang) => CHANNEL_COPY[channel][lang];
+/** Labels the channel it is really delivered on: rows saved as EMAIL/BOTH read "In-app" while no email is sent. */
+export const channelLabel = (channel: Channel, lang: Lang) =>
+  CHANNEL_COPY[effectiveChannel(channel)][lang];
 
 const STATUS_COPY: Record<AnnouncementStatus, { en: string; th: string }> = {
   DRAFT: { en: "Draft", th: "ฉบับร่าง" },

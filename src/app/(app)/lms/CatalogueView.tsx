@@ -99,15 +99,21 @@ export function CatalogueView({
     });
   }, [courses, state.q, state.category, state.kind]);
 
-  // what the assessment asked for comes first, in the order of the gap it closes
+  // what the assessment asked for comes first, soonest due first, then in the
+  // order of the gap it closes
   const assigned = useMemo(
     () =>
       visibleCourses
         .filter((c) => c.assigned && !c.complete)
-        .sort((a, b) => (a.level ?? 0) - (b.level ?? 0)),
+        .sort(
+          (a, b) =>
+            a.assigned!.dueAt.localeCompare(b.assigned!.dueAt) ||
+            (a.level ?? 0) - (b.level ?? 0),
+        ),
     [visibleCourses],
   );
   const rest = visibleCourses.filter((c) => !assigned.includes(c));
+  const overdueCount = assigned.filter((c) => c.assigned!.overdue).length;
 
   const categoryOptions = [
     { value: "ALL" as const, label: t("label.all") },
@@ -261,11 +267,16 @@ export function CatalogueView({
                   <Target size={18} className="text-accent" />
                   {tt("Assigned to you", "คอร์สที่ได้รับมอบหมาย")}
                   <Pill tone="danger">{assigned.length}</Pill>
+                  {overdueCount ? (
+                    <Pill tone="danger">
+                      {tt(`${overdueCount} overdue`, `เลยกำหนด ${overdueCount}`)}
+                    </Pill>
+                  ) : null}
                 </h2>
                 <p className="mb-4 mt-1 text-xs text-muted">
                   {tt(
-                    "From your latest assessment: where your supervisor's score is below what your position expects, the courses at the levels in between.",
-                    "จากผลประเมินล่าสุด: สมรรถนะที่หัวหน้าให้คะแนนต่ำกว่าระดับที่ตำแหน่งของคุณคาดหวัง ระบบมอบหมายคอร์สในระดับที่อยู่ระหว่างนั้นให้",
+                    "From your latest assessment: where your supervisor's score is below what your position expects, the courses at the levels in between. Each is due 30 days after it was assigned.",
+                    "จากผลประเมินล่าสุด: สมรรถนะที่หัวหน้าให้คะแนนต่ำกว่าระดับที่ตำแหน่งของคุณคาดหวัง ระบบมอบหมายคอร์สในระดับที่อยู่ระหว่างนั้นให้ แต่ละคอร์สครบกำหนด 30 วันหลังได้รับมอบหมาย",
                   )}
                 </p>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

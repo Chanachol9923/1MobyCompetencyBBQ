@@ -16,6 +16,7 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EMAIL_DELIVERY } from "@/lib/delivery";
 import { useT } from "@/lib/i18n";
 import { useViewer } from "@/lib/viewer";
 import {
@@ -205,7 +206,8 @@ export function Topbar() {
                           <span className="mt-0.5 block line-clamp-2 text-xs text-muted">
                             {pick(lang, n.bodyEn, n.bodyTh)}
                           </span>
-                          {n.channel !== "IN_APP" ? (
+                          {/* only claim an email when one is really sent (lib/delivery) */}
+                          {EMAIL_DELIVERY && n.channel !== "IN_APP" ? (
                             <span className="mt-1 inline-block rounded bg-surface px-1.5 py-0.5 text-[10px] text-muted">
                               {tt("also emailed", "ส่งอีเมลด้วย")}
                             </span>
