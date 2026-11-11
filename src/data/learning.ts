@@ -2810,7 +2810,7 @@ export const REWARDS: Reward[] = [
 export const POINT_RULES = [
   { id: "course", label: "Complete 1 course", labelTh: "เรียนจบ 1 หลักสูตร", points: 50, icon: "book" },
   { id: "assessment", label: "Complete an assessment", labelTh: "ทำแบบประเมินเสร็จ", points: 30, icon: "clipboard" },
-  { id: "idp", label: "Complete IDP plan", labelTh: "ทำแผนพัฒนารายบุคคลครบ", points: 100, icon: "target" },
+  { id: "idp", label: "Complete a development goal (IDP)", labelTh: "ทำเป้าหมายในแผนพัฒนารายบุคคลสำเร็จ", points: 40, icon: "target" },
   { id: "streak", label: "Log in streak for 7 days", labelTh: "เข้าใช้งานต่อเนื่อง 7 วัน", points: 20, icon: "flame" },
 ];
 

@@ -135,7 +135,7 @@ export type ChapterResult = {
  *
  * Marking the last chapter closes the enrolment, awards the course points once
  * and tells the learner that the development goal built on this course is now
- * done. The goal's own percentage is *derived* from these chapter rows, so
+ * done — which earns that goal's own points, once per goal. The goal's own percentage is *derived* from these chapter rows, so
  * nothing is written onto it — the notification is the only new fact.
  */
 export async function completeChapterAction(
@@ -231,6 +231,19 @@ export async function completeChapterAction(
         nameEn: g.competency.nameEn,
         nameTh: g.competency.nameTh,
       }));
+
+      // each goal this course closes earns its own points, once per goal —
+      // keyed on the goal id, so a goal re-linked to another course or a
+      // course finished again never pays twice
+      for (const g of linked) {
+        pointsAwarded += await awardOnce({
+          employeeId,
+          delta: LMS_POINTS.idpGoal,
+          reason: POINT_REASON.idpGoal,
+          refType: POINT_REF.idpGoal,
+          refId: g.id,
+        });
+      }
 
       if (linked.length) {
         await db.notification.createMany({

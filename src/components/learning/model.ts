@@ -69,6 +69,8 @@ export const LMS_POINTS = {
   short: 5,
   /** reading a document to the last page */
   document: 20,
+  /** a development goal in the IDP reaching 100%, once per goal */
+  idpGoal: 40,
 } as const;
 
 /** Reasons written on the point ledger, so an award can be recognised again. */
@@ -78,6 +80,7 @@ export const POINT_REASON = {
   path: "Completed a learning path",
   short: "Watched a short",
   document: "Read a document",
+  idpGoal: "Completed a development goal",
 } as const;
 
 /**
@@ -94,6 +97,7 @@ export const POINT_REF = {
   path: "LearningPath",
   short: "Short",
   document: "Document",
+  idpGoal: "IdpGoal",
 } as const;
 
 /** What an administrator may upload, and how big. */
