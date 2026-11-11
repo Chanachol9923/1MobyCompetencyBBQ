@@ -252,6 +252,10 @@ export type GoalRow = {
   /** 0-100, from the course's chapters when there is one, else the manual value */
   progress: number;
   complete: boolean;
+  /** who wrote the goal; null for seeded goals and authors since removed */
+  createdByName: string | null;
+  /** the plan's owner added it themselves — only they may edit or delete it */
+  selfAdded: boolean;
 };
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -295,6 +299,8 @@ export async function getGoalRowsForMany(
       remark: true,
       manualProgress: true,
       completedAt: true,
+      createdById: true,
+      createdBy: { select: { name: true } },
       competency: { select: { nameEn: true, nameTh: true } },
       course: {
         select: {
@@ -356,6 +362,8 @@ export async function getGoalRowsForMany(
       remark: g.remark,
       progress: Math.max(0, Math.min(100, progress)),
       complete: g.completedAt !== null || progress >= 100,
+      createdByName: g.createdBy?.name ?? null,
+      selfAdded: g.createdById === g.employeeId,
     });
   }
   return out;

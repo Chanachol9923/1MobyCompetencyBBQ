@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
@@ -8,20 +8,36 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
+  Pencil,
   Play,
+  Plus,
   RefreshCw,
   Target,
+  Trash2,
 } from "lucide-react";
 import {
   Button,
   Card,
   CardHeader,
   EmptyState,
+  Modal,
   PageHeading,
   Pill,
   Progress,
   Tabs,
 } from "@/components/ui";
+import {
+  GoalFormModal,
+  type CourseChoice,
+  type GoalDraft,
+} from "@/components/profile/GoalFormModal";
+import type { GapRow } from "@/components/profile/gap";
+import { useUi } from "@/lib/ui-state";
+import {
+  deleteOwnGoalAction,
+  saveOwnGoalAction,
+  type OwnGoalError,
+} from "./actions";
 import {
   categoryDictKey,
   pick,
@@ -53,28 +69,113 @@ const ACTIVITY_LABEL: Record<
  * stored: finishing a course in the LMS on a phone moves this screen on a
  * laptop, because both are reading the same `ChapterProgress` rows.
  *
- * Employees do not author goals; their manager assigns them in Team Profile.
- * The only write this screen makes is the learning evidence panel.
+ * Most goals are assigned by the manager in Team Profile. With `canEdit` the
+ * owner may add activities of their own and edit or delete only those — the
+ * server enforces the same rule; the buttons merely follow it. The learning
+ * evidence panel is the other write this screen makes.
  */
 export function IdpView({
   goals,
   certificates,
   assessedGroups,
+  canEdit = false,
+  rows = [],
+  courses: courseChoices = [],
 }: {
   goals: IdpGoalView[];
   certificates: CertificateOption[];
   assessedGroups: CourseCategory[];
+  /** the viewer may add activities to their own plan */
+  canEdit?: boolean;
+  /** the viewer's own gap rows: the competencies an activity may target */
+  rows?: GapRow[];
+  courses?: CourseChoice[];
 }) {
   const { t, tt, lang } = useT();
-  // the stored stamp is "Assigned by NAME — note"; show the stamp in the
-  // reader's language and the manager's own words as written
+  // the stored stamp is "Assigned by NAME — note" (manager) or "Added by NAME
+  // — note" (the owner); show the stamp in the reader's language and the
+  // author's own words as written
   const remarkText = (remark: string) => {
-    const m = /^Assigned by (.+?)(?: — ([\s\S]*))?$/.exec(remark);
+    const m = /^(Assigned|Added) by (.+?)(?: — ([\s\S]*))?$/.exec(remark);
     if (!m) return remark;
-    const stamp = tt(`Assigned by ${m[1]}`, `มอบหมายโดย ${m[1]}`);
-    return m[2] ? `${stamp} — ${m[2]}` : stamp;
+    const stamp =
+      m[1] === "Added"
+        ? tt(`Added by ${m[2]}`, `เพิ่มโดย ${m[2]}`)
+        : tt(`Assigned by ${m[2]}`, `มอบหมายโดย ${m[2]}`);
+    return m[3] ? `${stamp} — ${m[3]}` : stamp;
   };
   const router = useRouter();
+
+  /* ------------------------------------------------ the owner's own goals */
+  const { notify } = useUi();
+  const [form, setForm] = useState<{ goal: IdpGoalView | null } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<IdpGoalView | null>(null);
+  const [formError, setFormError] = useState<OwnGoalError | null>(null);
+  const [saving, startSaving] = useTransition();
+
+  const errorText = (code: OwnGoalError) =>
+    ({
+      not_authorised: tt("You cannot change this plan.", "คุณไม่มีสิทธิ์แก้ไขแผนนี้"),
+      invalid: tt("Check the form and try again.", "ตรวจสอบข้อมูลแล้วลองใหม่"),
+      unknown_competency: tt(
+        "Your role is not assessed on that competency.",
+        "บทบาทของคุณไม่ได้ประเมินสมรรถนะดังกล่าว",
+      ),
+      unknown_course: tt("That course is not available.", "หลักสูตรนี้ไม่เปิดให้เรียนแล้ว"),
+      course_in_plan: tt(
+        "That course is already in another goal of your plan.",
+        "หลักสูตรนี้อยู่ในเป้าหมายอื่นของแผนคุณแล้ว",
+      ),
+      bad_dates: tt(
+        "Due date must be after the start date.",
+        "วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น",
+      ),
+      bad_levels: tt(
+        "The target level must be above the current level.",
+        "ระดับเป้าหมายต้องสูงกว่าระดับปัจจุบัน",
+      ),
+      not_found: tt("That goal no longer exists.", "ไม่พบเป้าหมายนี้แล้ว"),
+      not_yours: tt(
+        "Only your manager can change a goal they set.",
+        "เป้าหมายที่หัวหน้ากำหนด แก้ไขได้เฉพาะหัวหน้าเท่านั้น",
+      ),
+    })[code];
+
+  const runOwn = (
+    fn: () => Promise<{ ok: true } | { ok: false; error: OwnGoalError }>,
+    done: () => void,
+    success: string,
+  ) => {
+    setFormError(null);
+    startSaving(async () => {
+      const result = await fn();
+      if (result.ok) {
+        done();
+        notify(success);
+        router.refresh();
+      } else if (form) {
+        setFormError(result.error);
+      } else {
+        notify(errorText(result.error), "error");
+      }
+    });
+  };
+
+  const saveOwn = (draft: GoalDraft) =>
+    runOwn(
+      () => saveOwnGoalAction({ goalId: form?.goal?.id ?? null, ...draft }),
+      () => setForm(null),
+      form?.goal
+        ? tt("Activity updated.", "อัปเดตกิจกรรมแล้ว")
+        : tt("Activity added to your plan.", "เพิ่มกิจกรรมในแผนของคุณแล้ว"),
+    );
+
+  const removeOwn = (goal: IdpGoalView) =>
+    runOwn(
+      () => deleteOwnGoalAction({ goalId: goal.id }),
+      () => setPendingDelete(null),
+      tt("Activity removed.", "ลบกิจกรรมแล้ว"),
+    );
   /** which course of the competency each goal card is showing */
   const [shownCourse, setShownCourse] = useState<Record<string, string>>({});
   const statusLabel = useStatusLabel();
@@ -201,14 +302,22 @@ export function IdpView({
         <p className="text-2xl font-medium text-ink lg:text-[32px]">
           {tt("In progress", "กำลังดำเนินการ")}
         </p>
-        {options.length ? (
-          <Tabs
-            variant="dark"
-            value={activeGroup}
-            onChange={setGroup}
-            options={options.map((g) => ({ value: g, label: groupLabel(g) }))}
-          />
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {options.length ? (
+            <Tabs
+              variant="dark"
+              value={activeGroup}
+              onChange={setGroup}
+              options={options.map((g) => ({ value: g, label: groupLabel(g) }))}
+            />
+          ) : null}
+          {canEdit ? (
+            <Button onClick={() => setForm({ goal: null })} disabled={saving}>
+              <Plus size={15} />
+              {tt("Add activity", "เพิ่มกิจกรรม")}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <SmoothPanel swapKey={activeGroup ?? ""} className="space-y-6">
@@ -285,6 +394,31 @@ export function IdpView({
                     <MessageSquare size={13} className="mt-0.5 shrink-0" />
                     <span>{remarkText(g.remark)}</span>
                   </p>
+                ) : null}
+
+                {/* only an activity the owner added is theirs to change */}
+                {canEdit && g.selfAdded ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={saving}
+                      onClick={() => setForm({ goal: g })}
+                    >
+                      <Pencil size={13} />
+                      {t("action.edit")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-accent hover:text-accent"
+                      disabled={saving}
+                      onClick={() => setPendingDelete(g)}
+                    >
+                      <Trash2 size={13} />
+                      {t("action.delete")}
+                    </Button>
+                  </div>
                 ) : null}
 
                 <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-stretch">
@@ -435,10 +569,15 @@ export function IdpView({
               }
               hint={
                 goals.length === 0
-                  ? tt(
-                      "Development goals are assigned by your manager from your competency gaps.",
-                      "เป้าหมายการพัฒนาจะถูกกำหนดโดยหัวหน้าของคุณจากช่องว่างสมรรถนะ",
-                    )
+                  ? canEdit
+                    ? tt(
+                        "Your manager assigns goals from your competency gaps, and you can add your own with Add activity.",
+                        "หัวหน้าจะกำหนดเป้าหมายจากช่องว่างสมรรถนะ และคุณเพิ่มกิจกรรมของตนเองได้ด้วยปุ่มเพิ่มกิจกรรม",
+                      )
+                    : tt(
+                        "Development goals are assigned by your manager from your competency gaps.",
+                        "เป้าหมายการพัฒนาจะถูกกำหนดโดยหัวหน้าของคุณจากช่องว่างสมรรถนะ",
+                      )
                   : tt(
                       "Switch tabs to see goals in another competency group.",
                       "สลับแท็บเพื่อดูเป้าหมายในกลุ่มสมรรถนะอื่น",
@@ -496,6 +635,68 @@ export function IdpView({
           </div>
         </section>
       ) : null}
+
+      {/* ------------------------------------------ add / edit own activity */}
+      {form ? (
+        <GoalFormModal
+          key={form.goal?.id ?? "new"}
+          memberName=""
+          self
+          rows={rows}
+          courses={courseChoices}
+          goal={
+            form.goal
+              ? {
+                  competencyId: form.goal.competencyId,
+                  courseId: form.goal.courseId,
+                  fromLevel: form.goal.fromLevel,
+                  toLevel: form.goal.toLevel,
+                  activity: form.goal.activity,
+                  startDate: form.goal.startDate,
+                  dueDate: form.goal.dueDate,
+                  remark: form.goal.remark,
+                }
+              : null
+          }
+          pending={saving}
+          error={formError ? errorText(formError) : null}
+          onClose={() => {
+            setForm(null);
+            setFormError(null);
+          }}
+          onSubmit={saveOwn}
+        />
+      ) : null}
+
+      <Modal
+        open={pendingDelete != null}
+        onClose={() => setPendingDelete(null)}
+        width="max-w-md"
+        title={tt("Remove this activity?", "ลบกิจกรรมนี้หรือไม่?")}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
+              {t("action.cancel")}
+            </Button>
+            <Button
+              variant="danger"
+              disabled={saving}
+              onClick={() => pendingDelete && removeOwn(pendingDelete)}
+            >
+              {t("action.delete")}
+            </Button>
+          </>
+        }
+      >
+        {pendingDelete ? (
+          <p className="text-sm text-muted">
+            {tt(
+              `${goalName(pendingDelete)} (level ${pendingDelete.fromLevel} → ${pendingDelete.toLevel}) will be taken off your development plan. Your manager is told.`,
+              `${goalName(pendingDelete)} (ระดับ ${pendingDelete.fromLevel} → ${pendingDelete.toLevel}) จะถูกนำออกจากแผนพัฒนาของคุณ และหัวหน้าจะได้รับแจ้ง`,
+            )}
+          </p>
+        ) : null}
+      </Modal>
 
       <p className="mt-6 text-xs text-muted">
         {tt("Statuses shown", "สถานะที่แสดง")}:{" "}

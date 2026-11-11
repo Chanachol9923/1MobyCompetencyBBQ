@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getGapRows } from "@/server/competency";
+import {
+  NOTE_SEP,
+  goalColumns,
+  goalFieldsSchema,
+  goalShapeError,
+} from "@/server/goal-input";
 import { assertManagerOf, recordActivity } from "@/server/session";
 
 /**
@@ -32,27 +38,13 @@ export type ActionResult =
   | { ok: true }
   | { ok: false; error: ActionError };
 
-const ACTIVITY = ["ONLINE_COURSE", "COACHING", "ON_THE_JOB"] as const;
-const isoDay = /^\d{4}-\d{2}-\d{2}$/;
-
-const goalSchema = z.object({
+const goalSchema = goalFieldsSchema.extend({
   /** null creates, a string edits that row */
   goalId: z.string().min(1).nullable(),
   employeeId: z.string().min(1),
-  competencyId: z.string().min(1),
-  courseId: z.string().min(1).nullable(),
-  fromLevel: z.number().int().min(0).max(4),
-  toLevel: z.number().int().min(1).max(4),
-  activity: z.enum(ACTIVITY),
-  startDate: z.string().regex(isoDay),
-  dueDate: z.string().regex(isoDay),
-  note: z.string().max(500),
 });
 
 export type GoalInput = z.infer<typeof goalSchema>;
-
-/** Separator the form uses to split the stamp from the manager's own words. */
-const NOTE_SEP = " — ";
 
 /** Revalidate everywhere a goal is visible. */
 function revalidateGoalViews() {
@@ -66,13 +58,8 @@ export async function saveGoalAction(input: GoalInput): Promise<ActionResult> {
   if (!parsed.success) return { ok: false, error: "invalid" };
   const data = parsed.data;
 
-  if (Date.parse(data.dueDate) <= Date.parse(data.startDate)) {
-    return { ok: false, error: "bad_dates" };
-  }
-  // a goal raises a level; the database refuses anything else too
-  if (data.toLevel <= data.fromLevel) {
-    return { ok: false, error: "bad_levels" };
-  }
+  const shape = goalShapeError(data);
+  if (shape) return { ok: false, error: shape };
 
   let viewer;
   try {
@@ -111,16 +98,7 @@ export async function saveGoalAction(input: GoalInput): Promise<ActionResult> {
     ? `Assigned by ${viewer.name}${NOTE_SEP}${data.note}`
     : `Assigned by ${viewer.name}`;
 
-  const fields = {
-    competencyId: data.competencyId,
-    courseId: data.courseId,
-    fromLevel: data.fromLevel,
-    toLevel: data.toLevel,
-    activity: data.activity,
-    startDate: new Date(`${data.startDate}T00:00:00.000Z`),
-    dueDate: new Date(`${data.dueDate}T00:00:00.000Z`),
-    remark,
-  };
+  const fields = goalColumns(data, remark);
 
   const detail =
     `${data.fromLevel} → ${data.toLevel} · ${data.activity} · ` +
