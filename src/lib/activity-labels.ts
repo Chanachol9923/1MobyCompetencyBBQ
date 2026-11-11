@@ -11,6 +11,8 @@ const ACTION_TH: Record<string, string> = {
   "Added employee": "เพิ่มพนักงาน",
   "Adjusted reward stock": "ปรับจำนวนของรางวัล",
   "Assigned IDP goal": "มอบหมายเป้าหมายในแผนพัฒนา",
+  "Saved course test questions": "บันทึกข้อสอบของหลักสูตร",
+  "Drafted course test with AI": "ให้ AI ร่างข้อสอบของหลักสูตร",
   "Added own IDP goal": "เพิ่มกิจกรรมในแผนพัฒนาของตนเอง",
   "Edited own IDP goal": "แก้ไขกิจกรรมในแผนพัฒนาของตนเอง",
   "Removed own IDP goal": "ลบกิจกรรมในแผนพัฒนาของตนเอง",

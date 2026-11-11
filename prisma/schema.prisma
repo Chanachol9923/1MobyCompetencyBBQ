@@ -512,6 +512,7 @@ model Course {
   shorts      ShortVideo[]
   documents   LearningDocument[]
   assignments CourseAssignment[]
+  questions   CourseQuestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -541,6 +542,28 @@ model CourseAssignment {
 
   @@unique([employeeId, courseId])
   @@index([courseId])
+}
+
+/// One question of a course's pre/post-test bank, written (or AI-drafted and
+/// then checked) by an administrator. Both tests draw from the same bank, each
+/// in its own deterministic order. `options` is a JSON array of {en, th}; the
+/// answer key never leaves the server before the paper is handed in.
+model CourseQuestion {
+  id          String   @id @default(cuid())
+  courseId    String
+  sortOrder   Int
+  stemEn      String
+  stemTh      String?
+  options     Json
+  answerIndex Int
+  explainEn   String?
+  explainTh   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, sortOrder])
 }
 
 model Chapter {

@@ -1,58 +1,86 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Check, ClipboardCheck, TrendingUp, X } from "lucide-react";
 import { Button, Modal, Pill, Progress } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { PASS_MARK } from "./model";
+import type { TestVariant } from "./testEngine";
 import {
-  buildCourseTest,
-  scoreTest,
-  type TestSource,
-  type TestVariant,
-} from "./testEngine";
+  getTestPaperAction,
+  recordTestAction,
+  type LmsError,
+  type TestOutcome,
+} from "@/app/(app)/lms/actions";
+import type { PublicPaper } from "@/server/course-test";
 
 /* -------------------------------------------------------------------- modal */
 
+/**
+ * One sitting of the pre- or post-test.
+ *
+ * The paper comes from the server without its answers; what goes back is the
+ * option picked for each question. The server grades it and only then returns
+ * the key, which is what the review below shows.
+ */
 export function CourseTestModal({
   open,
   onClose,
   title,
-  source,
+  slug,
   variant,
-  onSubmit,
-  pending = false,
+  onRecorded,
+  onError,
 }: {
   open: boolean;
   onClose: () => void;
   /** the course title, already picked by language */
   title: string;
-  source: TestSource;
+  /** the course's LMS route key */
+  slug: string;
   variant: TestVariant;
-  /** called once, with the percentage score, the moment the paper is handed in */
-  onSubmit: (score: number) => void;
-  pending?: boolean;
+  /** called once the server has graded and recorded the paper */
+  onRecorded: (outcome: TestOutcome) => void;
+  onError: (error: LmsError) => void;
 }) {
   const { tt, lang } = useT();
-  // keyed on the course id, not the object: a re-render must not regenerate the
-  // paper under the learner mid-test
-  const questions = useMemo(
-    () => buildCourseTest(source, variant),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source.courseId, variant],
-  );
+  const kind = variant === "pre" ? "PRE" : "POST";
+  const [paper, setPaper] = useState<PublicPaper | null>(null);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
-  const [score, setScore] = useState<number | null>(null);
+  const [outcome, setOutcome] = useState<TestOutcome | null>(null);
+  const [pending, startTransition] = useTransition();
 
+  // a fresh sitting every time the modal opens: fetch the paper, clear answers
   useEffect(() => {
     if (!open) return;
-    setAnswers(questions.map(() => null));
-    setScore(null);
-  }, [open, questions]);
+    setPaper(null);
+    setOutcome(null);
+    setAnswers([]);
+    let live = true;
+    startTransition(async () => {
+      const result = await getTestPaperAction({ slug, kind });
+      if (!live) return;
+      if (!result.ok) {
+        onError(result.error);
+        onClose();
+        return;
+      }
+      setPaper(result.data);
+      setAnswers(result.data.questions.map(() => null));
+    });
+    return () => {
+      live = false;
+    };
+    // the paper depends on the course and the kind only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, slug, kind]);
 
+  const questions = paper?.questions ?? [];
   const answered = answers.filter((a) => a !== null).length;
-  const allAnswered = questions.length > 0 && answered === questions.length;
+  // a course with nothing to ask (no bank, no chapter indicators) can still be
+  // handed in, so the pre-test never locks the chapters for good
+  const ready = paper !== null && answered === questions.length;
 
   const heading =
     variant === "pre"
@@ -60,10 +88,26 @@ export function CourseTestModal({
       : tt("Post-test", "แบบทดสอบหลังเรียน");
 
   const submit = () => {
-    const value = scoreTest(questions, answers);
-    setScore(value);
-    onSubmit(value);
+    if (!paper) return;
+    startTransition(async () => {
+      const result = await recordTestAction({
+        slug,
+        kind,
+        paperKey: paper.key,
+        answers,
+      });
+      if (!result.ok) {
+        onError(result.error);
+        // a stale paper cannot be graded: close so the next open fetches anew
+        if (result.error === "paper_changed") onClose();
+        return;
+      }
+      setOutcome(result.data);
+      onRecorded(result.data);
+    });
   };
+
+  const score = outcome?.score ?? null;
 
   return (
     <Modal
@@ -72,12 +116,16 @@ export function CourseTestModal({
       width="max-w-2xl"
       title={`${heading} — ${title}`}
       subtitle={
-        score === null
-          ? tt(
-              `${questions.length} questions generated from this course's chapters`,
-              `${questions.length} ข้อ สร้างจากบทเรียนของหลักสูตรนี้`,
-            )
-          : tt("Your result", "ผลการทำแบบทดสอบ")
+        score !== null
+          ? tt("Your result", "ผลการทำแบบทดสอบ")
+          : paper === null
+            ? tt("Preparing the test…", "กำลังเตรียมแบบทดสอบ…")
+            : paper.source === "bank"
+              ? tt(`${questions.length} questions`, `${questions.length} ข้อ`)
+              : tt(
+                  `${questions.length} questions generated from this course's chapters`,
+                  `${questions.length} ข้อ สร้างจากบทเรียนของหลักสูตรนี้`,
+                )
       }
       footer={
         score === null ? (
@@ -85,74 +133,78 @@ export function CourseTestModal({
             <Button variant="outline" onClick={onClose}>
               {tt("Cancel", "ยกเลิก")}
             </Button>
-            <Button onClick={submit} disabled={!allAnswered || pending}>
+            <Button onClick={submit} disabled={!ready || pending}>
               <ClipboardCheck size={16} />
               {tt("Submit answers", "ส่งคำตอบ")}
             </Button>
           </>
         ) : (
-          <Button onClick={onClose} disabled={pending}>
-            {tt("Done", "เสร็จสิ้น")}
-          </Button>
+          <Button onClick={onClose}>{tt("Done", "เสร็จสิ้น")}</Button>
         )
       }
     >
       {score === null ? (
-        <>
-          <div className="mb-4">
-            <div className="mb-1 flex justify-between text-xs text-muted">
-              <span>{tt("Answered", "ตอบแล้ว")}</span>
-              <span className="font-bold text-ink">
-                {answered} / {questions.length}
-              </span>
+        paper === null ? (
+          <p className="py-10 text-center text-sm text-muted">
+            {tt("Loading questions…", "กำลังโหลดคำถาม…")}
+          </p>
+        ) : (
+          <>
+            <div className="mb-4">
+              <div className="mb-1 flex justify-between text-xs text-muted">
+                <span>{tt("Answered", "ตอบแล้ว")}</span>
+                <span className="font-bold text-ink">
+                  {answered} / {questions.length}
+                </span>
+              </div>
+              <Progress value={(answered / Math.max(1, questions.length)) * 100} />
             </div>
-            <Progress value={(answered / Math.max(1, questions.length)) * 100} />
-          </div>
-          <ol className="space-y-4">
-            {questions.map((q, qi) => (
-              <li key={q.id} className="rounded-xl border border-line/70 p-4">
-                <p className="text-sm font-medium text-ink">
-                  {qi + 1}. {lang === "th" ? q.stem.th : q.stem.en}
-                </p>
-                <div className="mt-2 space-y-1.5">
-                  {q.options.map((o, oi) => {
-                    const picked = answers[qi] === oi;
-                    return (
-                      <button
-                        key={oi}
-                        type="button"
-                        onClick={() =>
-                          setAnswers((a) => a.map((v, i) => (i === qi ? oi : v)))
-                        }
-                        className={cn(
-                          "flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-                          picked
-                            ? "border-brand bg-brand-tint text-ink"
-                            : "border-line bg-white text-muted hover:border-line-2",
-                        )}
-                      >
-                        <span
+            <ol className="space-y-4">
+              {questions.map((q, qi) => (
+                <li key={q.id} className="rounded-xl border border-line/70 p-4">
+                  <p className="text-sm font-medium text-ink">
+                    {qi + 1}. {lang === "th" ? q.stem.th : q.stem.en}
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {q.options.map((o, oi) => {
+                      const picked = answers[qi] === oi;
+                      return (
+                        <button
+                          key={oi}
+                          type="button"
+                          onClick={() =>
+                            setAnswers((a) => a.map((v, i) => (i === qi ? oi : v)))
+                          }
                           className={cn(
-                            "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
+                            "flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
                             picked
-                              ? "border-brand bg-brand text-white"
-                              : "border-line-2",
+                              ? "border-brand bg-brand-tint text-ink"
+                              : "border-line bg-white text-muted hover:border-line-2",
                           )}
                         >
-                          {picked ? <Check size={10} /> : null}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          {String.fromCharCode(65 + oi)}.{" "}
-                          {lang === "th" ? o.th : o.en}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </>
+                          <span
+                            className={cn(
+                              "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
+                              picked
+                                ? "border-brand bg-brand text-white"
+                                : "border-line-2",
+                            )}
+                          >
+                            {picked ? <Check size={10} /> : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            {String.fromCharCode(65 + oi)}.{" "}
+                            {lang === "th" ? o.th : o.en}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </>
+        )
       ) : (
         <div>
           <div className="flex flex-wrap items-center gap-4 rounded-xl bg-surface p-4">
@@ -194,7 +246,9 @@ export function CourseTestModal({
 
           <ol className="mt-4 space-y-2">
             {questions.map((q, qi) => {
-              const right = answers[qi] === q.answerIndex;
+              const r = outcome?.review[qi];
+              if (!r) return null;
+              const key = q.options[r.answerIndex];
               return (
                 <li
                   key={q.id}
@@ -203,19 +257,22 @@ export function CourseTestModal({
                   <span
                     className={cn(
                       "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-white",
-                      right ? "bg-success" : "bg-accent",
+                      r.correct ? "bg-success" : "bg-accent",
                     )}
                   >
-                    {right ? <Check size={10} /> : <X size={10} />}
+                    {r.correct ? <Check size={10} /> : <X size={10} />}
                   </span>
                   <span className="min-w-0 flex-1 text-xs text-muted">
                     <span className="block font-medium text-ink">
                       {qi + 1}. {lang === "th" ? q.stem.th : q.stem.en}
                     </span>
                     {tt("Correct answer", "คำตอบที่ถูกต้อง")}:{" "}
-                    {lang === "th"
-                      ? q.options[q.answerIndex]!.th
-                      : q.options[q.answerIndex]!.en}
+                    {key ? (lang === "th" ? key.th : key.en) : "—"}
+                    {r.explain ? (
+                      <span className="mt-0.5 block">
+                        {lang === "th" ? r.explain.th : r.explain.en}
+                      </span>
+                    ) : null}
                   </span>
                 </li>
               );

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Archive,
   BookOpen,
+  ClipboardCheck,
   Eye,
   EyeOff,
   GraduationCap,
@@ -49,6 +50,7 @@ import {
   useChapterUploader,
   type ChapterDraft,
 } from "@/components/admin/ChapterEditor";
+import { CourseTestEditor } from "@/components/admin/CourseTestEditor";
 import { useT } from "@/lib/i18n";
 
 const CATEGORIES: CompetencyGroupValue[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
@@ -129,6 +131,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
   const [editing, setEditing] = useState<AdminCourseRow | null>(null);
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(0));
   const [confirm, setConfirm] = useState<AdminCourseRow | null>(null);
+  // the course whose pre/post-test bank is open
+  const [testFor, setTestFor] = useState<AdminCourseRow | null>(null);
   const [busy, startTransition] = useTransition();
   // files uploaded in the open editor and not yet saved against anything
   const fresh = useRef(new Set<string>());
@@ -416,6 +420,14 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                       </IconAction>
                       <IconAction
                         tone="brand"
+                        aria-label={tt(`Test questions for ${c.titleEn}`, `ข้อสอบของ ${c.titleEn}`)}
+                        title={tt("Pre/post-test questions", "ข้อสอบก่อน/หลังเรียน")}
+                        onClick={() => setTestFor(c)}
+                      >
+                        <ClipboardCheck size={14} />
+                      </IconAction>
+                      <IconAction
+                        tone="brand"
                         aria-label={`${t("action.edit")} ${c.titleEn}`}
                         onClick={() => openEdit(c)}
                       >
@@ -633,6 +645,17 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
           </div>
         )}
       </Modal>
+
+      {testFor ? (
+        <CourseTestEditor
+          course={{ id: testFor.id, title: title(testFor) }}
+          onClose={() => setTestFor(null)}
+          onSaved={(res) => {
+            setTestFor(null);
+            setResult(res);
+          }}
+        />
+      ) : null}
 
       <Modal
         open={Boolean(confirm)}

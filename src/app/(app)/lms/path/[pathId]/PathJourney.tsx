@@ -91,6 +91,10 @@ export function PathJourney({ path }: { path: PathView }) {
         "The pre-test has already been taken — it counts once, as your starting point.",
         "ทำแบบทดสอบก่อนเรียนไปแล้ว ระบบนับครั้งแรกเป็นคะแนนตั้งต้นเพียงครั้งเดียว",
       ),
+      paper_changed: tt(
+        "The test was updated while you had it open — open it again to get the current questions.",
+        "แบบทดสอบถูกแก้ไขระหว่างที่คุณเปิดอยู่ กรุณาเปิดใหม่อีกครั้งเพื่อรับชุดคำถามล่าสุด",
+      ),
     })[code];
 
   const submitProject = () => {

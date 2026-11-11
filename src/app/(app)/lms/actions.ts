@@ -6,6 +6,13 @@ import { db } from "@/lib/db";
 import { assertEmployee, recordActivity } from "@/server/session";
 import { courseProgress } from "@/server/learning";
 import {
+  gradePaper,
+  publicPaper,
+  type PublicPaper,
+  type ReviewItem,
+  type TestKind,
+} from "@/server/course-test";
+import {
   LMS_POINTS,
   PASS_MARK,
   POINT_REASON,
@@ -35,7 +42,9 @@ export type LmsError =
   | "not_found"
   | "not_complete"
   | "pretest_required"
-  | "pretest_taken";
+  | "pretest_taken"
+  /** the question bank changed after the paper was handed out */
+  | "paper_changed";
 
 export type LmsResult<T> = { ok: true; data: T } | { ok: false; error: LmsError };
 
@@ -296,10 +305,16 @@ export async function completeChapterAction(
 
 /* -------------------------------------------------------------------- tests */
 
-const testSchema = z.object({
+const paperSchema = z.object({
   slug: z.string().trim().min(1).max(200),
   kind: z.enum(["PRE", "POST"]),
-  score: z.number().int().min(0).max(100),
+});
+
+const testSchema = paperSchema.extend({
+  /** the key of the paper the browser was given, from getTestPaperAction */
+  paperKey: z.string().trim().min(1).max(64),
+  /** the option picked for each question, in paper order; null = unanswered */
+  answers: z.array(z.number().int().min(0).max(9).nullable()).max(50),
 });
 
 export type TestOutcome = {
@@ -309,32 +324,22 @@ export type TestOutcome = {
   certificateIssued: boolean;
   certificateCode: string | null;
   pointsAwarded: number;
+  /** the answer key and explanations, only now that the paper is in */
+  review: ReviewItem[];
 };
 
+type TestCourse = { id: string; titleEn: string; titleTh: string | null; chapterCount: number };
+
 /**
- * Records a pre- or post-test.
- *
- * The pre-test is taken once, before chapter 1: it is the baseline, so a retake
- * after studying would only make the improvement look bigger than it is. The
- * post-test may be retaken (`@@unique([employeeId, courseId, kind])` replaces
- * the score), and the certificate is issued at most once per person and course
- * however many times it is passed.
+ * Who may sit which test, checked both when the paper is handed out and when
+ * it is handed in: the pre-test once, before chapter 1; the post-test once
+ * every chapter is done.
  */
-export async function recordTestAction(
-  input: z.infer<typeof testSchema>,
-): Promise<LmsResult<TestOutcome>> {
-  const parsed = testSchema.safeParse(input);
-  if (!parsed.success) return fail("invalid");
-  const { slug, kind, score } = parsed.data;
-
-  let viewer;
-  try {
-    viewer = await assertEmployee();
-  } catch {
-    return fail("not_authorised");
-  }
-  const employeeId = viewer.employeeId;
-
+async function testGate(
+  employeeId: string,
+  slug: string,
+  kind: TestKind,
+): Promise<{ ok: true; course: TestCourse } | { ok: false; error: LmsError }> {
   const course = await db.course.findUnique({
     where: { slug },
     select: {
@@ -345,7 +350,7 @@ export async function recordTestAction(
       _count: { select: { chapters: true } },
     },
   });
-  if (!course || course.status !== "PUBLISHED") return fail("not_found");
+  if (!course || course.status !== "PUBLISHED") return { ok: false, error: "not_found" };
 
   if (kind === "PRE") {
     const [taken, started] = await Promise.all([
@@ -355,7 +360,7 @@ export async function recordTestAction(
       }),
       db.chapterProgress.count({ where: { enrollment: { employeeId, courseId: course.id } } }),
     ]);
-    if (taken || started > 0) return fail("pretest_taken");
+    if (taken || started > 0) return { ok: false, error: "pretest_taken" };
   }
 
   if (kind === "POST") {
@@ -368,8 +373,79 @@ export async function recordTestAction(
       Boolean(enrollment?.completedAt) ||
       (course._count.chapters > 0 &&
         (enrollment?._count.chapters ?? 0) >= course._count.chapters);
-    if (!complete) return fail("not_complete");
+    if (!complete) return { ok: false, error: "not_complete" };
   }
+
+  return {
+    ok: true,
+    course: {
+      id: course.id,
+      titleEn: course.titleEn,
+      titleTh: course.titleTh,
+      chapterCount: course._count.chapters,
+    },
+  };
+}
+
+/**
+ * Hands out the paper for a pre- or post-test — questions and options only.
+ * The paper is derived from the course and the kind, so asking again returns
+ * the same one; its `key` is what the answers are handed in against.
+ */
+export async function getTestPaperAction(
+  input: z.infer<typeof paperSchema>,
+): Promise<LmsResult<PublicPaper>> {
+  const parsed = paperSchema.safeParse(input);
+  if (!parsed.success) return fail("invalid");
+
+  let viewer;
+  try {
+    viewer = await assertEmployee();
+  } catch {
+    return fail("not_authorised");
+  }
+
+  const gate = await testGate(viewer.employeeId, parsed.data.slug, parsed.data.kind);
+  if (!gate.ok) return fail(gate.error);
+
+  return { ok: true, data: await publicPaper(gate.course.id, parsed.data.kind) };
+}
+
+/**
+ * Grades and records a pre- or post-test.
+ *
+ * The browser sends the options it picked, never a score: the server rebuilds
+ * the paper from the course and the kind, checks it is the one that was handed
+ * out, and grades it. Only then does the answer key go back, for the review.
+ *
+ * The pre-test is taken once, before chapter 1: it is the baseline, so a retake
+ * after studying would only make the improvement look bigger than it is. The
+ * post-test may be retaken (`@@unique([employeeId, courseId, kind])` replaces
+ * the score), and the certificate is issued at most once per person and course
+ * however many times it is passed.
+ */
+export async function recordTestAction(
+  input: z.infer<typeof testSchema>,
+): Promise<LmsResult<TestOutcome>> {
+  const parsed = testSchema.safeParse(input);
+  if (!parsed.success) return fail("invalid");
+  const { slug, kind, paperKey, answers } = parsed.data;
+
+  let viewer;
+  try {
+    viewer = await assertEmployee();
+  } catch {
+    return fail("not_authorised");
+  }
+  const employeeId = viewer.employeeId;
+
+  const gate = await testGate(employeeId, slug, kind);
+  if (!gate.ok) return fail(gate.error);
+  const { course } = gate;
+
+  const graded = await gradePaper(course.id, kind, paperKey, answers);
+  if (!graded.ok) return fail(graded.error);
+  const { score, review } = graded;
 
   await db.testResult.upsert({
     where: {
@@ -451,7 +527,7 @@ export async function recordTestAction(
   revalidateLearning(slug);
   return {
     ok: true,
-    data: { score, passed, certificateIssued, certificateCode, pointsAwarded },
+    data: { score, passed, certificateIssued, certificateCode, pointsAwarded, review },
   };
 }
 

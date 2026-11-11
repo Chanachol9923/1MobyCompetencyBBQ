@@ -9,8 +9,10 @@
  * are different papers but each one is stable across reloads and across
  * devices: the same person retaking the post-test sees the same questions.
  *
- * The paper is generated in the browser; only the *score* is written to the
- * server, as a `TestResult` row.
+ * This is the fallback paper for a course whose question bank
+ * (`CourseQuestion`) is empty. It runs on the server only
+ * (`src/server/course-test.ts`): the browser receives the questions without
+ * their answers, sends back the options it picked, and the server grades them.
  */
 
 export type Bilingual = { en: string; th: string };
@@ -37,7 +39,8 @@ export type TestSource = {
 
 /* ------------------------------------------------------------------ helpers */
 
-function seed(s: string) {
+/** A seeded PRNG (FNV-1a hash into mulberry32): same string, same sequence. */
+export function seededRandom(s: string) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -115,7 +118,7 @@ export function buildCourseTest(
   const pool = indicatorsOf(source);
   if (!pool.length) return [];
 
-  const rnd = seed(`${source.courseId}:${variant}`);
+  const rnd = seededRandom(`${source.courseId}:${variant}`);
   const count = Math.min(5, Math.max(3, pool.length));
 
   // rotate the starting point so pre and post do not open on the same indicator

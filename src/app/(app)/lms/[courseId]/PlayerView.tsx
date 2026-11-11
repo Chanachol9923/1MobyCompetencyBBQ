@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils";
 import type { PlayerView as PlayerData } from "@/server/learning";
 import {
   completeChapterAction,
-  recordTestAction,
+  type TestOutcome,
   type LmsError,
 } from "../actions";
 import { SEEK_EVENT, type SeekRequest } from "@/components/learning/lesson-seek";
@@ -118,11 +118,6 @@ function Player({ view }: { view: PlayerData }) {
   const chapterDone = chapter ? isDone(chapter.id) : false;
   const nextChapter = chapters[chapterIndex + 1];
 
-  const testSource = useMemo(
-    () => ({ courseId: view.courseId, chapters: view.chapters }),
-    [view.courseId, view.chapters],
-  );
-
   const errorText = (code: LmsError) =>
     ({
       not_authorised: tt(
@@ -145,6 +140,10 @@ function Player({ view }: { view: PlayerData }) {
       pretest_taken: tt(
         "The pre-test has already been taken — it counts once, as your starting point.",
         "ทำแบบทดสอบก่อนเรียนไปแล้ว ระบบนับครั้งแรกเป็นคะแนนตั้งต้นเพียงครั้งเดียว",
+      ),
+      paper_changed: tt(
+        "The test was updated while you had it open — open it again to get the current questions.",
+        "แบบทดสอบถูกแก้ไขระหว่างที่คุณเปิดอยู่ กรุณาเปิดใหม่อีกครั้งเพื่อรับชุดคำถามล่าสุด",
       ),
     })[code];
 
@@ -197,50 +196,40 @@ function Player({ view }: { view: PlayerData }) {
 
   /* ------------------------------------------------------------ the tests */
 
-  const submitTest = (variant: TestVariant, score: number) => {
+  /** The server has graded and recorded the paper; say what it means. */
+  const testRecorded = (variant: TestVariant, data: TestOutcome) => {
     setError(null);
-    startTransition(async () => {
-      const result = await recordTestAction({
-        slug: view.slug,
-        kind: variant === "pre" ? "PRE" : "POST",
-        score,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const data = result.data;
-      if (variant === "pre") {
-        setMessage(
-          tt(
-            `Pre-test recorded — ${score}%`,
-            `บันทึกคะแนนก่อนเรียนแล้ว — ${score}%`,
-          ),
-        );
-      } else if (!data.passed) {
-        setMessage(
-          tt(
-            `Post-test ${score}% — pass mark is ${PASS_MARK}%. Review and retake.`,
-            `คะแนนหลังเรียน ${score}% เกณฑ์ผ่านคือ ${PASS_MARK}% กรุณาทบทวนแล้วทำใหม่`,
-          ),
-        );
-      } else if (data.certificateIssued) {
-        setMessage(
-          tt(
-            `Passed ${score}% — certificate ${data.certificateCode} issued${data.pointsAwarded ? `, +${data.pointsAwarded} points` : ""}`,
-            `ผ่าน ${score}% ระบบออกใบรับรองเลขที่ ${data.certificateCode} ให้แล้ว${data.pointsAwarded ? ` +${data.pointsAwarded} คะแนน` : ""}`,
-          ),
-        );
-      } else {
-        setMessage(
-          tt(
-            `Post-test passed — ${score}%. Your certificate was already issued.`,
-            `ผ่านแบบทดสอบหลังเรียนแล้ว — ${score}% ระบบเคยออกใบรับรองให้คุณไปแล้ว`,
-          ),
-        );
-      }
-      router.refresh();
-    });
+    const score = data.score;
+    if (variant === "pre") {
+      setMessage(
+        tt(
+          `Pre-test recorded — ${score}%`,
+          `บันทึกคะแนนก่อนเรียนแล้ว — ${score}%`,
+        ),
+      );
+    } else if (!data.passed) {
+      setMessage(
+        tt(
+          `Post-test ${score}% — pass mark is ${PASS_MARK}%. Review and retake.`,
+          `คะแนนหลังเรียน ${score}% เกณฑ์ผ่านคือ ${PASS_MARK}% กรุณาทบทวนแล้วทำใหม่`,
+        ),
+      );
+    } else if (data.certificateIssued) {
+      setMessage(
+        tt(
+          `Passed ${score}% — certificate ${data.certificateCode} issued${data.pointsAwarded ? `, +${data.pointsAwarded} points` : ""}`,
+          `ผ่าน ${score}% ระบบออกใบรับรองเลขที่ ${data.certificateCode} ให้แล้ว${data.pointsAwarded ? ` +${data.pointsAwarded} คะแนน` : ""}`,
+        ),
+      );
+    } else {
+      setMessage(
+        tt(
+          `Post-test passed — ${score}%. Your certificate was already issued.`,
+          `ผ่านแบบทดสอบหลังเรียนแล้ว — ${score}% ระบบเคยออกใบรับรองให้คุณไปแล้ว`,
+        ),
+      );
+    }
+    router.refresh();
   };
 
   /* -------------------------------------------------------------- render */
@@ -350,10 +339,10 @@ function Player({ view }: { view: PlayerData }) {
           open={testOpen === "pre"}
           onClose={() => setTestOpen(null)}
           title={courseTitle}
-          source={testSource}
+          slug={view.slug}
           variant="pre"
-          pending={pending}
-          onSubmit={(score) => submitTest("pre", score)}
+          onRecorded={(data) => testRecorded("pre", data)}
+          onError={setError}
         />
       </div>
     );
@@ -624,10 +613,10 @@ function Player({ view }: { view: PlayerData }) {
         open={testOpen === "post"}
         onClose={() => setTestOpen(null)}
         title={courseTitle}
-        source={testSource}
+        slug={view.slug}
         variant="post"
-        pending={pending}
-        onSubmit={(score) => submitTest("post", score)}
+        onRecorded={(data) => testRecorded("post", data)}
+        onError={setError}
       />
     </div>
   );
