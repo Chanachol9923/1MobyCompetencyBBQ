@@ -107,10 +107,10 @@ export function parseBehavior(raw: string | null): {
  * reader sees the same four steps rather than four blanks.
  */
 export const LEVEL_DESC_EN: Record<number, string> = {
-  4: "Does this consistently and sets the example for everyone else.",
-  3: "Does this well and consistently, as the role requires.",
-  2: "Does this some of the time — still building consistency.",
-  1: "Does not yet show this behaviour, or acts against it.",
+  4: "Far exceeds expectations and can serve as a role model.",
+  3: "Consistently meets the defined standard.",
+  2: "Falls below the standard in some areas and needs development.",
+  1: "Performs far below the standard and needs urgent improvement.",
 };
 
 /* ------------------------------------------------------------------ scores */

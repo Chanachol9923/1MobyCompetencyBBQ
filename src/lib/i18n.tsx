@@ -40,10 +40,10 @@ export const DICT: Record<string, { en: string; th: string }> = {
   "group.managerial": { en: "Managerial", th: "สมรรถนะการบริหาร" },
 
   // rating scale
-  "rating.1": { en: "Needs improvement", th: "ต้องปรับปรุง" },
-  "rating.2": { en: "Developing", th: "กำลังพัฒนา" },
-  "rating.3": { en: "Proficient", th: "ทำได้ตามมาตรฐาน" },
-  "rating.4": { en: "Exemplary", th: "เกินความคาดหมาย" },
+  "rating.1": { en: "Unacceptable", th: "ต้องปรับปรุงเร่งด่วน" },
+  "rating.2": { en: "Needs Improvement", th: "ต้องได้รับการพัฒนา" },
+  "rating.3": { en: "Meets Expectations", th: "ทำได้ตามมาตรฐาน" },
+  "rating.4": { en: "Exceeds Expectations", th: "เกินความคาดหมาย" },
 
   // assessment modes (180 degree)
   "mode.self": { en: "Self", th: "ประเมินตนเอง" },
