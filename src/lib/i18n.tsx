@@ -197,13 +197,16 @@ const LEVEL_TH: Record<string, string> = {
   Supervise: "กำกับดูแล",
   Management: "บริหารจัดการ",
   Strategy: "กลยุทธ์",
+  Vision: "วิสัยทัศน์",
 };
 
 export function levelText(level: string, lang: Lang): string {
   if (lang !== "th") return level;
-  const m = /^Level (\d+):\s*(.+)$/.exec(level.trim());
+  // a role may span two levels: "Level 4-5: Management / Strategy"
+  const m = /^Level (\d+(?:\s*-\s*\d+)?):\s*(.+)$/.exec(level.trim());
   if (!m) return level;
-  return `ระดับ ${m[1]}: ${LEVEL_TH[m[2]!] ?? m[2]}`;
+  const names = m[2]!.split(/\s*\/\s*/).map((n) => LEVEL_TH[n] ?? n);
+  return `ระดับ ${m[1]}: ${names.join(" / ")}`;
 }
 
 /** Rating label helper that follows the active language. */

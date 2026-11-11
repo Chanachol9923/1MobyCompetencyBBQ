@@ -11,7 +11,8 @@ export type RoleName =
   | "Specialist Lead"
   | "Manager"
   | "Expertise"
-  | "Director";
+  | "Director"
+  | "C Suite";
 
 export type LevelDetail = {
   score: number;
@@ -559,7 +560,8 @@ export const FRAMEWORK: FrameworkCompetency[] = [
 
 /**
  * Expected level per career role. `null` means the competency is not assessed
- * for that role - Executives, for example, are not assessed on Managerial.
+ * for that role - Executives, for example, are not assessed on Managerial, and
+ * C Suite is not assessed on anything.
  */
 export const EXPECTED_BY_ROLE: Record<RoleName, Record<string, number | null>> = {
   Senior: {
@@ -677,6 +679,21 @@ export const EXPECTED_BY_ROLE: Record<RoleName, Record<string, number | null>> =
     databases: 3,
     "version-control": 3,
     analytical: 3,
+    process: null,
+    purpose: null,
+    people: null,
+    result: null
+  },
+  "C Suite": {
+    "create-impact": null,
+    "take-ownership": null,
+    adaptive: null,
+    collaboration: null,
+    programming: null,
+    architecture: null,
+    databases: null,
+    "version-control": null,
+    analytical: null,
     process: null,
     purpose: null,
     people: null,

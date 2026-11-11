@@ -683,18 +683,26 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                     </span>
                   </Td>
                   <Td className="whitespace-nowrap text-muted">{lv(p.level)}</Td>
-                  <Td>
-                    <Pill tone={p.selfSubmitted ? "success" : "danger"}>
-                      {p.selfSubmitted ? t("status.completed") : t("status.incomplete")}
-                    </Pill>
-                  </Td>
-                  <Td>
-                    <Pill tone={p.supervisorSubmitted ? "success" : "danger"}>
-                      {p.supervisorSubmitted
-                        ? t("status.completed")
-                        : t("status.incomplete")}
-                    </Pill>
-                  </Td>
+                  {p.assessedCount === 0 ? (
+                    <Td colSpan={2}>
+                      <Pill tone="neutral">{tt("Not assessed", "ไม่ถูกประเมิน")}</Pill>
+                    </Td>
+                  ) : (
+                    <>
+                      <Td>
+                        <Pill tone={p.selfSubmitted ? "success" : "danger"}>
+                          {p.selfSubmitted ? t("status.completed") : t("status.incomplete")}
+                        </Pill>
+                      </Td>
+                      <Td>
+                        <Pill tone={p.supervisorSubmitted ? "success" : "danger"}>
+                          {p.supervisorSubmitted
+                            ? t("status.completed")
+                            : t("status.incomplete")}
+                        </Pill>
+                      </Td>
+                    </>
+                  )}
                   <Td className="text-muted">
                     {tt(
                       `${p.phase}% of ${p.assessedCount}`,
@@ -706,13 +714,13 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={busy || p.selfSubmitted}
+                        disabled={busy || p.selfSubmitted || p.assessedCount === 0}
                         onClick={() => run(() => remindEmployee({ employeeId: p.id }))}
                       >
                         <Mail size={13} className="text-brand" />
                         {t("action.sendReminder")}
                       </Button>
-                      {!p.supervisorSubmitted ? (
+                      {!p.supervisorSubmitted && p.assessedCount > 0 ? (
                         <Button
                           variant="outline"
                           size="sm"

@@ -221,6 +221,8 @@ export async function submitAssessmentAction(
   const { cycle } = open;
 
   const questions = await getCompetencyQuestions(who.subjectId);
+  // a career role assessed on nothing (C Suite) has nothing to submit
+  if (questions.length === 0) return { ok: false, error: "not_assessed" };
 
   const assessment = await db.assessment.findUnique({
     where: {

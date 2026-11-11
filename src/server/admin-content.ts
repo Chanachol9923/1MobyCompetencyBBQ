@@ -1495,8 +1495,11 @@ export async function remindEveryonePending(
     }
 
     const { rows } = await loadWorkforce(cycle.id);
-    const pending = rows.filter((r) =>
-      parsed.data.mode === "SELF" ? !r.selfSubmitted : !r.supervisorSubmitted,
+    // a career role assessed on nothing (C Suite) never owes an assessment
+    const pending = rows.filter(
+      (r) =>
+        r.assessedCount > 0 &&
+        (parsed.data.mode === "SELF" ? !r.selfSubmitted : !r.supervisorSubmitted),
     );
     if (pending.length === 0) {
       return done(

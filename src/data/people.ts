@@ -236,6 +236,8 @@ export const POSITIONS = [...posCounts.entries()].map(([name, headcount], i) => 
  * follow the chart: Specialist Lead is SP3-SP4 (the specialist track goes on
  * from Specialist's SP1-SP2), Expertise spans EP1-EP4 across levels 4-5, and
  * Director, which has no track code, takes the level-5 general grades G09-G10.
+ * C Suite is level 6 (G11) and, as in the brief's "Level ที่ถูกประเมิน" table,
+ * is not assessed on any competency.
  */
 export const JOB_ROLES = [
   { id: "r1", name: "Executive", level: "Level 1: Operation", grade: "EX1 - EX2", managerial: false },
@@ -244,8 +246,9 @@ export const JOB_ROLES = [
   { id: "r4", name: "Team Lead", level: "Level 3: Supervise", grade: "TL1 - TL2", managerial: true },
   { id: "r5", name: "Specialist Lead", level: "Level 3: Supervise", grade: "SP3 - SP4", managerial: true },
   { id: "r6", name: "Manager", level: "Level 4: Management", grade: "MG1 - MG2", managerial: true },
-  { id: "r7", name: "Expertise", level: "Level 5: Strategy", grade: "EP1 - EP4", managerial: true },
+  { id: "r7", name: "Expertise", level: "Level 4-5: Management / Strategy", grade: "EP1 - EP4", managerial: true },
   { id: "r8", name: "Director", level: "Level 5: Strategy", grade: "G09 - G10", managerial: true },
+  { id: "r9", name: "C Suite", level: "Level 6: Vision", grade: "G11", managerial: false },
 ].map((r) => ({
   ...r,
   headcount: EMPLOYEES.filter((p) => p.jobRole === r.name).length,
@@ -255,7 +258,7 @@ export const JOB_ROLES = [
 export const CAREER_LADDER = [
   { level: "6. Vision (C Level)", roles: ["C Suite"], grades: ["G11"] },
   { level: "5. Strategy", roles: ["Director", "Expertise"], grades: ["G09", "G10"] },
-  { level: "4. Management", roles: ["Manager"], grades: ["G07", "G08"] },
+  { level: "4. Management", roles: ["Manager", "Expertise"], grades: ["G07", "G08"] },
   { level: "3. Supervise", roles: ["Team Lead", "Specialist Lead"], grades: ["G05", "G06"] },
   { level: "2. Senior Operation", roles: ["Senior", "Specialist"], grades: ["G03", "G04"] },
   { level: "1. Operation", roles: ["Executive"], grades: ["G01", "G02"] },

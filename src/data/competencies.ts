@@ -217,6 +217,8 @@ export const GROUPS_FOR_LEVEL: Record<string, Group[]> = {
   "Level 2: Senior Operation": ["core", "functional", "managerial"],
   "Level 3: Supervise": ["core", "functional", "managerial"],
   "Level 4: Management": ["core", "functional", "managerial"],
+  "Level 4-5: Management / Strategy": ["core", "functional", "managerial"],
   "Level 5: Strategy": ["core", "functional", "managerial"],
+  "Level 6: Vision": [],
   Admin: ["core", "functional", "managerial"],
 };

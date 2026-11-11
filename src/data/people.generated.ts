@@ -329,7 +329,7 @@ export const RAW_PEOPLE = [
     nickname: "Pim",
     position: "Software Engineer Expertise",
     jobRole: "Expertise",
-    level: "Level 5: Strategy",
+    level: "Level 4-5: Management / Strategy",
     grade: "EP1",
     department: "Software Production",
     division: "Project Development",

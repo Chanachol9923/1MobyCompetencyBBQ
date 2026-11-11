@@ -34,3 +34,32 @@ export function NoCycleNotice({ showLink = true }: { showLink?: boolean }) {
     </div>
   );
 }
+
+/**
+ * Shown when the subject's career role is assessed on no competency at all —
+ * C Suite, for one — so the wizard would have nothing to ask.
+ */
+export function NotAssessedNotice({ name }: { name: string }) {
+  const { t, tt } = useT();
+  return (
+    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
+      <PageHeading title={t("nav.assessment")} />
+      <Card className="grid place-items-center gap-3 px-6 py-16 text-center">
+        <h2 className="text-xl font-bold text-ink">
+          {tt("Nothing to assess", "ไม่มีสมรรถนะให้ประเมิน")}
+        </h2>
+        <p className="max-w-lg break-words text-sm leading-relaxed text-muted">
+          {tt(
+            `${name}'s career role is not assessed on any competency.`,
+            `บทบาทสายอาชีพของ ${name} ไม่ได้ถูกประเมินสมรรถนะใด`,
+          )}
+        </p>
+        <Link href="/assessment">
+          <Button className="mt-2">
+            {tt("Back to assessment hub", "กลับไปหน้าการประเมิน")}
+          </Button>
+        </Link>
+      </Card>
+    </div>
+  );
+}

@@ -95,10 +95,19 @@ export function DashboardView({
   const router = useRouter();
   const [group, setGroup] = useState<CompetencyGroup | null>(null);
 
-  /** Only the groups this person's career role is actually assessed on. */
+  /**
+   * Only the groups this person's career role is actually assessed on. A role
+   * assessed on nothing (C Suite) still gets its team's groups, so the heat map
+   * below has columns to show.
+   */
   const groups = useMemo(
-    () => COMPETENCY_GROUPS.filter((g) => rows.some((r) => r.group === g)),
-    [rows],
+    () =>
+      COMPETENCY_GROUPS.filter((g) =>
+        rows.length
+          ? rows.some((r) => r.group === g)
+          : teamCompetencies.some((c) => c.group === g),
+      ),
+    [rows, teamCompetencies],
   );
   const activeGroup = group && groups.includes(group) ? group : groups[0];
 
@@ -193,16 +202,21 @@ export function DashboardView({
               />
             ) : (
               <p className="text-sm text-muted">
-                {tt("No competencies are set for your career role yet.",
-                  "บทบาทสายอาชีพของคุณยังไม่มีสมรรถนะที่กำหนดไว้",
+                {tt("Your career role is not assessed on any competency.",
+                  "บทบาทสายอาชีพของคุณไม่ได้ถูกประเมินสมรรถนะใด",
                 )}
               </p>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <Pill tone="neutral">
-                {t("label.gap")} {formatGap(overallGap)}
-              </Pill>
-              <VerdictPill verdict={verdictFor(overallGap)} />
+              {/* nothing assessed means no gap — not a gap of zero */}
+              {rows.length ? (
+                <>
+                  <Pill tone="neutral">
+                    {t("label.gap")} {formatGap(overallGap)}
+                  </Pill>
+                  <VerdictPill verdict={verdictFor(overallGap)} />
+                </>
+              ) : null}
               <Button
                 variant="outline"
                 size="sm"

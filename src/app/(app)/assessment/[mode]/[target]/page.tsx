@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { AssessmentWizard } from "@/components/assessment/AssessmentWizard";
-import { NoCycleNotice } from "@/components/assessment/NoCycleNotice";
+import {
+  NoCycleNotice,
+  NotAssessedNotice,
+} from "@/components/assessment/NoCycleNotice";
 import { can, PERMISSIONS } from "@/lib/permissions";
 import { requireEmployee } from "@/server/session";
 import { getWizardData, isMode } from "@/server/assessment";
@@ -58,6 +61,10 @@ export default async function AssessmentRunPage({
 
   // no open cycle, or the employee record vanished between the guard and here
   if (!data) return <NoCycleNotice />;
+  // a career role assessed on nothing (C Suite) has no steps to walk through
+  if (data.competencies.length === 0) {
+    return <NotAssessedNotice name={data.subject.name} />;
+  }
 
   return <AssessmentWizard data={data} />;
 }

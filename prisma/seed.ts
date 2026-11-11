@@ -182,14 +182,15 @@ async function seedFramework() {
     }
   }
 
-  // career ladder
+  // career ladder; a level that spans two ("Level 4-5") ranks with its top
   for (const [i, r] of JOB_ROLES.entries()) {
     const [from, to] = r.grade.split(" - ");
+    const levelRank = Math.max(...(r.level.match(/\d+/g) ?? [String(i + 1)]).map(Number));
     await db.jobRole.upsert({
       where: { name: r.name },
       update: {
         level: r.level,
-        levelRank: Number(r.level.match(/\d/)?.[0] ?? i + 1),
+        levelRank,
         gradeFrom: from ?? r.grade,
         gradeTo: to ?? from ?? r.grade,
         sortOrder: i,
@@ -198,7 +199,7 @@ async function seedFramework() {
         key: r.name.toLowerCase().replace(/\s+/g, "-"),
         name: r.name,
         level: r.level,
-        levelRank: Number(r.level.match(/\d/)?.[0] ?? i + 1),
+        levelRank,
         gradeFrom: from ?? r.grade,
         gradeTo: to ?? from ?? r.grade,
         sortOrder: i,

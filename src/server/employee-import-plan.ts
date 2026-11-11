@@ -135,7 +135,8 @@ export async function buildPlan(cells: string[][]): Promise<{ plan: ImportPlan; 
   ]);
 
   const roleOf = (v: string) => {
-    const n = norm(v);
+    // the career chart calls level 6 "Vision (C Level)"; the role is C Suite
+    const n = /^(?:level)?6?(?:vision)?clevel$|^cxo$/.test(norm(v)) ? "csuite" : norm(v);
     return (
       jobRoles.find((r) => norm(r.name) === n || norm(r.key) === n) ??
       // "2. Senior", "Level 2: Senior Operation"

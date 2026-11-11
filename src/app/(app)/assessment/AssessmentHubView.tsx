@@ -81,7 +81,9 @@ export function AssessmentHubView({
     .sort((a, b) => a.gap - b.gap)
     .slice(0, 3);
 
-  const doneReviews = reports.filter((r) => r.status === "submitted").length;
+  // a report whose career role is assessed on nothing (C Suite) has no review
+  const reviewable = reports.filter((r) => r.required > 0);
+  const doneReviews = reviewable.filter((r) => r.status === "submitted").length;
 
   return (
     <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
@@ -107,8 +109,8 @@ export function AssessmentHubView({
                   `Closes ${closes}. ${viewerName} is assessed as ${jobRoleName ?? ""} on ${groupsLabel}.`,
                   `ปิดรอบ ${closes} — ${viewerName} ถูกประเมินในฐานะ ${jobRoleName ?? ""} ในกลุ่ม ${groupsLabel}`,
                 )
-              : tt(`Closes ${closes}. No competency has an expected level for this career role yet.`,
-                  `ปิดรอบ ${closes} — บทบาทสายอาชีพนี้ยังไม่มีสมรรถนะที่กำหนดระดับที่คาดหวัง`,
+              : tt(`Closes ${closes}. ${jobRoleName ?? "This career role"} is not assessed on any competency, so there is no self assessment to do.`,
+                  `ปิดรอบ ${closes} — ${jobRoleName ?? "บทบาทสายอาชีพนี้"} ไม่ได้ถูกประเมินสมรรถนะใด จึงไม่มีแบบประเมินตนเองให้ทำ`,
                 )}
           </p>
         </div>
@@ -121,7 +123,7 @@ export function AssessmentHubView({
       </Card>
 
       {/* --------------------------------------------------------- self */}
-      {canSelfAssess ? (
+      {canSelfAssess && self.competencyCount > 0 ? (
         <Card className="flex flex-col">
           <CardHeader
             title={
@@ -182,8 +184,8 @@ export function AssessmentHubView({
               "ผู้ใต้บังคับบัญชาโดยตรงของคุณ ผลนี้คือผลอย่างเป็นทางการและใช้วิเคราะห์ส่วนต่าง",
             )}
             right={
-              <Pill tone={doneReviews === reports.length ? "success" : "neutral"}>
-                {doneReviews}/{reports.length} {tt("done", "เสร็จ")}
+              <Pill tone={doneReviews === reviewable.length ? "success" : "neutral"}>
+                {doneReviews}/{reviewable.length} {tt("done", "เสร็จ")}
               </Pill>
             }
           />
@@ -281,7 +283,7 @@ export function AssessmentHubView({
                     {tt("Open my IDP", "เปิดแผนพัฒนาของฉัน")}
                   </Button>
                 </Link>
-                {canSelfAssess ? (
+                {canSelfAssess && self.competencyCount > 0 ? (
                   <Link href={runHref("self", viewerId)}>
                     <Button variant="outline">
                       {tt(
@@ -293,6 +295,14 @@ export function AssessmentHubView({
                 ) : null}
               </div>
             </>
+          ) : self.competencyCount === 0 ? (
+            <EmptyState
+              title={tt("Not assessed", "ไม่ถูกประเมิน")}
+              hint={tt(
+                "Your career role is not assessed on any competency, so there is no result to show.",
+                "บทบาทสายอาชีพของคุณไม่ได้ถูกประเมินสมรรถนะใด จึงไม่มีผลการประเมินให้แสดง",
+              )}
+            />
           ) : (
             <EmptyState
               title={tt(
@@ -324,22 +334,28 @@ function ReportRow({ report }: { report: HubReport }) {
           {[report.position, report.jobRole].filter(Boolean).join(" · ")}
         </p>
       </div>
-      <span className="text-xs text-muted">
-        {report.answered}/{report.required} {t("label.progress").toLowerCase()}
-      </span>
-      <StatusPill status={report.status} />
-      <Link href={runHref("supervisor", report.id)}>
-        <Button
-          size="sm"
-          variant={report.status === "submitted" ? "outline" : "primary"}
-        >
-          {actionLabel(report.status, {
-            start: tt("Review", "เริ่มประเมิน"),
-            resume: tt("Continue", "ทำต่อ"),
-            view: tt("View", "ดูผล"),
-          })}
-        </Button>
-      </Link>
+      {report.required === 0 ? (
+        <Pill tone="neutral">{tt("Not assessed", "ไม่ถูกประเมิน")}</Pill>
+      ) : (
+        <>
+          <span className="text-xs text-muted">
+            {report.answered}/{report.required} {t("label.progress").toLowerCase()}
+          </span>
+          <StatusPill status={report.status} />
+          <Link href={runHref("supervisor", report.id)}>
+            <Button
+              size="sm"
+              variant={report.status === "submitted" ? "outline" : "primary"}
+            >
+              {actionLabel(report.status, {
+                start: tt("Review", "เริ่มประเมิน"),
+                resume: tt("Continue", "ทำต่อ"),
+                view: tt("View", "ดูผล"),
+              })}
+            </Button>
+          </Link>
+        </>
+      )}
     </li>
   );
 }

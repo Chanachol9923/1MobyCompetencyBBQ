@@ -189,6 +189,10 @@ for r in rows[numeric_start : numeric_start + 4]:
     # Executive is explicitly not assessed on managerial competencies
     expected["Executive"][cid] = None
 
+# C Suite (level 6) is missing from the brief's "Level ที่ถูกประเมิน" table:
+# it is not assessed on any competency
+expected["C Suite"] = {c["id"]: None for c in competencies}
+
 # ------------------------------------------------------------------- employees
 
 ws = wb["Result"]
@@ -244,7 +248,7 @@ LEVEL_OF_ROLE = {
     "Team Lead": "Level 3: Supervise",
     "Specialist Lead": "Level 3: Supervise",
     "Manager": "Level 4: Management",
-    "Expertise": "Level 5: Strategy",
+    "Expertise": "Level 4-5: Management / Strategy",
     "Director": "Level 5: Strategy",
 }
 GRADE_OF_ROLE = {
@@ -371,7 +375,8 @@ export type RoleName =
   | "Specialist Lead"
   | "Manager"
   | "Expertise"
-  | "Director";
+  | "Director"
+  | "C Suite";
 
 export type LevelDetail = {{
   score: number;
@@ -418,7 +423,8 @@ export const FRAMEWORK: FrameworkCompetency[] = {ts([
 
 /**
  * Expected level per career role. `null` means the competency is not assessed
- * for that role - Executives, for example, are not assessed on Managerial.
+ * for that role - Executives, for example, are not assessed on Managerial, and
+ * C Suite is not assessed on anything.
  */
 export const EXPECTED_BY_ROLE: Record<RoleName, Record<string, number | null>> = {ts(expected)};
 
