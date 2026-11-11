@@ -96,6 +96,8 @@ const ACTION_TH: Record<string, string> = {
   "Sent assessment reminder": "ส่งการเตือนให้ประเมิน",
   "Set KPIs": "กำหนด KPI",
   "Sent bulk assessment reminder": "ส่งการเตือนให้ประเมินหลายคน",
+  "Sent supervisor review reminder": "ส่งการเตือนให้หัวหน้าประเมิน",
+  "Sent bulk supervisor review reminder": "ส่งการเตือนให้หัวหน้าประเมินหลายคน",
   "Set expected level": "กำหนดระดับที่คาดหวัง",
   "Skipped pre-test": "ข้ามแบบทดสอบก่อนเรียน",
   "Submitted learning path project": "ส่งโปรเจกต์เส้นทางการเรียนรู้",
