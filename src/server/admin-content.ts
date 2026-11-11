@@ -1128,10 +1128,14 @@ async function loadWorkforce(cycleId: string | null) {
     };
   });
 
+  // the submission totals count only people assessed on something: a C Suite
+  // member has nothing to submit and must not hold the cycle below complete
+  const assessable = rows.filter((r) => r.assessedCount > 0);
   return {
     rows,
-    selfSubmittedCount: rows.filter((r) => r.selfSubmitted).length,
-    supervisorSubmittedCount: rows.filter((r) => r.supervisorSubmitted).length,
+    assessableCount: assessable.length,
+    selfSubmittedCount: assessable.filter((r) => r.selfSubmitted).length,
+    supervisorSubmittedCount: assessable.filter((r) => r.supervisorSubmitted).length,
   };
 }
 
@@ -1210,14 +1214,18 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
 
   const departments: DepartmentProgressRow[] = [...byDepartment.entries()]
     .map(([name, members]) => {
-      const progress = Math.round(
-        members.reduce((a, m) => a + m.phase, 0) / Math.max(members.length, 1),
-      );
+      // progress is over the people assessed on something; headcount stays the
+      // real staff count. A department of only unassessed roles reads complete.
+      const assessable = members.filter((m) => m.assessedCount > 0);
+      const progress = assessable.length
+        ? Math.round(assessable.reduce((a, m) => a + m.phase, 0) / assessable.length)
+        : 100;
       return {
         id: name,
         name,
         headcount: members.length,
-        assessed: members.filter((m) => m.phase >= 100).length,
+        assessable: assessable.length,
+        assessed: assessable.filter((m) => m.phase >= 100).length,
         progress,
         status:
           progress >= 100
@@ -1241,6 +1249,7 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     cycle: cycle ? toCycleSummary(cycle) : null,
     counts: {
       headcount: workforce.rows.length,
+      assessable: workforce.assessableCount,
       selfSubmitted: workforce.selfSubmittedCount,
       supervisorSubmitted: workforce.supervisorSubmittedCount,
       certificates,
@@ -3039,6 +3048,7 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
     employees,
     counts: {
       headcount: employees.length,
+      assessable: workforce.assessableCount,
       selfSubmitted: workforce.selfSubmittedCount,
       supervisorSubmitted: workforce.supervisorSubmittedCount,
       assessedCells,

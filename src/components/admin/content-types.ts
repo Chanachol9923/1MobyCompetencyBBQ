@@ -158,7 +158,9 @@ export type DepartmentProgressRow = {
   id: string;
   name: string;
   headcount: number;
-  /** how many of them have a complete set of scores */
+  /** members assessed on at least one competency (C Suite is not) */
+  assessable: number;
+  /** how many of those have a complete set of scores */
   assessed: number;
   progress: number;
   status: "complete" | "on-track" | "follow-up";
@@ -235,6 +237,12 @@ export type AssessmentAdminData = {
   employees: CycleStatusRow[];
   counts: {
     headcount: number;
+    /**
+     * People assessed on at least one competency — the denominator of the
+     * Self/Supervisor totals, so a role assessed on nothing (C Suite) can
+     * never keep the cycle from reading complete.
+     */
+    assessable: number;
     selfSubmitted: number;
     supervisorSubmitted: number;
     assessedCells: number;
@@ -397,6 +405,8 @@ export type AdminOverviewData = {
   cycle: CycleSummary | null;
   counts: {
     headcount: number;
+    /** people assessed on at least one competency; see CycleStatusData */
+    assessable: number;
     selfSubmitted: number;
     supervisorSubmitted: number;
     certificates: number;

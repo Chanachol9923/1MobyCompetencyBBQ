@@ -265,12 +265,12 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
             {[
               {
                 label: tt("Self assessments in", "ประเมินตนเองที่ส่งแล้ว"),
-                value: `${counts.selfSubmitted} / ${counts.headcount}`,
+                value: `${counts.selfSubmitted} / ${counts.assessable}`,
                 tone: "text-brand",
               },
               {
                 label: tt("Supervisor reviews in", "หัวหน้าประเมินที่ส่งแล้ว"),
-                value: `${counts.supervisorSubmitted} / ${counts.headcount}`,
+                value: `${counts.supervisorSubmitted} / ${counts.assessable}`,
                 tone: "text-amber",
               },
               {
@@ -527,7 +527,7 @@ export function AdminOverviewScreen({ data }: { data: AdminOverviewData }) {
                   <Td className="font-bold">{d.name}</Td>
                   <Td className="font-bold">{formatNumber(d.headcount)}</Td>
                   <Td className="font-bold">
-                    {d.assessed}/{d.headcount}
+                    {d.assessed}/{d.assessable}
                   </Td>
                   <Td>
                     <Progress

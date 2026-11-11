@@ -15,7 +15,8 @@ import {
  * same paper every time it is asked for: the browser is handed the questions
  * *without* their answers, sends back the options it picked, and the server
  * rebuilds the same paper to grade them. The browser never states a score and
- * never sees the key before it has handed its answers in.
+ * never sees the key before it has handed its answers in — and afterwards only
+ * as much of it as `disclose` allows.
  *
  * Questions come from the course's bank (`CourseQuestion`) when it has any —
  * the pre-test and the post-test draw from it in different orders, with the
@@ -46,13 +47,47 @@ type GradedQuestion = PaperQuestion & {
 
 type Paper = Omit<PublicPaper, "questions"> & { questions: GradedQuestion[] };
 
-/** One answer after grading, returned once the paper is handed in. */
-export type ReviewItem = {
+/** One answer after grading, as the server knows it. */
+type GradedAnswer = {
   chosen: number | null;
   answerIndex: number;
   correct: boolean;
   explain: Bilingual | null;
 };
+
+/**
+ * One answer as the learner is shown it. The pre-test and the post-test draw
+ * on the same bank, so what is disclosed is limited by `disclose`: `correct`
+ * is null when right/wrong is withheld, `answerIndex` and `explain` are null
+ * when the key is withheld.
+ */
+export type ReviewItem = {
+  chosen: number | null;
+  correct: boolean | null;
+  answerIndex: number | null;
+  explain: Bilingual | null;
+};
+
+/**
+ * How much of the key goes back after a paper is graded. Both tests share the
+ * bank and the paper is deterministic, so a key shown early would hand the
+ * learner the post-test:
+ * - PRE: nothing — the score only (an empty review).
+ * - POST, not passed: which answers were wrong, not what the right ones are.
+ * - POST, passed: the full key with explanations.
+ */
+export function disclose(kind: TestKind, passed: boolean, review: GradedAnswer[]): ReviewItem[] {
+  if (kind === "PRE") return [];
+  if (!passed) {
+    return review.map((r) => ({
+      chosen: r.chosen,
+      correct: r.correct,
+      answerIndex: null,
+      explain: null,
+    }));
+  }
+  return review.map((r) => ({ ...r }));
+}
 
 /** The most questions one paper asks; a bigger bank is sampled per test. */
 export const PAPER_SIZE = 10;
@@ -208,7 +243,7 @@ export async function publicPaper(courseId: string, kind: TestKind): Promise<Pub
 }
 
 export type GradeResult =
-  | { ok: true; score: number; review: ReviewItem[] }
+  | { ok: true; score: number; review: GradedAnswer[] }
   | { ok: false; error: "paper_changed" | "invalid" };
 
 /**
@@ -226,7 +261,7 @@ export async function gradePaper(
   if (paper.key !== key) return { ok: false, error: "paper_changed" };
   if (answers.length !== paper.questions.length) return { ok: false, error: "invalid" };
 
-  const review = paper.questions.map((q, i) => {
+  const review = paper.questions.map((q, i): GradedAnswer => {
     const chosen = answers[i] ?? null;
     const valid = chosen !== null && chosen >= 0 && chosen < q.options.length;
     return {

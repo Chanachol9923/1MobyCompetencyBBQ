@@ -21,8 +21,9 @@ import type { PublicPaper } from "@/server/course-test";
  * One sitting of the pre- or post-test.
  *
  * The paper comes from the server without its answers; what goes back is the
- * option picked for each question. The server grades it and only then returns
- * the key, which is what the review below shows.
+ * option picked for each question. The server grades it and returns only what
+ * may be shown: the score after the pre-test, which answers were wrong after a
+ * failed post-test, and the key with explanations after a pass.
  */
 export function CourseTestModal({
   open,
@@ -220,16 +221,20 @@ export function CourseTestModal({
               </p>
             </div>
             <div className="min-w-0 flex-1">
-              <Pill tone={score >= PASS_MARK ? "success" : "danger"}>
-                {score >= PASS_MARK
-                  ? tt("Passed", "ผ่านเกณฑ์")
-                  : tt("Not passed", "ยังไม่ผ่านเกณฑ์")}
-              </Pill>
+              {variant === "pre" ? (
+                <Pill tone="neutral">{tt("Baseline", "คะแนนตั้งต้น")}</Pill>
+              ) : (
+                <Pill tone={score >= PASS_MARK ? "success" : "danger"}>
+                  {score >= PASS_MARK
+                    ? tt("Passed", "ผ่านเกณฑ์")
+                    : tt("Not passed", "ยังไม่ผ่านเกณฑ์")}
+                </Pill>
+              )}
               <p className="mt-1.5 text-xs text-muted">
                 {variant === "pre"
                   ? tt(
-                      "This is your baseline. Work through the chapters and take the post-test at the end.",
-                      "นี่คือคะแนนตั้งต้นของคุณ เรียนให้ครบทุกบทแล้วทำแบบทดสอบหลังเรียนอีกครั้ง",
+                      "This is your baseline. Work through the chapters and take the post-test at the end — the answers are shown once you pass the post-test.",
+                      "นี่คือคะแนนตั้งต้นของคุณ เรียนให้ครบทุกบทแล้วทำแบบทดสอบหลังเรียน เฉลยจะแสดงเมื่อคุณผ่านแบบทดสอบหลังเรียนแล้ว",
                     )
                   : score >= PASS_MARK
                     ? tt(
@@ -237,8 +242,8 @@ export function CourseTestModal({
                         `เกณฑ์ผ่านคือ ${PASS_MARK}% ระบบได้ออกใบรับรองให้คุณแล้ว`,
                       )
                     : tt(
-                        `Pass mark is ${PASS_MARK}%. Review the chapters and retake the post-test.`,
-                        `เกณฑ์ผ่านคือ ${PASS_MARK}% กรุณาทบทวนบทเรียนแล้วทำแบบทดสอบใหม่อีกครั้ง`,
+                        `Pass mark is ${PASS_MARK}%. The questions you got wrong are marked below; review the chapters and retake the post-test. The correct answers are shown once you pass.`,
+                        `เกณฑ์ผ่านคือ ${PASS_MARK}% ข้อที่ตอบผิดมีเครื่องหมายด้านล่าง กรุณาทบทวนบทเรียนแล้วทำแบบทดสอบใหม่อีกครั้ง เฉลยจะแสดงเมื่อคุณผ่านแล้ว`,
                       )}
               </p>
             </div>
@@ -246,9 +251,12 @@ export function CourseTestModal({
 
           <ol className="mt-4 space-y-2">
             {questions.map((q, qi) => {
+              // the server sends only what may be shown: nothing after the
+              // pre-test, right/wrong after a failed post-test, the key after a pass
               const r = outcome?.review[qi];
-              if (!r) return null;
-              const key = q.options[r.answerIndex];
+              if (!r || r.correct === null) return null;
+              const key = r.answerIndex !== null ? q.options[r.answerIndex] : null;
+              const mine = r.chosen !== null ? q.options[r.chosen] : null;
               return (
                 <li
                   key={q.id}
@@ -266,8 +274,19 @@ export function CourseTestModal({
                     <span className="block font-medium text-ink">
                       {qi + 1}. {lang === "th" ? q.stem.th : q.stem.en}
                     </span>
-                    {tt("Correct answer", "คำตอบที่ถูกต้อง")}:{" "}
-                    {key ? (lang === "th" ? key.th : key.en) : "—"}
+                    {r.answerIndex !== null ? (
+                      <>
+                        {tt("Correct answer", "คำตอบที่ถูกต้อง")}:{" "}
+                        {key ? (lang === "th" ? key.th : key.en) : "—"}
+                      </>
+                    ) : (
+                      <>
+                        {tt("Your answer", "คำตอบของคุณ")}:{" "}
+                        {mine ? (lang === "th" ? mine.th : mine.en) : tt("not answered", "ไม่ได้ตอบ")}
+                        {" · "}
+                        {r.correct ? tt("correct", "ถูก") : tt("wrong", "ผิด")}
+                      </>
+                    )}
                     {r.explain ? (
                       <span className="mt-0.5 block">
                         {lang === "th" ? r.explain.th : r.explain.en}

@@ -77,3 +77,12 @@ UPDATE "Employee" e
 SET "grade" = j."gradeFrom"
 FROM "JobRole" j
 WHERE e."jobRoleId" = j."id" AND e."grade" = '3';
+
+-- Directors' grades: migration 0011 moved the Director career role from
+-- EP3-EP4 to G09-G10 (Director has no track code), but people already in it
+-- kept the old codes. Map them one-to-one: EP3 -> G09, EP4 -> G10. Only
+-- Directors are touched; EP3/EP4 stay valid grades for Expertise.
+UPDATE "Employee" e
+SET "grade" = CASE e."grade" WHEN 'EP3' THEN 'G09' WHEN 'EP4' THEN 'G10' END
+FROM "JobRole" j
+WHERE e."jobRoleId" = j."id" AND j."key" = 'director' AND e."grade" IN ('EP3', 'EP4');

@@ -259,7 +259,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           )}
           right={
             <span className="text-sm font-bold text-ink">
-              {counts.selfSubmitted}/{counts.headcount}{" "}
+              {counts.selfSubmitted}/{counts.assessable}{" "}
               <span className="font-medium text-muted">{t("status.submitted")}</span>
             </span>
           }
@@ -627,10 +627,15 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
             </h3>
             <p className="mt-0.5 text-xs text-muted">
               {tt(
-                `Self ${counts.selfSubmitted}/${counts.headcount} · Supervisor ${counts.supervisorSubmitted}/${counts.headcount}`,
-                `ประเมินตนเอง ${counts.selfSubmitted}/${counts.headcount} · หัวหน้าประเมิน ${counts.supervisorSubmitted}/${counts.headcount}`,
+                `Self ${counts.selfSubmitted}/${counts.assessable} · Supervisor ${counts.supervisorSubmitted}/${counts.assessable}`,
+                `ประเมินตนเอง ${counts.selfSubmitted}/${counts.assessable} · หัวหน้าประเมิน ${counts.supervisorSubmitted}/${counts.assessable}`,
               )}
-
+              {counts.headcount > counts.assessable
+                ? tt(
+                    ` · ${counts.headcount - counts.assessable} not assessed (their career role has no competencies)`,
+                    ` · ${counts.headcount - counts.assessable} คนไม่ถูกประเมิน (บทบาทไม่มีสมรรถนะที่ประเมิน)`,
+                  )
+                : null}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -643,7 +648,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
             <Button
               variant="outline"
               size="sm"
-              disabled={busy || counts.selfSubmitted === counts.headcount}
+              disabled={busy || counts.selfSubmitted >= counts.assessable}
               onClick={() => run(() => remindEveryonePending({ mode: "SELF" }))}
             >
               <Mail size={13} className="text-brand" />
@@ -652,7 +657,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
             <Button
               variant="outline"
               size="sm"
-              disabled={busy || counts.supervisorSubmitted === counts.headcount}
+              disabled={busy || counts.supervisorSubmitted >= counts.assessable}
               onClick={() => run(() => remindEveryonePending({ mode: "SUPERVISOR" }))}
             >
               <Mail size={13} className="text-brand" />

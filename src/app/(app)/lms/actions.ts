@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { assertEmployee, recordActivity } from "@/server/session";
 import { courseProgress } from "@/server/learning";
 import {
+  disclose,
   gradePaper,
   publicPaper,
   type PublicPaper,
@@ -324,7 +325,11 @@ export type TestOutcome = {
   certificateIssued: boolean;
   certificateCode: string | null;
   pointsAwarded: number;
-  /** the answer key and explanations, only now that the paper is in */
+  /**
+   * What the learner may see of the key now that the paper is in: nothing for
+   * the pre-test, right/wrong only for a failed post-test, the full key and
+   * explanations for a passed one (see `disclose`).
+   */
   review: ReviewItem[];
 };
 
@@ -416,7 +421,8 @@ export async function getTestPaperAction(
  *
  * The browser sends the options it picked, never a score: the server rebuilds
  * the paper from the course and the kind, checks it is the one that was handed
- * out, and grades it. Only then does the answer key go back, for the review.
+ * out, and grades it. Only then does any of the answer key go back, and only
+ * as much as `disclose` allows for this kind and result.
  *
  * The pre-test is taken once, before chapter 1: it is the baseline, so a retake
  * after studying would only make the improvement look bigger than it is. The
@@ -445,7 +451,7 @@ export async function recordTestAction(
 
   const graded = await gradePaper(course.id, kind, paperKey, answers);
   if (!graded.ok) return fail(graded.error);
-  const { score, review } = graded;
+  const { score } = graded;
 
   await db.testResult.upsert({
     where: {
@@ -527,7 +533,14 @@ export async function recordTestAction(
   revalidateLearning(slug);
   return {
     ok: true,
-    data: { score, passed, certificateIssued, certificateCode, pointsAwarded, review },
+    data: {
+      score,
+      passed,
+      certificateIssued,
+      certificateCode,
+      pointsAwarded,
+      review: disclose(kind, passed, graded.review),
+    },
   };
 }
 
