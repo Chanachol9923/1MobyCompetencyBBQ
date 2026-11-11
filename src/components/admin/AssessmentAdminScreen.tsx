@@ -41,6 +41,7 @@ import type {
 import {
   remindEmployee,
   remindEveryonePending,
+  remindSupervisor,
   saveCycle,
   setExpectedLevel,
   updateCycleWeights,
@@ -648,6 +649,15 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               <Mail size={13} className="text-brand" />
               {tt("Remind everyone pending", "แจ้งเตือนผู้ที่ยังไม่ส่ง")}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || counts.supervisorSubmitted === counts.headcount}
+              onClick={() => run(() => remindEveryonePending({ mode: "SUPERVISOR" }))}
+            >
+              <Mail size={13} className="text-brand" />
+              {tt("Remind supervisors pending", "แจ้งเตือนหัวหน้าที่ยังไม่ประเมิน")}
+            </Button>
           </div>
         </div>
         <TableWrap>
@@ -692,7 +702,7 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                     )}
                   </Td>
                   <Td>
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -702,6 +712,22 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                         <Mail size={13} className="text-brand" />
                         {t("action.sendReminder")}
                       </Button>
+                      {!p.supervisorSubmitted ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy || !p.managerName}
+                          title={
+                            p.managerName
+                              ? tt(`Remind ${p.managerName}`, `แจ้งเตือน ${p.managerName}`)
+                              : tt("No supervisor to remind", "ไม่มีหัวหน้าให้แจ้งเตือน")
+                          }
+                          onClick={() => run(() => remindSupervisor({ employeeId: p.id }))}
+                        >
+                          <Mail size={13} className="text-brand" />
+                          {tt("Remind supervisor", "เตือนหัวหน้า")}
+                        </Button>
+                      ) : null}
                     </div>
                   </Td>
                 </tr>
@@ -718,8 +744,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
         </TableWrap>
         <div className="border-t border-line/70 p-5">
           <Note>
-            {tt("Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app.",
-              "ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ",
+            {tt("Progress = competencies scored ÷ competencies their career role is assessed on (set in the table above). Send reminder notifies that person in the app; Remind supervisor notifies their supervisor to review them.",
+              "ความคืบหน้า = จำนวนสมรรถนะที่มีคะแนน ÷ จำนวนสมรรถนะที่บทบาทของคนนั้นต้องประเมิน (กำหนดในตารางด้านบน) ปุ่มส่งการเตือนจะแจ้งเตือนคนนั้นในระบบ ส่วนปุ่มเตือนหัวหน้าจะแจ้งให้หัวหน้าของคนนั้นเข้ามาประเมิน",
             )}
           </Note>
         </div>

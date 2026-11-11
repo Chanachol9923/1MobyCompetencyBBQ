@@ -209,6 +209,8 @@ export type CycleStatusRow = {
   jobRoleName: string;
   level: string;
   departmentName: string | null;
+  /** who reviews them; null when they report to nobody */
+  managerName: string | null;
   assessedCount: number;
   phase: number;
   selfSubmitted: boolean;

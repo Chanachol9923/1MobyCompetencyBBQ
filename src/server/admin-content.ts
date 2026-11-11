@@ -1117,6 +1117,7 @@ async function loadWorkforce(cycleId: string | null) {
       businessUnit: e.businessUnit,
       grade: e.grade,
       remark: e.remark,
+      managerId: e.managerId,
       managerName: e.managerId ? (nameById.get(e.managerId) ?? null) : null,
       skillIndex,
       phase: assessed.size ? Math.round((values.length / assessed.size) * 100) : 0,
@@ -1398,9 +1399,86 @@ export async function remindEmployee(
   });
 }
 
+/**
+ * Nudge the supervisor of one person whose review is still outstanding.
+ *
+ * The notification goes to the *manager* and links straight to that person's
+ * supervisor review — the subject cannot do anything about it themselves.
+ */
+export async function remindSupervisor(
+  input: z.input<typeof remindSchema>,
+): Promise<ActionResult> {
+  return guarded(PERMISSIONS.MANAGE_CYCLE, async (viewer) => {
+    const parsed = remindSchema.safeParse(input);
+    if (!parsed.success) return fail("Unknown employee.", "ไม่พบพนักงานที่ระบุ");
+
+    const employee = await db.employee.findUnique({
+      where: { id: parsed.data.employeeId },
+      select: {
+        id: true,
+        name: true,
+        manager: { select: { id: true, name: true, active: true } },
+      },
+    });
+    if (!employee) return fail("That employee no longer exists.", "ไม่พบพนักงานคนนี้แล้ว");
+    const manager = employee.manager;
+    if (!manager) {
+      return fail(
+        `${employee.name} has no supervisor to remind.`,
+        `${employee.name} ไม่มีหัวหน้าที่จะแจ้งเตือน`,
+      );
+    }
+    if (!manager.active) {
+      return fail(
+        `${manager.name} is deactivated and will not see a reminder.`,
+        `${manager.name} ถูกปิดใช้งานอยู่ จะไม่ได้รับการแจ้งเตือน`,
+      );
+    }
+
+    const cycle = await currentCycleRow();
+    const due = cycle ? cycle.endsAt.toISOString().slice(0, 10) : null;
+    await db.notification.create({
+      data: {
+        employeeId: manager.id,
+        kind: "ASSESSMENT",
+        channel: "IN_APP",
+        titleEn: "Supervisor review reminder",
+        titleTh: "แจ้งเตือนการประเมินลูกน้อง",
+        bodyEn: cycle
+          ? `Please review ${employee.name} for ${cycle.nameEn} before ${due}.`
+          : `Please finish your review of ${employee.name}.`,
+        bodyTh: cycle
+          ? `กรุณาประเมิน ${employee.name} รอบ ${cycle.nameTh} ให้เสร็จก่อนวันที่ ${due}`
+          : `กรุณาประเมิน ${employee.name} ให้เรียบร้อย`,
+        href: `/assessment/supervisor/${employee.id}`,
+      },
+    });
+
+    await recordActivity({
+      viewer,
+      action: "Sent supervisor review reminder",
+      targetType: "employee",
+      targetId: manager.id,
+      targetLabel: manager.name,
+      detail: `${employee.name} · ${cycle?.nameEn ?? "No open cycle"}`,
+    });
+    revalidateContent("/announcements");
+    return done(
+      `Reminder sent to ${manager.name}.`,
+      `ส่งการแจ้งเตือนถึง ${manager.name} แล้ว`,
+    );
+  });
+}
+
 const remindAllSchema = z.object({ mode: z.enum(["SELF", "SUPERVISOR"]) });
 
-/** The same nudge to everyone still outstanding — one insert, not one per row. */
+/**
+ * The same nudge to everyone still outstanding — one insert, not one per row.
+ *
+ * SELF reminds each person who has not submitted their own assessment.
+ * SUPERVISOR reminds each *manager* once, listing the people still waiting on
+ * their review; people with no (active) manager have nobody to remind.
+ */
 export async function remindEveryonePending(
   input: z.input<typeof remindAllSchema>,
 ): Promise<ActionResult> {
@@ -1428,6 +1506,52 @@ export async function remindEveryonePending(
     }
 
     const due = cycle.endsAt.toISOString().slice(0, 10);
+
+    if (parsed.data.mode === "SUPERVISOR") {
+      // loadWorkforce holds active people only, so a deactivated manager is
+      // simply absent here and gets nothing
+      const activeIds = new Set(rows.map((r) => r.id));
+      const byManager = new Map<string, string[]>();
+      for (const p of pending) {
+        if (!p.managerId || !activeIds.has(p.managerId)) continue;
+        byManager.set(p.managerId, [...(byManager.get(p.managerId) ?? []), p.name]);
+      }
+      if (byManager.size === 0) {
+        return fail(
+          "Nobody pending has an active supervisor to remind.",
+          "ผู้ที่ยังไม่ได้รับการประเมินไม่มีหัวหน้าที่ใช้งานอยู่ให้แจ้งเตือน",
+        );
+      }
+
+      await db.notification.createMany({
+        data: [...byManager].map(([managerId, names]) => ({
+          employeeId: managerId,
+          kind: "ASSESSMENT" as const,
+          channel: "IN_APP" as const,
+          titleEn: "Supervisor review reminder",
+          titleTh: "แจ้งเตือนการประเมินลูกน้อง",
+          bodyEn: `${names.length} ${names.length === 1 ? "person is" : "people are"} still waiting for your ${cycle.nameEn} review (${names.join(", ")}). It closes on ${due}.`,
+          bodyTh: `ยังมีลูกน้อง ${names.length} คนที่รอการประเมินรอบ ${cycle.nameTh} จากคุณ (${names.join(", ")}) จะปิดวันที่ ${due}`,
+          href: "/assessment",
+        })),
+      });
+
+      const reviews = [...byManager.values()].reduce((a, n) => a + n.length, 0);
+      await recordActivity({
+        viewer,
+        action: "Sent bulk supervisor review reminder",
+        targetType: "cycle",
+        targetId: cycle.id,
+        targetLabel: cycle.nameEn,
+        detail: `${byManager.size} supervisors, ${reviews} reviews`,
+      });
+      revalidateContent("/announcements");
+      return done(
+        `Reminder sent to ${byManager.size} ${byManager.size === 1 ? "supervisor" : "supervisors"} (${reviews} pending ${reviews === 1 ? "review" : "reviews"}).`,
+        `ส่งการแจ้งเตือนถึงหัวหน้า ${byManager.size} คนแล้ว (รอประเมิน ${reviews} คน)`,
+      );
+    }
+
     await db.notification.createMany({
       data: pending.map((p) => ({
         employeeId: p.id,
@@ -2890,6 +3014,7 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
     jobRoleName: r.jobRoleName,
     level: r.level,
     departmentName: r.departmentName,
+    managerName: r.managerName,
     assessedCount: r.assessedCount,
     phase: r.phase,
     selfSubmitted: r.selfSubmitted,
