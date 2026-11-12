@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, CalendarClock, Clock, PlayCircle, Target } from "lucide-react";
+import { BookOpen, CalendarClock, Clock, Lock, PlayCircle, Target } from "lucide-react";
 import { Button, Card, Progress } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 import { formatDateLocale } from "@/lib/datetime";
@@ -36,6 +36,9 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
     ? pick(lang, course.descriptionEn, course.descriptionTh)
     : null;
   const href = `/lms/${course.slug}`;
+  // locked until the courses it builds on are completed (decided on the server)
+  const missing = course.lock?.locked ? course.lock.missing : [];
+  const firstMissing = missing[0];
 
   return (
     <Card className="flex flex-col overflow-hidden">
@@ -47,7 +50,7 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
           course.cover ?? FALLBACK_COVER,
         )}
       >
-        <PlayCircle size={40} strokeWidth={1.5} />
+        {firstMissing ? <Lock size={36} strokeWidth={1.5} /> : <PlayCircle size={40} strokeWidth={1.5} />}
         {done ? (
           <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-success">
             {tt("Completed", "เรียนจบแล้ว")}
@@ -120,6 +123,21 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
           </p>
         ) : null}
 
+        {firstMissing ? (
+          <p className="mt-1.5 flex items-start gap-1.5 rounded-md bg-surface px-2 py-1.5 text-[11px] leading-snug text-ink">
+            <Lock size={12} className="mt-0.5 shrink-0 text-muted" />
+            <span>
+              {tt("Complete ", "เรียน ")}
+              <Link href={`/lms/${firstMissing.slug}`} className="font-semibold text-brand hover:underline">
+                {pick(lang, firstMissing.titleEn, firstMissing.titleTh)}
+              </Link>
+              {missing.length > 1
+                ? tt(` and ${missing.length - 1} more first`, ` และอีก ${missing.length - 1} คอร์สให้จบก่อน`)
+                : tt(" first", " ให้จบก่อน")}
+            </span>
+          </p>
+        ) : null}
+
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {course.kinds.map((k) => (
             <KindBadge key={k} kind={k} />
@@ -146,10 +164,12 @@ export function CourseCard({ course }: { course: CatalogueCourse }) {
 
         <div className="mt-4 flex-1" />
         <Link href={href} className="block">
-          <Button className="w-full" variant={done ? "outline" : "primary"}>
+          <Button className="w-full" variant={done || firstMissing ? "outline" : "primary"}>
             {done
               ? tt("Review course", "ทบทวนหลักสูตร")
-              : started
+              : firstMissing
+                ? tt("Locked — see what comes first", "ล็อกอยู่ — ดูคอร์สที่ต้องเรียนก่อน")
+                : started
                 ? t("action.continue")
                 : tt("Start course", "เริ่มเรียน")}
           </Button>

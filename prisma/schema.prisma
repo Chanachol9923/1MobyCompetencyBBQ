@@ -536,12 +536,32 @@ model Course {
   documents   LearningDocument[]
   assignments CourseAssignment[]
   questions   CourseQuestion[]
+  /// the courses this one requires first, and the ones that require it
+  prerequisites CoursePrerequisite[] @relation("PrereqOf")
+  requiredBy    CoursePrerequisite[] @relation("PrereqRequired")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([competencyId])
   @@index([status])
+}
+
+/// "Take the earlier course first": `courseId` stays locked for a learner until
+/// they have completed `requiresCourseId` (`Enrollment.completedAt`). No
+/// self-links (a CHECK) and no cycles (checked when an administrator saves,
+/// `course-prerequisites.ts`). Arrives with migration 0018; until then the
+/// readers treat every course as unlocked.
+model CoursePrerequisite {
+  courseId         String
+  requiresCourseId String
+  createdAt        DateTime @default(now())
+
+  course   Course @relation("PrereqOf", fields: [courseId], references: [id], onDelete: Cascade)
+  requires Course @relation("PrereqRequired", fields: [requiresCourseId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, requiresCourseId])
+  @@index([requiresCourseId])
 }
 
 /// A course given to someone because of their assessment: their supervisor's

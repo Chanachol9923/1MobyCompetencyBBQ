@@ -11,8 +11,10 @@ import {
   Pencil,
   Plus,
   Tags,
+  Lock,
   Trash2,
   Video,
+  X,
 } from "lucide-react";
 import {
   Button,
@@ -80,6 +82,8 @@ type Draft = {
   cover: string;
   glossary: string;
   level: string;
+  /** ids of the courses a learner completes before this one */
+  prerequisites: string[];
   chapters: ChapterDraft[];
 };
 
@@ -94,6 +98,7 @@ const emptyDraft = (coverIndex: number): Draft => ({
   cover: COVERS[coverIndex % COVERS.length]!,
   glossary: "",
   level: "",
+  prerequisites: [],
   // a new course starts empty: dropping files is how most chapters arrive
   chapters: [],
 });
@@ -109,6 +114,7 @@ const fromCourse = (c: AdminCourseRow): Draft => ({
   cover: c.cover ?? COVERS[0]!,
   glossary: c.glossary.join(", "),
   level: c.level ? String(c.level) : "",
+  prerequisites: c.prerequisiteIds,
   chapters: c.chapters.map(chapterFromRow),
 });
 
@@ -249,6 +255,8 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
       cover: draft.cover,
       glossary: draft.glossary,
       level: draft.level,
+      // before migration 0018 the list is left alone rather than refused
+      ...(data.prerequisitesReady ? { prerequisites: draft.prerequisites } : {}),
       chapters: draft.chapters.filter((ch) => !isBlankChapter(ch)).map(chapterPayload),
     };
     runForm(() => saveCourse(payload));
@@ -623,6 +631,31 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
                 onChange={(e) => set("glossary", e.target.value)}
               />
             </Field>
+            <Field
+              label={tt("Complete these courses first", "คอร์สที่ต้องเรียนจบก่อน")}
+              hint={
+                data.prerequisitesReady
+                  ? tt(
+                      "Learners can start this course only after completing every course picked here, so the content follows on. Someone already part-way through keeps going.",
+                      "ผู้เรียนจะเริ่มคอร์สนี้ได้เมื่อเรียนคอร์สที่เลือกไว้ครบแล้ว เพื่อให้เนื้อหาต่อเนื่องกัน ผู้ที่เรียนค้างอยู่แล้วเรียนต่อได้ตามเดิม",
+                    )
+                  : tt(
+                      "Available once database migration 0018 is applied.",
+                      "ใช้ได้เมื่อรัน migration 0018 ของฐานข้อมูลแล้ว",
+                    )
+              }
+              className="sm:col-span-2"
+            >
+              {data.prerequisitesReady ? (
+                <PrerequisitePicker
+                  courses={courses}
+                  selfId={editing?.id ?? null}
+                  value={draft.prerequisites}
+                  onChange={(ids) => set("prerequisites", ids)}
+                  title={title}
+                />
+              ) : null}
+            </Field>
           </div>
         ) : (
           <div className="space-y-4">
@@ -701,6 +734,101 @@ export function LmsAdminScreen({ data }: { data: LmsAdminData }) {
               )}
         </p>
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * Picks the courses a learner must complete before this one. Drafts are
+ * offered too (a sequence can be prepared before it is published); a required
+ * course that is not published never holds anybody back. Loops are refused by
+ * the server when the course is saved.
+ */
+function PrerequisitePicker({
+  courses,
+  selfId,
+  value,
+  onChange,
+  title,
+}: {
+  courses: AdminCourseRow[];
+  selfId: string | null;
+  value: string[];
+  onChange: (ids: string[]) => void;
+  title: (c: { titleEn: string; titleTh: string | null }) => string;
+}) {
+  const { tt } = useT();
+  const [q, setQ] = useState("");
+  const byId = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
+  const options = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return courses.filter(
+      (c) =>
+        c.id !== selfId &&
+        c.status !== "ARCHIVED" &&
+        !value.includes(c.id) &&
+        (!needle || `${c.titleEn} ${c.titleTh ?? ""} ${c.slug}`.toLowerCase().includes(needle)),
+    );
+  }, [courses, selfId, value, q]);
+
+  return (
+    <div className="space-y-2">
+      {value.length ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {value.map((id) => {
+            const c = byId.get(id);
+            return (
+              <li
+                key={id}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-brand-tint py-1 pl-2.5 pr-1 text-xs font-medium text-brand"
+              >
+                <Lock size={11} className="shrink-0" />
+                <span className="truncate">{c ? title(c) : id}</span>
+                <button
+                  type="button"
+                  onClick={() => onChange(value.filter((v) => v !== id))}
+                  aria-label={tt("Remove", "นำออก")}
+                  className="grid size-5 shrink-0 place-items-center rounded-full hover:bg-brand/15"
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted">{tt("None — anyone can start it.", "ไม่มี — เริ่มเรียนได้ทันที")}</p>
+      )}
+      <Input
+        value={q}
+        placeholder={tt("Search courses to add…", "ค้นหาคอร์สเพื่อเพิ่ม…")}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      <ul className="max-h-44 overflow-y-auto rounded-lg border border-line">
+        {options.length ? (
+          options.map((c) => (
+            <li key={c.id} className="border-b border-line last:border-b-0">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange([...value, c.id]);
+                  setQ("");
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-surface"
+              >
+                <Plus size={12} className="shrink-0 text-brand" />
+                <span className="min-w-0 flex-1 truncate text-ink">{title(c)}</span>
+                {c.level ? (
+                  <span className="shrink-0 text-muted">{tt(`Level ${c.level}`, `ระดับ ${c.level}`)}</span>
+                ) : null}
+                {c.status === "DRAFT" ? <Pill tone="warn">{tt("Draft", "ฉบับร่าง")}</Pill> : null}
+              </button>
+            </li>
+          ))
+        ) : (
+          <li className="px-3 py-2 text-xs text-muted">{tt("No matching courses", "ไม่พบคอร์สที่ตรงกัน")}</li>
+        )}
+      </ul>
     </div>
   );
 }

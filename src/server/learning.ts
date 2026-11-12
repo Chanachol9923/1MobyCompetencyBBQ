@@ -1,4 +1,5 @@
 import { getAssignments, type AssignedCourse } from "@/server/course-assignment";
+import { getCourseLocks, type CourseLock } from "@/server/course-prerequisites";
 import "server-only";
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
@@ -103,6 +104,8 @@ export type CatalogueCourse = {
   level: number | null;
   /** set when the course was assigned from this person's assessment */
   assigned: AssignedCourse | null;
+  /** the courses it requires first; null when it requires none */
+  lock: CourseLock | null;
 };
 
 export type CatalogueStats = {
@@ -152,7 +155,7 @@ export async function getCatalogue(
       : {}),
   };
 
-  const [rows, enrolled, totalPublished, assignments] = await Promise.all([
+  const [rows, enrolled, totalPublished, assignments, locks] = await Promise.all([
     db.course.findMany({
       where,
       orderBy: [{ category: "asc" }, { titleEn: "asc" }],
@@ -184,6 +187,7 @@ export async function getCatalogue(
     }),
     db.course.count({ where: { status: "PUBLISHED" } }),
     getAssignments(employeeId),
+    getCourseLocks(employeeId),
   ]);
 
   const progressByCourse = new Map<string, number>();
@@ -214,6 +218,7 @@ export async function getCatalogue(
       complete: progress >= 100,
       level: c.level,
       assigned: assignments.get(c.id) ?? null,
+      lock: locks.get(c.id) ?? null,
     };
   });
 
@@ -307,6 +312,8 @@ export type PlayerView = {
   postScore: number | null;
   certificate: PlayerCertificate | null;
   goals: LinkedGoal[];
+  /** the courses it requires first; null when it requires none */
+  lock: CourseLock | null;
 };
 
 /**
@@ -378,7 +385,7 @@ export async function getPlayerView(
   });
   if (!course || course.status !== "PUBLISHED") return null;
 
-  const [enrollment, tests, certificate, goals] = await Promise.all([
+  const [enrollment, tests, certificate, goals, locks] = await Promise.all([
     db.enrollment.findUnique({
       where: { employeeId_courseId: { employeeId, courseId: course.id } },
       select: {
@@ -406,6 +413,7 @@ export async function getPlayerView(
         competency: { select: { nameEn: true, nameTh: true } },
       },
     }),
+    getCourseLocks(employeeId, [course.id]),
   ]);
 
   const done = new Set(enrollment?.chapters.map((c) => c.chapterId) ?? []);
@@ -489,6 +497,7 @@ export async function getPlayerView(
       toLevel: g.toLevel,
       complete: g.completedAt !== null,
     })),
+    lock: locks.get(course.id) ?? null,
   };
 }
 

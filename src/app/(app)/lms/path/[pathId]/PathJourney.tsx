@@ -95,6 +95,10 @@ export function PathJourney({ path }: { path: PathView }) {
         "The test was updated while you had it open — open it again to get the current questions.",
         "แบบทดสอบถูกแก้ไขระหว่างที่คุณเปิดอยู่ กรุณาเปิดใหม่อีกครั้งเพื่อรับชุดคำถามล่าสุด",
       ),
+      prerequisites: tt(
+        "Complete the courses this one builds on first.",
+        "กรุณาเรียนคอร์สที่ต้องเรียนก่อนให้จบก่อน",
+      ),
     })[code];
 
   const submitProject = () => {

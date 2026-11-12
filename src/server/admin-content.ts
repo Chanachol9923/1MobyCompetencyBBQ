@@ -64,6 +64,7 @@ import { enqueueTranscript, recheckTranscripts } from "@/server/transcribe";
 import { kickTranscription } from "@/server/transcript-kick";
 import { enqueueDocumentText } from "@/server/pdf-text";
 import { syncCourseAssignments } from "@/server/course-assignment";
+import { checkPrerequisites, getAllPrerequisiteIds, writePrerequisites } from "@/server/course-prerequisites";
 import {
   assessedSetOf,
   expectedCell,
@@ -2482,7 +2483,7 @@ export async function deleteJobRole(
 export async function getLmsAdminData(): Promise<LmsAdminData> {
   await assertPermission(PERMISSIONS.MANAGE_LMS);
 
-  const [courses, competencies] = await Promise.all([
+  const [courses, competencies, prerequisites] = await Promise.all([
     db.course.findMany({
       orderBy: [{ status: "asc" }, { titleEn: "asc" }],
       select: {
@@ -2527,6 +2528,8 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
       orderBy: [{ group: "asc" }, { sortOrder: "asc" }],
       select: { id: true, key: true, group: true, nameEn: true, nameTh: true },
     }),
+    // null until migration 0018 creates the table
+    getAllPrerequisiteIds(),
   ]);
 
   // "how many finished it" in one grouped query rather than one per course
@@ -2558,11 +2561,13 @@ export async function getLmsAdminData(): Promise<LmsAdminData> {
     completedCount: completedByCourse.get(c.id) ?? 0,
     certificateCount: c._count.certificates,
     pathStepCount: c._count.pathSteps,
+    prerequisiteIds: prerequisites?.get(c.id) ?? [],
   }));
 
   return {
     courses: rows,
     competencies,
+    prerequisitesReady: prerequisites !== null,
     counts: {
       total: rows.length,
       published: rows.filter((c) => c.status === "PUBLISHED").length,
@@ -2630,6 +2635,8 @@ const courseFields = z.object({
       ),
     ].slice(0, 80)),
   chapters: z.array(chapterSchema).max(60),
+  /** the courses a learner completes before this one; absent = leave as is */
+  prerequisites: z.array(z.string().max(64)).max(20).optional(),
 });
 
 const saveCourseSchema = courseFields.extend({
@@ -2658,7 +2665,7 @@ export async function saveCourse(
   return guarded(PERMISSIONS.MANAGE_LMS, async (viewer) => {
     const parsed = saveCourseSchema.safeParse(input);
     if (!parsed.success) return BAD_COURSE;
-    const { courseId, chapters, ...d } = parsed.data;
+    const { courseId, chapters, prerequisites, ...d } = parsed.data;
 
     if (d.competencyId) {
       const competency = await db.competency.findUnique({
@@ -2678,6 +2685,24 @@ export async function saveCourse(
       : null;
     if (courseId && !existing) {
       return fail("That course no longer exists.", "ไม่พบหลักสูตรนี้แล้ว");
+    }
+
+    // checked before anything is written, so a refusal leaves the course as it was
+    const prereqError = prerequisites ? await checkPrerequisites(existing?.id ?? null, prerequisites) : null;
+    if (prereqError) {
+      return prereqError === "cycle"
+        ? fail(
+            "Those prerequisites would make a loop — a course it requires already needs this one first.",
+            "คอร์สที่ต้องเรียนก่อนชุดนี้ทำให้เกิดวงวน — คอร์สที่เลือกไว้ต้องเรียนคอร์สนี้ก่อนอยู่แล้ว",
+          )
+        : prereqError === "self"
+          ? fail("A course cannot require itself.", "คอร์สไม่สามารถกำหนดให้ต้องเรียนตัวเองก่อนได้")
+          : prereqError === "not_ready"
+            ? fail(
+                "Prerequisites can be saved once database migration 0018 is applied.",
+                "จะบันทึกคอร์สที่ต้องเรียนก่อนได้เมื่อรัน migration 0018 แล้ว",
+              )
+            : fail("One of the required courses no longer exists.", "ไม่พบคอร์สที่ต้องเรียนก่อนบางรายการแล้ว");
     }
 
     const data = {
@@ -2754,6 +2779,7 @@ export async function saveCourse(
 
       return target;
     });
+    if (prerequisites) await writePrerequisites(id, prerequisites);
 
     const kept = new Set(
       chapters.filter((c) => c.kind !== "ARTICLE" && c.mediaUrl).map((c) => c.mediaUrl),

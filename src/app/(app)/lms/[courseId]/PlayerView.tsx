@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
+  Lock,
   Sparkles,
 } from "lucide-react";
 import { Button, Card, PageHeading, Pill, Progress } from "@/components/ui";
@@ -145,6 +146,10 @@ function Player({ view }: { view: PlayerData }) {
         "The test was updated while you had it open — open it again to get the current questions.",
         "แบบทดสอบถูกแก้ไขระหว่างที่คุณเปิดอยู่ กรุณาเปิดใหม่อีกครั้งเพื่อรับชุดคำถามล่าสุด",
       ),
+      prerequisites: tt(
+        "Complete the courses this one builds on first.",
+        "กรุณาเรียนคอร์สที่ต้องเรียนก่อนให้จบก่อน",
+      ),
     })[code];
 
   /* ----------------------------------------------------- chapter progress */
@@ -266,6 +271,74 @@ function Player({ view }: { view: PlayerData }) {
         <PageHeading title={courseTitle} />
         <Card className="p-8 text-center text-sm text-muted">
           {tt("This course has no chapters yet", "หลักสูตรนี้ยังไม่มีบทเรียน")}
+        </Card>
+      </div>
+    );
+  }
+
+  /* --------------------------------------------------- prerequisite lock */
+
+  /* Courses build on each other: until the ones this course requires are
+     completed, the page lists them in place of the pre-test. The server
+     refuses the paper and the chapters too; someone already part-way through
+     never sees this (the lock is empty for them). */
+  if (view.lock?.locked) {
+    return (
+      <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
+        {backLink}
+        <PageHeading title={t("nav.lms")} />
+        <Card className="overflow-hidden">
+          <div className={cn("h-2 w-full bg-gradient-to-r", view.cover ?? FALLBACK_COVER)} />
+          <div className="p-6 lg:p-8">
+            <span className="grid size-12 place-items-center rounded-xl bg-surface text-muted">
+              <Lock size={24} />
+            </span>
+            <h2 className="mt-4 text-2xl font-medium tracking-tight text-ink">{courseTitle}</h2>
+            <p className="mt-2 max-w-[62ch] text-sm font-light text-muted">
+              {tt(
+                "This course builds on others, so it opens once you have completed the courses below. Finish them in order and the content follows on.",
+                "หลักสูตรนี้ต่อยอดจากคอร์สอื่น จึงจะเปิดให้เรียนเมื่อคุณเรียนคอร์สด้านล่างจบแล้ว เรียนตามลำดับเพื่อให้เนื้อหาต่อเนื่องกัน",
+              )}
+            </p>
+            <ul className="mt-5 space-y-2">
+              {view.lock.required.map((r) => (
+                <li key={r.id}>
+                  <Link
+                    href={`/lms/${r.slug}`}
+                    className="flex items-center gap-3 rounded-lg border border-line p-3 transition-colors hover:border-brand"
+                  >
+                    {r.complete ? (
+                      <CheckCircle2 size={18} className="shrink-0 text-success" />
+                    ) : (
+                      <Lock size={18} className="shrink-0 text-muted" />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink">
+                        {pick(lang, r.titleEn, r.titleTh)}
+                      </span>
+                      <span className="mt-1.5 flex items-center gap-2">
+                        <Progress value={r.progress} tone={r.complete ? "success" : "brand"} className="flex-1" />
+                        <span className="w-16 shrink-0 text-right text-[11px] text-muted">
+                          {r.complete ? tt("Completed", "เรียนจบแล้ว") : `${r.progress}%`}
+                        </span>
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            {view.lock.missing[0] ? (
+              <div className="mt-6">
+                <Link href={`/lms/${view.lock.missing[0].slug}`}>
+                  <Button>
+                    {view.lock.missing[0].progress > 0
+                      ? tt("Continue the first course", "เรียนคอร์สแรกต่อ")
+                      : tt("Start the first course", "เริ่มเรียนคอร์สแรก")}
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
+          </div>
         </Card>
       </div>
     );

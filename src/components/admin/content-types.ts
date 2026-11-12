@@ -351,6 +351,8 @@ export type AdminCourseRow = {
   certificateCount: number;
   /** learning paths that include this course as a step */
   pathStepCount: number;
+  /** the courses a learner completes before this one */
+  prerequisiteIds: string[];
 };
 
 export type CompetencyOption = {
@@ -364,6 +366,8 @@ export type CompetencyOption = {
 export type LmsAdminData = {
   courses: AdminCourseRow[];
   competencies: CompetencyOption[];
+  /** false until migration 0018 creates the prerequisite table */
+  prerequisitesReady: boolean;
   counts: {
     total: number;
     published: number;

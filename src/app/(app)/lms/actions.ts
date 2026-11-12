@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { assertEmployee, recordActivity } from "@/server/session";
 import { courseProgress } from "@/server/learning";
+import { unmetPrerequisites } from "@/server/course-prerequisites";
 import {
   disclose,
   gradePaper,
@@ -45,7 +46,9 @@ export type LmsError =
   | "pretest_required"
   | "pretest_taken"
   /** the question bank changed after the paper was handed out */
-  | "paper_changed";
+  | "paper_changed"
+  /** a course this one requires is not completed yet */
+  | "prerequisites";
 
 export type LmsResult<T> = { ok: true; data: T } | { ok: false; error: LmsError };
 
@@ -176,6 +179,9 @@ export async function completeChapterAction(
   if (!course || course.status !== "PUBLISHED") return fail("not_found");
   // the chapter id came from the browser, so it is checked against the course
   if (!course.chapters.some((c) => c.id === chapterId)) return fail("not_found");
+
+  // the courses this one builds on come first (someone already in it carries on)
+  if ((await unmetPrerequisites(employeeId, course.id)).length) return fail("prerequisites");
 
   // the pre-test comes first: chapters open only once a baseline is on record.
   // Someone who was already part-way through before it was required carries on.
@@ -356,6 +362,11 @@ async function testGate(
     },
   });
   if (!course || course.status !== "PUBLISHED") return { ok: false, error: "not_found" };
+
+  // a locked course hands out no paper (someone already in it carries on)
+  if ((await unmetPrerequisites(employeeId, course.id)).length) {
+    return { ok: false, error: "prerequisites" };
+  }
 
   if (kind === "PRE") {
     const [taken, started] = await Promise.all([
