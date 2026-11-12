@@ -340,27 +340,33 @@ export function IdpView({
       {resume ? <ResumeCard resume={resume} /> : null}
 
       {/* --------------------------------------------------- plan summary */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Card className="flex flex-col justify-between p-4">
-          <p className="text-xs text-muted">{t("label.progress")}</p>
-          <p className="mt-0.5 text-2xl font-bold text-brand">{stats.avg}%</p>
+      {/* one strip rather than four tiles: the plan at a glance, short on a phone */}
+      <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-6 sm:p-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium text-ink">
+              {tt("Plan progress", "ความคืบหน้าของแผน")}
+            </p>
+            <p className="text-2xl font-bold tabular-nums text-brand">{stats.avg}%</p>
+          </div>
           <Progress className="mt-2" tone="brand" value={stats.avg} />
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted">{t("status.onTrack")}</p>
-          <p className="mt-0.5 text-2xl font-bold text-ink">{stats.onTrack}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted">{tt("At risk", "เสี่ยงล่าช้า")}</p>
-          <p className="mt-0.5 text-2xl font-bold text-amber">{stats.atRisk}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted">{t("status.overdue")}</p>
-          <p className="mt-0.5 text-2xl font-bold text-accent">
-            {stats.overdue}
-          </p>
-        </Card>
-      </div>
+        </div>
+        <dl className="grid grid-cols-4 gap-1.5 text-center sm:w-auto sm:gap-3">
+          {(
+            [
+              ["onTrack", stats.onTrack, "text-brand"],
+              ["atRisk", stats.atRisk, "text-amber"],
+              ["overdue", stats.overdue, "text-accent"],
+              ["complete", stats.complete, "text-success"],
+            ] as const
+          ).map(([key, n, tone]) => (
+            <div key={key} className="flex min-w-0 flex-col-reverse rounded-lg bg-surface px-1 py-2 sm:min-w-20 sm:px-2">
+              <dt className="truncate text-[11px] text-muted">{statusLabel(key)}</dt>
+              <dd className={cn("text-xl font-bold tabular-nums", tone)}>{n}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
 
       {/* ------------------------------------------------------- goal list */}
       <div className="mb-4 mt-8 flex flex-wrap items-end justify-between gap-3">
@@ -635,13 +641,6 @@ export function IdpView({
           </p>
         ) : null}
       </Modal>
-
-      <p className="mt-6 text-xs text-muted">
-        {tt("Statuses shown", "สถานะที่แสดง")}:{" "}
-        {(["onTrack", "atRisk", "overdue", "complete"] as const)
-          .map((s) => statusLabel(s))
-          .join(" · ")}
-      </p>
     </div>
   );
 }
