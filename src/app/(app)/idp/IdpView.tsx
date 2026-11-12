@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  BookOpen,
   CalendarDays,
   MessageSquare,
   Paperclip,
@@ -22,6 +21,7 @@ import {
   PageHeading,
   Pill,
   Progress,
+  Tabs,
 } from "@/components/ui";
 import {
   FALLBACK_COVER,
@@ -30,12 +30,24 @@ import {
   type CourseCategory,
 } from "@/components/learning/model";
 import { useT } from "@/lib/i18n";
-import type { CertificateOption, IdpGoalView, ResumeCourse } from "@/server/learning";
+import type {
+  CertificateOption,
+  IdpCompetency,
+  IdpGoalView,
+  ResumeCourse,
+} from "@/server/learning";
+import { verdictFor } from "@/components/profile/gap";
 import { GoalEvidencePanel } from "./GoalEvidence";
 import { GoalTimeline, StatusPill, useStatusLabel } from "./GoalTimeline";
-import { daysLeft, goalStatus, parseDate, type GoalStatus } from "./status";
+import { daysLeft, goalStatus, parseDate } from "./status";
 import { APP_TIME_ZONE } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
+
+const GROUP_ORDER: CourseCategory[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
+
+/** A row of the plan: an assessed competency, or (expected null) one that only
+ *  a goal brought in. */
+type RowCompetency = Omit<IdpCompetency, "expected"> & { expected: number | null };
 
 const ACTIVITY_LABEL: Record<
   IdpGoalView["activity"],
@@ -65,11 +77,15 @@ export function IdpView({
   goals,
   certificates,
   resume,
+  assessedGroups = [],
+  competencies = [],
 }: {
   goals: IdpGoalView[];
   certificates: CertificateOption[];
-  /** kept for callers; the plan is one list now, so groups are labels on cards */
+  /** the competency groups this person's role is assessed on: the tabs */
   assessedGroups?: CourseCategory[];
+  /** every competency they are assessed on, goal or not: one row each */
+  competencies?: IdpCompetency[];
   /** the course studied most recently, chosen on the server */
   resume: ResumeCourse | null;
 }) {
@@ -105,23 +121,42 @@ export function IdpView({
     return { ...acc, avg };
   }, [goals]);
 
-  /* The open goals, most urgent first: overdue, at risk, on track, then by
-     due date. One list, no tabs or pagers, so nothing on the page changes
-     height while it is being read; the details open in a dialog. */
+  /* The plan reads by competency group (tabs), and inside a group by
+     competency: one row for every competency this person is assessed on
+     (their position's functional set, their career role's expected levels),
+     with its goals or, without one, a line saying where it stands. A goal on a
+     competency outside that set still gets a row, so no goal is hidden. */
   const URGENCY: Record<string, number> = { overdue: 0, atRisk: 1, onTrack: 2, complete: 3 };
-  const open = useMemo(
-    () =>
-      goals
-        .filter((g) => !g.complete)
-        .map((g) => ({ g, status: goalStatus(g) }))
-        .sort(
-          (a, b) =>
-            URGENCY[a.status]! - URGENCY[b.status]! || a.g.dueDate.localeCompare(b.g.dueDate),
-        ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goals],
+  const goalsOf = (competencyId: string) =>
+    goals
+      .filter((g) => g.competencyId === competencyId)
+      .map((g) => ({ g, rank: URGENCY[goalStatus(g)]! }))
+      .sort((a, b) => a.rank - b.rank || a.g.dueDate.localeCompare(b.g.dueDate))
+      .map(({ g }) => g);
+  const rows = useMemo(() => {
+    const out: RowCompetency[] = [...competencies];
+    for (const g of goals) {
+      if (out.some((r) => r.competencyId === g.competencyId)) continue;
+      out.push({
+        competencyId: g.competencyId,
+        group: g.group,
+        nameEn: g.competencyNameEn,
+        nameTh: g.competencyNameTh,
+        expected: null,
+        manager: null,
+        self: null,
+      });
+    }
+    return out;
+  }, [competencies, goals]);
+  const groups = GROUP_ORDER.filter(
+    (gr) => assessedGroups.includes(gr) || rows.some((r) => r.group === gr),
   );
-  const finished = goals.filter((g) => g.complete);
+  const [group, setGroup] = useState<CourseCategory | null>(null);
+  const activeGroup =
+    group && groups.includes(group)
+      ? group
+      : (groups.find((gr) => goals.some((g) => g.group === gr && !g.complete)) ?? groups[0] ?? "CORE");
 
   const timelineGoals = useMemo(
     () =>
@@ -145,9 +180,9 @@ export function IdpView({
   /** the goal's own course, when it has one */
   const planCourse = (g: IdpGoalView) => g.courses.find((c) => c.inPlan) ?? null;
 
-  /** One goal: every line is a single truncated line, so all cards match. */
-  const goalCard = (g: IdpGoalView, status: GoalStatus) => {
-    const name = goalName(g);
+  /** One goal inside its competency's row, in the plan's original look. */
+  const goalBlock = (g: IdpGoalView) => {
+    const status = goalStatus(g);
     const course = planCourse(g);
     const left = daysLeft(g);
     const overdue = status === "overdue";
@@ -163,43 +198,20 @@ export function IdpView({
         }
       : { label: tt("Add evidence", "แนบหลักฐาน"), go: () => setDetailsId(g.id) };
     return (
-      <Card key={g.id} id={`goal-${g.id}`} className="flex h-full flex-col p-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[11px] font-medium uppercase tracking-wide text-muted">
-            {groupLabel(g.group)}
-          </span>
-          <StatusPill status={status} />
-        </div>
-        <h3 className="mt-1.5 truncate text-base font-bold text-ink" title={name}>
-          {name}
-        </h3>
-        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-xs">
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-tint px-2 py-0.5 font-medium text-brand">
-            <Target size={12} className="shrink-0" />
+      <div key={g.id} id={`goal-${g.id}`} className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-tint px-3 py-1.5 font-medium text-brand">
+            <Target size={14} className="shrink-0" />
             {tt(`Level ${g.fromLevel} → ${g.toLevel}`, `ระดับ ${g.fromLevel} → ${g.toLevel}`)}
           </span>
-          <span className="truncate text-muted">
-            {g.fromAssessment
-              ? tt("Assigned from your assessment", "มอบหมายจากผลการประเมิน")
-              : pick(lang, ACTIVITY_LABEL[g.activity].en, ACTIVITY_LABEL[g.activity].th)}
-          </span>
-        </div>
-
-        <p className="mt-3 flex min-w-0 items-center gap-1.5 text-sm text-ink">
-          <BookOpen size={14} className="shrink-0 text-muted" />
-          <span className="truncate">
-            {course
-              ? pick(lang, course.titleEn, course.titleTh)
-              : pick(lang, ACTIVITY_LABEL[g.activity].en, ACTIVITY_LABEL[g.activity].th)}
-          </span>
-        </p>
-        <div className="mt-2 flex items-center gap-2">
-          <Progress className="flex-1" tone={g.progress >= 100 ? "success" : overdue ? "amber" : "brand"} value={g.progress} />
-          <span className="w-9 shrink-0 text-right text-xs font-medium tabular-nums text-ink">{g.progress}%</span>
-        </div>
-        <p className={cn("mt-2 flex items-center gap-1.5 text-xs", overdue ? "font-medium text-accent" : "text-muted")}>
-          <CalendarDays size={13} className="shrink-0" />
-          <span className="truncate">
+          <StatusPill status={status} />
+          {g.fromAssessment ? (
+            <span className="text-xs font-medium text-brand">
+              {tt("Assigned from your assessment", "มอบหมายจากผลการประเมิน")}
+            </span>
+          ) : null}
+          <span className={cn("inline-flex items-center gap-1.5 text-xs", overdue ? "font-medium text-accent" : "text-muted")}>
+            <CalendarDays size={14} className="shrink-0" />
             {tt(`Due ${dateFmt(g.dueDate)}`, `ครบกำหนด ${dateFmt(g.dueDate)}`)}
             {status === "complete"
               ? ""
@@ -207,16 +219,104 @@ export function IdpView({
                 ? tt(` · ${-left} days overdue`, ` · เลยกำหนด ${-left} วัน`)
                 : tt(` · ${left} days left`, ` · เหลือ ${left} วัน`)}
           </span>
-        </p>
+        </div>
 
-        <div className="mt-auto flex gap-2 pt-4">
-          <Button className="min-w-0 flex-1" onClick={action.go}>
-            {course ? <Play size={14} /> : <Paperclip size={14} />}
-            <span className="truncate">{action.label}</span>
-          </Button>
-          <Button variant="outline" onClick={() => setDetailsId(g.id)} aria-label={tt(`Details of ${name}`, `รายละเอียด ${name}`)}>
-            {tt("Details", "รายละเอียด")}
-          </Button>
+        <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-stretch">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-lg bg-surface px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+            <span className="min-w-0 sm:w-56 sm:shrink-0">
+              <span className="block truncate text-sm font-bold text-ink">
+                {course
+                  ? pick(lang, course.titleEn, course.titleTh)
+                  : pick(lang, ACTIVITY_LABEL[g.activity].en, ACTIVITY_LABEL[g.activity].th)}
+              </span>
+              <span className="mt-0.5 block truncate text-[11px] text-muted">
+                {course
+                  ? `${course.chapterCount} ${tt("lessons", "บทเรียน")} · ${course.hours}${tt("h", " ชม.")}`
+                  : tt("No course attached", "ไม่มีหลักสูตรที่ผูกไว้")}
+              </span>
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between text-[11px] font-light text-muted">
+                <span>{t("label.progress")}</span>
+                <span className="tabular-nums">{g.progress}%</span>
+              </div>
+              <Progress className="mt-1" tone={g.progress >= 100 ? "success" : "amber"} value={g.progress} />
+            </div>
+          </div>
+          <div className="flex gap-2 lg:w-60">
+            <Button className="min-h-12 min-w-0 flex-1 font-bold" onClick={action.go}>
+              {course ? <Play size={14} /> : <Paperclip size={14} />}
+              <span className="truncate">{action.label}</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="min-h-12"
+              onClick={() => setDetailsId(g.id)}
+              aria-label={tt("Details", "รายละเอียด")}
+            >
+              {tt("Details", "รายละเอียด")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /** What a competency without a goal says instead: its standing, in words. */
+  const statusText = (c: RowCompetency) => {
+    if (c.expected === null) {
+      return { tone: "text-muted", text: tt("Not assessed for your role", "ไม่ได้ประเมินในบทบาทของคุณ") };
+    }
+    if (c.manager === null) {
+      return {
+        tone: "text-muted",
+        text: tt(
+          "Not reviewed yet — waiting for your supervisor",
+          "ยังไม่ได้รับการประเมิน — รอหัวหน้าประเมิน",
+        ),
+      };
+    }
+    const score = `(${c.manager}/${c.expected})`;
+    const verdict = verdictFor(c.manager - c.expected);
+    if (verdict === "strength") {
+      return { tone: "text-success", text: tt(`Above the standard ${score}`, `เกินมาตรฐาน ${score}`) };
+    }
+    if (verdict === "standard") {
+      return { tone: "text-success", text: tt(`Meets the standard ${score}`, `ตรงตามมาตรฐาน ${score}`) };
+    }
+    return {
+      tone: "text-amber",
+      text: tt(
+        `Gap ${c.manager} → ${c.expected} · no course yet`,
+        `ช่องว่าง ${c.manager} → ${c.expected} · ยังไม่มีคอร์ส`,
+      ),
+    };
+  };
+
+  /** One row per competency in a group: its goals, or a status line. */
+  const competencyRow = (c: RowCompetency) => {
+    const name = pick(lang, c.nameEn, c.nameTh);
+    const own = goalsOf(c.competencyId);
+    const status = own.length ? null : statusText(c);
+    return (
+      <Card key={c.competencyId} className="overflow-hidden">
+        <div className="p-5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className={cn("size-3 shrink-0 rounded-full", own.length ? "bg-accent" : "bg-line-2")} />
+            <h3 className="line-clamp-2 min-w-0 flex-1 text-lg font-bold text-ink lg:text-xl" title={name}>
+              {name}
+            </h3>
+            {c.expected !== null ? (
+              <span className="shrink-0 text-xs text-muted">
+                {tt(`Expected level ${c.expected}`, `ระดับที่คาดหวัง ${c.expected}`)}
+              </span>
+            ) : null}
+          </div>
+          {status ? (
+            <p className={cn("mt-2 pl-6 text-sm font-medium", status.tone)}>{status.text}</p>
+          ) : (
+            <div className="mt-4 space-y-4">{own.map(goalBlock)}</div>
+          )}
         </div>
       </Card>
     );
@@ -269,58 +369,51 @@ export function IdpView({
         </dl>
       </Card>
 
-      {/* ------------------------------------------------------- goal list */}
-      <div className="mb-4 mt-8 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-ink lg:text-2xl">
-            {tt("In progress", "กำลังดำเนินการ")}{" "}
-            <span className="text-base font-medium text-muted">({open.length})</span>
-          </h2>
-          <p className="mt-0.5 text-xs text-muted">
-            {tt("Most urgent first", "เรียงจากเร่งด่วนที่สุด")}
-          </p>
-        </div>
+      {/* --------------------------------------------- rows by group (tabs) */}
+      <div className="mb-6 mt-8 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-2xl font-medium text-ink lg:text-[32px]">
+          {tt("In progress", "กำลังดำเนินการ")}
+        </p>
+        {groups.length > 1 ? (
+          <Tabs
+            variant="dark"
+            value={activeGroup}
+            onChange={setGroup}
+            options={groups.map((g) => ({ value: g, label: groupLabel(g) }))}
+          />
+        ) : null}
       </div>
 
-      {open.length ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {open.map(({ g, status }) => goalCard(g, status))}
+      {groups.length ? (
+        /* every group's rows share one grid cell and only the active one is
+           visible, so the area is as tall as the tallest group and switching
+           tabs never moves the rest of the page */
+        <div className="grid grid-cols-1">
+          {groups.map((gr) => {
+            const list = rows.filter((r) => r.group === gr);
+            const active = gr === activeGroup;
+            return (
+              <div
+                key={gr}
+                aria-hidden={!active}
+                className={cn("space-y-4 [grid-area:1/1]", !active && "invisible pointer-events-none")}
+              >
+                {list.map(competencyRow)}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <Card>
           <EmptyState
-            title={
-              goals.length === 0
-                ? tt("No development goals yet", "ยังไม่มีเป้าหมายการพัฒนา")
-                : tt("Every goal is complete", "ทุกเป้าหมายเสร็จสิ้นแล้ว")
-            }
-            hint={
-              goals.length === 0
-                ? tt(
-                    "Your goals are set for you. Courses are assigned from your assessment: where your supervisor's score is below the level your position and career role expect, the courses in between are added here. Your supervisor can also set goals.",
-                    "เป้าหมายถูกกำหนดให้คุณ คอร์สมอบหมายจากผลประเมิน: สมรรถนะที่หัวหน้าให้คะแนนต่ำกว่าระดับที่ตำแหน่งและสายงานของคุณคาดหวัง ระบบจะเพิ่มคอร์สที่ต้องเรียนไว้ที่นี่ หัวหน้าก็กำหนดเป้าหมายเพิ่มได้",
-                  )
-                : tt(
-                    "Finished goals are listed below.",
-                    "เป้าหมายที่เสร็จแล้วแสดงอยู่ด้านล่าง",
-                  )
-            }
+            title={tt("No development goals yet", "ยังไม่มีเป้าหมายการพัฒนา")}
+            hint={tt(
+              "Your goals are set for you. Courses are assigned from your assessment: where your supervisor's score is below the level your position and career role expect, the courses in between are added here. Your supervisor can also set goals.",
+              "เป้าหมายถูกกำหนดให้คุณ คอร์สมอบหมายจากผลประเมิน: สมรรถนะที่หัวหน้าให้คะแนนต่ำกว่าระดับที่ตำแหน่งและสายงานของคุณคาดหวัง ระบบจะเพิ่มคอร์สที่ต้องเรียนไว้ที่นี่ หัวหน้าก็กำหนดเป้าหมายเพิ่มได้",
+            )}
           />
         </Card>
       )}
-
-      {/* ------------------------------------------------------ completed */}
-      {finished.length ? (
-        <section className="mt-8">
-          <h2 className="mb-4 text-xl font-bold text-ink lg:text-2xl">
-            {tt("Completed", "เสร็จสิ้นแล้ว")}{" "}
-            <span className="text-base font-medium text-muted">({finished.length})</span>
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {finished.map((g) => goalCard(g, "complete"))}
-          </div>
-        </section>
-      ) : null}
 
       {/* ------------------------------------------------------- timeline */}
       {goals.length ? (

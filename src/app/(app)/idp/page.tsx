@@ -23,7 +23,7 @@ export const metadata: Metadata = { title: "IDP" };
  */
 export default async function IdpPage() {
   const viewer = await requireEmployee();
-  const { goals, certificates, assessedGroups, resume } = await getIdpView(viewer.employeeId);
+  const { goals, certificates, assessedGroups, resume, competencies } = await getIdpView(viewer.employeeId);
 
   return (
     <IdpView
@@ -31,6 +31,7 @@ export default async function IdpPage() {
       certificates={certificates}
       assessedGroups={assessedGroups}
       resume={resume}
+      competencies={competencies}
     />
   );
 }

@@ -769,6 +769,20 @@ export type IdpView = {
   assessedGroups: CourseCategory[];
   /** the course this person studied most recently, for "pick up where you left off" */
   resume: ResumeCourse | null;
+  /** every competency this person is assessed on (their position's functional
+   *  set, their career role's expected levels), goal or not — one IDP row each */
+  competencies: IdpCompetency[];
+};
+
+export type IdpCompetency = {
+  competencyId: string;
+  group: CourseCategory;
+  nameEn: string;
+  nameTh: string | null;
+  expected: number;
+  /** the supervisor's score, the official one; null until they review */
+  manager: number | null;
+  self: number | null;
 };
 
 export type ResumeCourse = {
@@ -1010,5 +1024,14 @@ export async function getIdpView(employeeId: string): Promise<IdpView> {
     })),
     assessedGroups: GROUP_ORDER.filter((g) => assessed.has(g)),
     resume,
+    competencies: gapRows.map((r) => ({
+      competencyId: r.competencyId,
+      group: r.group,
+      nameEn: r.nameEn,
+      nameTh: dict.get(r.competencyId)?.nameTh ?? null,
+      expected: r.expected,
+      manager: r.manager,
+      self: r.self,
+    })),
   };
 }
