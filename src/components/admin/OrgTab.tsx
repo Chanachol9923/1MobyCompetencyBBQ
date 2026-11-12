@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Download, Pencil, Plus, Trash2 } from "lucide-react";
-import { Button, Field, Input, Modal, Select } from "@/components/ui";
+import { Download, Pencil, Plus, Target, Trash2 } from "lucide-react";
+import { Button, Field, Input, Modal, Pill, Select } from "@/components/ui";
 import {
   IconAction,
   SearchInput,
@@ -13,9 +13,11 @@ import {
 } from "@/components/admin/shared";
 import type {
   ActionResult,
+  FunctionalSetsData,
   OrgEntity,
   OrgUnitRow,
 } from "@/components/admin/content-types";
+import { PositionFunctionalModal } from "@/components/admin/PositionFunctionalModal";
 import { deleteOrgUnit, saveOrgUnit } from "@/server/admin-content";
 import { useT } from "@/lib/i18n";
 
@@ -32,12 +34,17 @@ export function OrgTab({
   rows,
   departments,
   onResult,
+  functional,
+  canEditFunctional = false,
 }: {
   entity: OrgEntity;
   rows: OrgUnitRow[];
   /** the parent options — empty for the department tab itself */
   departments: OrgUnitRow[];
   onResult: (result: ActionResult) => void;
+  /** positions only: each position's functional competency set */
+  functional?: FunctionalSetsData;
+  canEditFunctional?: boolean;
 }) {
   const { t, tt } = useT();
   const [query, setQuery] = useState("");
@@ -47,7 +54,9 @@ export function OrgTab({
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState("");
   const [confirm, setConfirm] = useState<OrgUnitRow | null>(null);
+  const [functionalFor, setFunctionalFor] = useState<OrgUnitRow | null>(null);
   const [busy, startTransition] = useTransition();
+  const showFunctional = entity === "position" && Boolean(functional);
 
   const noun =
     entity === "department"
@@ -173,6 +182,9 @@ export function OrgTab({
                 {hasParent ? t("label.department") : tt("Divisions", "จำนวนแผนก")}
               </Th>
               <Th>{t("label.headcount")}</Th>
+              {showFunctional ? (
+                <Th>{tt("Functional competencies", "สมรรถนะเฉพาะ")}</Th>
+              ) : null}
               <Th className="text-right">{t("label.actions")}</Th>
             </tr>
           </thead>
@@ -184,8 +196,40 @@ export function OrgTab({
                   {hasParent ? (r.parentName ?? "—") : r.childCount}
                 </Td>
                 <Td className="text-muted">{r.employeeCount}</Td>
+                {showFunctional && functional ? (
+                  <Td>
+                    {functional.sets[r.id] ? (
+                      <Pill
+                        tone={
+                          functional.sets[r.id]!.length === functional.briefSetSize
+                            ? "brand"
+                            : "warn"
+                        }
+                      >
+                        {tt(
+                          `Own set · ${functional.sets[r.id]!.length}`,
+                          `ชุดเฉพาะ · ${functional.sets[r.id]!.length}`,
+                        )}
+                      </Pill>
+                    ) : (
+                      <Pill tone="neutral">{tt("Default set", "ชุดเริ่มต้น")}</Pill>
+                    )}
+                  </Td>
+                ) : null}
                 <Td>
                   <div className="flex justify-end gap-2">
+                    {showFunctional ? (
+                      <IconAction
+                        tone="brand"
+                        aria-label={tt(
+                          `Functional competencies of ${r.name}`,
+                          `สมรรถนะเฉพาะของ ${r.name}`,
+                        )}
+                        onClick={() => setFunctionalFor(r)}
+                      >
+                        <Target size={14} />
+                      </IconAction>
+                    ) : null}
                     <IconAction
                       tone="brand"
                       aria-label={`${t("action.edit")} ${r.name}`}
@@ -207,7 +251,7 @@ export function OrgTab({
             ))}
             {visible.length === 0 ? (
               <tr>
-                <Td colSpan={4} className="py-10 text-center text-muted">
+                <Td colSpan={showFunctional ? 5 : 4} className="py-10 text-center text-muted">
                   {tt(`Nothing here yet — use "New ${noun.en.toLowerCase()}".`,
                     `ยังไม่มีข้อมูล — กด "${noun.th}ใหม่" เพื่อเพิ่ม`,
                   )}
@@ -283,6 +327,16 @@ export function OrgTab({
           ) : null}
         </div>
       </Modal>
+
+      {showFunctional && functional ? (
+        <PositionFunctionalModal
+          position={functionalFor}
+          functional={functional}
+          canEdit={canEditFunctional}
+          onClose={() => setFunctionalFor(null)}
+          onResult={onResult}
+        />
+      ) : null}
 
       <Modal
         open={Boolean(confirm)}

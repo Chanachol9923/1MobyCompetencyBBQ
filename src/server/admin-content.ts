@@ -64,6 +64,13 @@ import { enqueueTranscript, recheckTranscripts } from "@/server/transcribe";
 import { kickTranscription } from "@/server/transcript-kick";
 import { enqueueDocumentText } from "@/server/pdf-text";
 import { syncCourseAssignments } from "@/server/course-assignment";
+import {
+  assessedSetOf,
+  expectedCell,
+  functionalSetOf,
+  loadAssessmentRules,
+  type AssessmentRules,
+} from "@/server/assessed-competencies";
 
 /* ------------------------------------------------------------------ plumbing */
 
@@ -1019,8 +1026,8 @@ export async function revokeBadge(
  * for the whole expected-level matrix, one for the cycle's assessments and one
  * for the points — and the arithmetic happens here.
  */
-async function loadWorkforce(cycleId: string | null) {
-  const [employees, expected, assessments, points] = await Promise.all([
+async function loadWorkforce(cycleId: string | null, rulesIn?: AssessmentRules) {
+  const [employees, rules, assessments, points] = await Promise.all([
     db.employee.findMany({
       where: { active: true },
       orderBy: { name: "asc" },
@@ -1034,6 +1041,7 @@ async function loadWorkforce(cycleId: string | null) {
         businessUnit: true,
         remark: true,
         jobRoleId: true,
+        positionId: true,
         managerId: true,
         jobRole: { select: { name: true, level: true } },
         department: { select: { id: true, name: true } },
@@ -1041,10 +1049,7 @@ async function loadWorkforce(cycleId: string | null) {
         position: { select: { name: true } },
       },
     }),
-    db.expectedLevel.findMany({
-      where: { level: { not: null } },
-      select: { jobRoleId: true, competencyId: true },
-    }),
+    rulesIn ?? loadAssessmentRules(),
     cycleId
       ? db.assessment.findMany({
           where: { cycleId },
@@ -1058,14 +1063,6 @@ async function loadWorkforce(cycleId: string | null) {
       : Promise.resolve([]),
     db.pointLedger.groupBy({ by: ["employeeId"], _sum: { delta: true } }),
   ]);
-
-  // jobRoleId -> the competencies that career role is assessed on at all
-  const assessedByRole = new Map<string, Set<string>>();
-  for (const e of expected) {
-    const set = assessedByRole.get(e.jobRoleId) ?? new Set<string>();
-    set.add(e.competencyId);
-    assessedByRole.set(e.jobRoleId, set);
-  }
 
   type Scores = { self: Map<string, number>; manager: Map<string, number> };
   const scoresBySubject = new Map<string, Scores>();
@@ -1088,10 +1085,11 @@ async function loadWorkforce(cycleId: string | null) {
   const nameById = new Map(employees.map((e) => [e.id, e.name]));
 
   const rows = employees.map((e) => {
-    const assessed = assessedByRole.get(e.jobRoleId) ?? new Set<string>();
+    // what this person is assessed on: career role, and position for functional
+    const assessed = assessedSetOf(rules, e);
     const scores = scoresBySubject.get(e.id);
     const values: number[] = [];
-    for (const competencyId of assessed) {
+    for (const competencyId of assessed.keys()) {
       // the supervisor's score is the one that counts; the self score stands in
       // only until the review happens — the same rule as the gap engine
       const score =
@@ -1932,6 +1930,7 @@ export async function updateEmployee(
         email: true,
         userId: true,
         jobRoleId: true,
+        positionId: true,
         jobRole: { select: { name: true } },
       },
     });
@@ -1977,6 +1976,11 @@ export async function updateEmployee(
       : null;
 
     await db.employee.update({ where: { id: existing.id }, data: employeeData(d) });
+    // career role and position decide what they are assessed on, and so which
+    // courses the assessment assigns them
+    if (roleChanged || (existing.positionId ?? "") !== (d.positionId || "")) {
+      await syncCourseAssignments([existing.id]).catch((err) => console.error("course assignment failed", err));
+    }
 
     await recordActivity({
       viewer,
@@ -2945,7 +2949,8 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
 
   const cycle = await currentCycleRow();
 
-  const [jobRoles, competencies, expected, workforce, employeesByRole, scores] =
+  const rules = await loadAssessmentRules();
+  const [jobRoles, competencies, workforce, employeesByRole, scores] =
     await Promise.all([
       db.jobRole.findMany({
         orderBy: [{ sortOrder: "asc" }, { levelRank: "asc" }],
@@ -2979,13 +2984,10 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
           },
         },
       }),
-      db.expectedLevel.findMany({
-        select: { jobRoleId: true, competencyId: true, level: true },
-      }),
-      loadWorkforce(cycle?.id ?? null),
+      loadWorkforce(cycle?.id ?? null, rules),
       db.employee.findMany({
         where: { active: true },
-        select: { id: true, jobRoleId: true },
+        select: { id: true, jobRoleId: true, positionId: true },
       }),
       // every score in the open cycle, so the blast radius of a matrix edit can
       // be shown before it is applied rather than discovered afterwards
@@ -3000,19 +3002,40 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
         : Promise.resolve([]),
     ]);
 
+  // every cell as the rules apply it, so a functional competency a role has
+  // no row for shows the default level it is really assessed at
   const matrix: Record<string, number | null> = {};
   let assessedCells = 0;
-  for (const e of expected) {
-    matrix[cellKey(e.jobRoleId, e.competencyId)] = e.level;
-    if (e.level !== null) assessedCells++;
+  for (const r of jobRoles) {
+    for (const c of competencies) {
+      const level = expectedCell(rules, r.id, c.id);
+      matrix[cellKey(r.id, c.id)] = level;
+      if (level !== null) assessedCells++;
+    }
   }
 
-  const roleOfEmployee = new Map(employeesByRole.map((e) => [e.id, e.jobRoleId]));
+  // who a cell actually reaches: everyone in the role for core and
+  // managerial, but for a functional competency only the people whose
+  // position's functional set includes it
+  const competencyGroup = new Map(competencies.map((c) => [c.id, c.group]));
+  const reaches = (person: { jobRoleId: string; positionId: string | null }, competencyId: string) =>
+    competencyGroup.get(competencyId) !== "FUNCTIONAL" ||
+    functionalSetOf(rules, person.positionId).has(competencyId);
+  const affected: Record<string, number> = {};
+  for (const e of employeesByRole) {
+    for (const c of competencies) {
+      if (!reaches(e, c.id)) continue;
+      const key = cellKey(e.jobRoleId, c.id);
+      affected[key] = (affected[key] ?? 0) + 1;
+    }
+  }
+
+  const personById = new Map(employeesByRole.map((e) => [e.id, e]));
   const scoredPairs = new Map<string, Set<string>>();
   for (const s of scores) {
-    const roleId = roleOfEmployee.get(s.assessment.subjectId);
-    if (!roleId) continue;
-    const key = cellKey(roleId, s.competencyId);
+    const person = personById.get(s.assessment.subjectId);
+    if (!person || !reaches(person, s.competencyId)) continue;
+    const key = cellKey(person.jobRoleId, s.competencyId);
     const set = scoredPairs.get(key) ?? new Set<string>();
     set.add(s.assessment.subjectId);
     scoredPairs.set(key, set);
@@ -3042,9 +3065,15 @@ export async function getAssessmentAdminData(): Promise<AssessmentAdminData> {
       levelRank: r.levelRank,
       employeeCount: r._count.employees,
     })),
-    competencies: competencies as MatrixCompetency[],
+    competencies: competencies.map((c) => ({
+      ...c,
+      defaultFunctional:
+        rules.competencies.find((x) => x.id === c.id)?.defaultFunctional ?? false,
+    })) as MatrixCompetency[],
     matrix,
     scored,
+    affected,
+    functionalSetsReady: rules.ready,
     employees,
     counts: {
       headcount: employees.length,
@@ -3266,18 +3295,19 @@ export async function setExpectedLevel(
   }
   const { jobRoleId, competencyId, level } = parsed.data;
 
-  const [jobRole, competency, current] = await Promise.all([
+  const [jobRole, competency, rules, inRole] = await Promise.all([
     db.jobRole.findUnique({
       where: { id: jobRoleId },
-      select: { id: true, name: true, _count: { select: { employees: true } } },
+      select: { id: true, name: true },
     }),
     db.competency.findUnique({
       where: { id: competencyId },
-      select: { id: true, nameEn: true, nameTh: true },
+      select: { id: true, nameEn: true, nameTh: true, group: true },
     }),
-    db.expectedLevel.findUnique({
-      where: { jobRoleId_competencyId: { jobRoleId, competencyId } },
-      select: { level: true },
+    loadAssessmentRules(),
+    db.employee.findMany({
+      where: { jobRoleId, active: true },
+      select: { id: true, positionId: true },
     }),
   ]);
   if (!jobRole) {
@@ -3287,7 +3317,8 @@ export async function setExpectedLevel(
     return fail("That competency no longer exists.", "ไม่พบสมรรถนะนี้แล้ว");
   }
 
-  const from = current?.level ?? null;
+  // the level as it applies today, defaults included
+  const from = expectedCell(rules, jobRoleId, competencyId);
   if (from === level) {
     return fail(
       "Nothing changed — that level is already set.",
@@ -3295,14 +3326,21 @@ export async function setExpectedLevel(
     );
   }
 
-  // how many people carry a score for this competency today — the ones whose
+  // the people this cell reaches: the whole role, except that a functional
+  // competency only reaches those whose position's functional set includes it
+  const reached = inRole.filter(
+    (e) => competency.group !== "FUNCTIONAL" || functionalSetOf(rules, e.positionId).has(competencyId),
+  );
+  const employeesAffected = reached.length;
+
+  // how many of them carry a score for this competency today — the ones whose
   // gap report changes shape the moment this is saved
   const cycle = await currentCycleRow();
-  const scoresOrphaned = cycle
+  const scoresOrphaned = cycle && reached.length
     ? await db.assessmentScore.count({
         where: {
           competencyId,
-          assessment: { cycleId: cycle.id, subject: { jobRoleId, active: true } },
+          assessment: { cycleId: cycle.id, subjectId: { in: reached.map((e) => e.id) } },
         },
       })
     : 0;
@@ -3320,11 +3358,12 @@ export async function setExpectedLevel(
     targetType: "expectedLevel",
     targetId: `${jobRoleId}:${competencyId}`,
     targetLabel: `${jobRole.name} — ${competency.nameEn}`,
-    detail: `${from ?? "not assessed"} → ${level ?? "not assessed"}, ${jobRole._count.employees} employee(s)`,
+    detail: `${from ?? "not assessed"} → ${level ?? "not assessed"}, ${employeesAffected} employee(s)`,
   });
   // what the position expects moved: their assigned courses follow
-  const inRole = await db.employee.findMany({ where: { jobRoleId, active: true }, select: { id: true } });
-  await syncCourseAssignments(inRole.map((e) => e.id)).catch((err) => console.error("course assignment failed", err));
+  if (reached.length) {
+    await syncCourseAssignments(reached.map((e) => e.id)).catch((err) => console.error("course assignment failed", err));
+  }
   revalidateContent("/assessment", "/dashboard", "/team-profile", "/reports", "/idp");
 
   const outcome: ExpectedLevelOutcome = {
@@ -3333,7 +3372,7 @@ export async function setExpectedLevel(
     competencyNameTh: competency.nameTh,
     from,
     to: level,
-    employeesAffected: jobRole._count.employees,
+    employeesAffected,
     scoresOrphaned,
   };
 
@@ -3341,8 +3380,8 @@ export async function setExpectedLevel(
     return {
       ok: true,
       message: msg(
-        `${jobRole.name} is no longer assessed on "${competency.nameEn}". It disappears from ${jobRole._count.employees} people's gap report${scoresOrphaned ? `, and ${scoresOrphaned} existing score(s) stop being counted` : ""}.`,
-        `บทบาท ${jobRole.name} จะไม่ถูกประเมินสมรรถนะ "${competency.nameTh ?? competency.nameEn}" อีกต่อไป จะหายไปจากรายงานช่องว่างของพนักงาน ${jobRole._count.employees} คน${scoresOrphaned ? ` และคะแนนเดิม ${scoresOrphaned} รายการจะไม่ถูกนำมาคิด` : ""}`,
+        `${jobRole.name} is no longer assessed on "${competency.nameEn}". It disappears from ${employeesAffected} people's gap report${scoresOrphaned ? `, and ${scoresOrphaned} existing score(s) stop being counted` : ""}.`,
+        `บทบาท ${jobRole.name} จะไม่ถูกประเมินสมรรถนะ "${competency.nameTh ?? competency.nameEn}" อีกต่อไป จะหายไปจากรายงานช่องว่างของพนักงาน ${employeesAffected} คน${scoresOrphaned ? ` และคะแนนเดิม ${scoresOrphaned} รายการจะไม่ถูกนำมาคิด` : ""}`,
       ),
       outcome,
     };
@@ -3352,11 +3391,11 @@ export async function setExpectedLevel(
     ok: true,
     message: msg(
       from === null
-        ? `${jobRole.name} is now assessed on "${competency.nameEn}" at level ${level}. ${jobRole._count.employees} people gain a competency they had not been measured on.`
-        : `${jobRole.name} now expects level ${level} on "${competency.nameEn}" (was ${from}). ${jobRole._count.employees} people's gaps are recalculated.`,
+        ? `${jobRole.name} is now assessed on "${competency.nameEn}" at level ${level}. ${employeesAffected} people gain a competency they had not been measured on.`
+        : `${jobRole.name} now expects level ${level} on "${competency.nameEn}" (was ${from}). ${employeesAffected} people's gaps are recalculated.`,
       from === null
-        ? `บทบาท ${jobRole.name} จะถูกประเมินสมรรถนะ "${competency.nameTh ?? competency.nameEn}" ที่ระดับ ${level} พนักงาน ${jobRole._count.employees} คนจะมีสมรรถนะเพิ่มขึ้นหนึ่งรายการ`
-        : `บทบาท ${jobRole.name} คาดหวังระดับ ${level} ในสมรรถนะ "${competency.nameTh ?? competency.nameEn}" (เดิม ${from}) ระบบจะคำนวณช่องว่างของพนักงาน ${jobRole._count.employees} คนใหม่`,
+        ? `บทบาท ${jobRole.name} จะถูกประเมินสมรรถนะ "${competency.nameTh ?? competency.nameEn}" ที่ระดับ ${level} พนักงาน ${employeesAffected} คนจะมีสมรรถนะเพิ่มขึ้นหนึ่งรายการ`
+        : `บทบาท ${jobRole.name} คาดหวังระดับ ${level} ในสมรรถนะ "${competency.nameTh ?? competency.nameEn}" (เดิม ${from}) ระบบจะคำนวณช่องว่างของพนักงาน ${employeesAffected} คนใหม่`,
     ),
     outcome,
   };

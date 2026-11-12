@@ -7,6 +7,7 @@ import {
   ListChecks,
   Download,
   Mail,
+  Plus,
   Save,
   SlidersHorizontal,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import {
   formatDate,
 } from "@/components/admin/shared";
 import { ResultBanner } from "@/components/admin/rbac-shared";
+import { FunctionalCompetencyModal } from "@/components/admin/FunctionalCompetencyModal";
 import type {
   ActionResult,
   AssessmentAdminData,
@@ -124,7 +126,8 @@ type PendingCell = {
 export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
   const { t, tt, lang, lv } = useT();
   const { can } = usePermission();
-  const { cycle, jobRoles, competencies, matrix, scored, employees, counts } = data;
+  const { cycle, jobRoles, competencies, matrix, scored, affected, employees, counts } = data;
+  const [creating, setCreating] = useState(false);
 
   const canEditFramework = can(PERMISSIONS.MANAGE_FRAMEWORK);
 
@@ -425,8 +428,8 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
       <Card className="mt-5">
         <CardHeader
           title={tt("Expected level matrix", "ตารางระดับที่คาดหวัง")}
-          subtitle={tt("Competency × career role. A dash means that role is deliberately not assessed on that competency, so it never appears in their gap report.",
-            "สมรรถนะ × บทบาทสายอาชีพ เครื่องหมาย – หมายถึงตั้งใจไม่ประเมินสมรรถนะนั้นในบทบาทนี้ และจะไม่ปรากฏในรายงานส่วนต่าง",
+          subtitle={tt("Competency × career role. A dash means that role is deliberately not assessed on that competency, so it never appears in their gap report. Functional competencies apply only to the positions that use them (Staff records → Position); positions without their own set use the default set.",
+            "สมรรถนะ × บทบาทสายอาชีพ เครื่องหมาย – หมายถึงตั้งใจไม่ประเมินสมรรถนะนั้นในบทบาทนี้ และจะไม่ปรากฏในรายงานส่วนต่าง สมรรถนะเฉพาะใช้กับตำแหน่งที่เลือกไว้เท่านั้น (ข้อมูลพนักงาน → ตำแหน่ง) ตำแหน่งที่ไม่ได้เลือกใช้ชุดเริ่มต้น",
           )}
           right={
             <div className="flex flex-wrap items-center gap-2">
@@ -446,6 +449,22 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                 <Download size={14} className="text-brand" />
                 {t("action.exportCsv")}
               </Button>
+              {canEditFramework ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!data.functionalSetsReady || busy}
+                  title={
+                    data.functionalSetsReady
+                      ? undefined
+                      : tt("Needs database migration 0017", "ต้องรัน migration 0017 ของฐานข้อมูลก่อน")
+                  }
+                  onClick={() => setCreating(true)}
+                >
+                  <Plus size={14} className="text-brand" />
+                  {tt("New functional competency", "สร้างสมรรถนะเฉพาะ")}
+                </Button>
+              ) : null}
             </div>
           }
         />
@@ -494,6 +513,11 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                       <tr key={c.id} className="border-b border-line/60">
                         <Td className="sticky left-0 z-10 bg-white font-bold">
                           {competencyName(c)}
+                          {c.group === "FUNCTIONAL" && !c.defaultFunctional ? (
+                            <span className="block text-[10px] font-normal text-muted">
+                              {tt("chosen per position", "เลือกตามตำแหน่ง")}
+                            </span>
+                          ) : null}
                         </Td>
                         {jobRoles.map((role) => {
                           const key = cellKey(role.id, c.id);
@@ -509,7 +533,9 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
                                     requestCellChange(
                                       role.id,
                                       role.name,
-                                      role.employeeCount,
+                                      // only the people this cell reaches: for a
+                                      // functional competency, those whose position includes it
+                                      affected[key] ?? 0,
                                       c,
                                       e.target.value,
                                     )
@@ -810,9 +836,13 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
               <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber" />
               <div className="min-w-0 space-y-1.5 leading-relaxed text-ink">
                 <p>
-                  {tt(`${pending.employeeCount} ${pending.employeeCount === 1 ? "person holds" : "people hold"} this career role. Their gap report, skill index and assessment progress are all recalculated from this cell.`,
-                    `มีพนักงาน ${pending.employeeCount} คนอยู่ในบทบาทนี้ รายงานส่วนต่าง ดัชนีสมรรถนะ และความคืบหน้าการประเมินของพวกเขาจะถูกคำนวณใหม่จากช่องนี้`,
-                  )}
+                  {pending.competency.group === "FUNCTIONAL"
+                    ? tt(`${pending.employeeCount} ${pending.employeeCount === 1 ? "person in this career role has" : "people in this career role have"} a position whose functional set includes this competency. Their gap report, skill index and assessment progress are all recalculated from this cell.`,
+                        `มีพนักงาน ${pending.employeeCount} คนในบทบาทนี้ที่ตำแหน่งของเขามีสมรรถนะนี้อยู่ในชุดสมรรถนะเฉพาะ รายงานส่วนต่าง ดัชนีสมรรถนะ และความคืบหน้าการประเมินของพวกเขาจะถูกคำนวณใหม่จากช่องนี้`,
+                      )
+                    : tt(`${pending.employeeCount} ${pending.employeeCount === 1 ? "person holds" : "people hold"} this career role. Their gap report, skill index and assessment progress are all recalculated from this cell.`,
+                        `มีพนักงาน ${pending.employeeCount} คนอยู่ในบทบาทนี้ รายงานส่วนต่าง ดัชนีสมรรถนะ และความคืบหน้าการประเมินของพวกเขาจะถูกคำนวณใหม่จากช่องนี้`,
+                      )}
                 </p>
                 {pending.to === null ? (
                   <p>
@@ -845,6 +875,12 @@ export function AssessmentAdminScreen({ data }: { data: AssessmentAdminData }) {
           </div>
         ) : null}
       </Modal>
+
+      <FunctionalCompetencyModal
+        open={creating}
+        onClose={() => setCreating(false)}
+        onResult={setResult}
+      />
     </div>
   );
 }

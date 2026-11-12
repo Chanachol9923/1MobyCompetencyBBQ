@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getAssessedSets } from "@/server/assessed-competencies";
 import {
   getActiveCycle,
   getGapRows,
@@ -131,8 +132,8 @@ export type TeamMatrix = {
 };
 
 /**
- * The whole heat map in two round trips regardless of team size — expected
- * levels per career role, then every score in the cycle for those people at once.
+ * The whole heat map in a fixed number of round trips regardless of team size —
+ * each member's assessed set, then every score in the cycle for them at once.
  * Competencies nobody in the team is assessed on never get a column, and a
  * member who is not assessed on a column has no cell (the table renders "N/A").
  */
@@ -142,32 +143,18 @@ export async function getTeamMatrix(
   const empty: TeamMatrix = { competencies: [], cells: new Map() };
   if (employeeIds.length === 0) return empty;
 
-  // two round trips whatever the team size: people with their role's
-  // expectations (and the cycle and dictionary) together, then the scores
+  // whatever the team size: the people (and the cycle and dictionary)
+  // together, their assessed sets from one read of the rules, then the scores
   const [cycle, people, dict] = await Promise.all([
     getActiveCycle(),
     db.employee.findMany({
       where: { id: { in: employeeIds } },
-      select: {
-        id: true,
-        jobRoleId: true,
-        jobRole: {
-          select: {
-            expectedLevels: {
-              where: { level: { not: null } },
-              select: { competencyId: true, level: true },
-            },
-          },
-        },
-      },
+      select: { id: true, jobRoleId: true, positionId: true },
     }),
     getCompetencyDictionary(),
   ]);
   if (!cycle || people.length === 0) return empty;
-  const employees = people.map((e) => ({ id: e.id, jobRoleId: e.jobRoleId }));
-  const expected = people.flatMap((e) =>
-    e.jobRole.expectedLevels.map((x) => ({ jobRoleId: e.jobRoleId, ...x })),
-  );
+  const assessedById = await getAssessedSets(people);
 
   const assessments = await db.assessment.findMany({
     where: { cycleId: cycle.id, subjectId: { in: employeeIds } },
@@ -177,15 +164,6 @@ export async function getTeamMatrix(
       scores: { select: { competencyId: true, score: true } },
     },
   });
-
-  // jobRoleId → competencyId → expected level
-  const expectedBy = new Map<string, Map<string, number>>();
-  for (const e of expected) {
-    if (e.level === null) continue;
-    let byRole = expectedBy.get(e.jobRoleId);
-    if (!byRole) expectedBy.set(e.jobRoleId, (byRole = new Map()));
-    byRole.set(e.competencyId, e.level);
-  }
 
   // subjectId → competencyId → { self, manager }
   const scoreBy = new Map<string, Map<string, { self?: number; manager?: number }>>();
@@ -202,11 +180,11 @@ export async function getTeamMatrix(
 
   const used = new Set<string>();
   const cells = new Map<string, Map<string, HeatCell>>();
-  for (const employee of employees) {
-    const byRole = expectedBy.get(employee.jobRoleId);
+  for (const employee of people) {
+    const assessed = assessedById.get(employee.id);
     const row = new Map<string, HeatCell>();
-    if (byRole) {
-      for (const [competencyId, level] of byRole) {
+    if (assessed) {
+      for (const [competencyId, level] of assessed) {
         used.add(competencyId);
         const scores = scoreBy.get(employee.id)?.get(competencyId);
         const self = scores?.self ?? null;
@@ -678,14 +656,15 @@ type PersonAggregate = {
  * The whole report, rolled up in Postgres.
  *
  * Both halves run off the same `scored` CTE: one row per (person, competency)
- * the person's career role is actually assessed on, with the official score
- * (supervisor where it exists, otherwise self) and the expected level beside
- * it. A competency the role has no expected level for never enters the CTE, so
- * it can never be averaged in as a zero.
+ * the person is actually assessed on, with the official score (supervisor
+ * where it exists, otherwise self) and the expected level beside it. Which
+ * pairs those are is decided in `assessed-competencies.ts` — the same rule as
+ * every other screen — and handed to Postgres as three parallel arrays; a
+ * competency outside someone's set never enters the CTE, so it can never be
+ * averaged in as a zero.
  *
  * The browser gets at most one row per competency plus a bounded slice of
- * people — a company of ten thousand costs the same three queries as a team of
- * six.
+ * people; the arithmetic stays in the database whatever the scope.
  */
 export async function getScopeReport(
   filter: ScopeFilter,
@@ -696,41 +675,52 @@ export async function getScopeReport(
     return EMPTY_REPORT;
   }
 
-  const where =
-    filter.kind === "people"
-      ? Prisma.sql`e.id IN (${Prisma.join(filter.employeeIds)})`
-      : Prisma.sql`TRUE ${
-          filter.departmentId
-            ? Prisma.sql`AND e."departmentId" = ${filter.departmentId}`
-            : Prisma.empty
-        } ${
-          filter.divisionId
-            ? Prisma.sql`AND e."divisionId" = ${filter.divisionId}`
-            : Prisma.empty
-        }`;
+  const scope = await db.employee.findMany({
+    where:
+      filter.kind === "people"
+        ? { active: true, id: { in: filter.employeeIds } }
+        : {
+            active: true,
+            ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
+            ...(filter.divisionId ? { divisionId: filter.divisionId } : {}),
+          },
+    select: { id: true, jobRoleId: true, positionId: true },
+  });
+  const headcount = scope.length;
+
+  // (person, competency, expected) for everything each person is assessed on
+  const assessedById = await getAssessedSets(scope);
+  const pairEmployee: string[] = [];
+  const pairCompetency: string[] = [];
+  const pairExpected: number[] = [];
+  for (const [employeeId, set] of assessedById) {
+    for (const [competencyId, expected] of set) {
+      pairEmployee.push(employeeId);
+      pairCompetency.push(competencyId);
+      pairExpected.push(expected);
+    }
+  }
 
   /** One row per (person, competency) that person is assessed on. */
   const scored = Prisma.sql`
-    WITH scope AS (
-      SELECT e.id, e."jobRoleId"
-      FROM "Employee" e
-      WHERE e.active = true AND ${where}
+    WITH assessed AS (
+      SELECT *
+      FROM unnest(${pairEmployee}::text[], ${pairCompetency}::text[], ${pairExpected}::int[])
+        AS t(employee_id, competency_id, expected)
     ),
     cell AS (
       SELECT
-        s.id                                                   AS employee_id,
-        el."competencyId"                                      AS competency_id,
-        el.level                                               AS expected,
+        x.employee_id                                          AS employee_id,
+        x.competency_id                                        AS competency_id,
+        x.expected                                             AS expected,
         MAX(CASE WHEN a.mode = 'SUPERVISOR' THEN sc.score END) AS mgr,
         MAX(CASE WHEN a.mode = 'SELF'       THEN sc.score END) AS slf
-      FROM scope s
-      JOIN "ExpectedLevel" el
-        ON el."jobRoleId" = s."jobRoleId" AND el.level IS NOT NULL
+      FROM assessed x
       LEFT JOIN "Assessment" a
-        ON a."subjectId" = s.id AND a."cycleId" = ${cycle.id}
+        ON a."subjectId" = x.employee_id AND a."cycleId" = ${cycle.id}
       LEFT JOIN "AssessmentScore" sc
-        ON sc."assessmentId" = a.id AND sc."competencyId" = el."competencyId"
-      GROUP BY s.id, el."competencyId", el.level
+        ON sc."assessmentId" = a.id AND sc."competencyId" = x.competency_id
+      GROUP BY x.employee_id, x.competency_id, x.expected
     ),
     scored AS (
       SELECT employee_id, competency_id, expected, slf,
@@ -738,19 +728,7 @@ export async function getScopeReport(
       FROM cell
     )`;
 
-  const [headcount, byCompetency, byPerson] = await Promise.all([
-    filter.kind === "people"
-      ? db.employee.count({
-          where: { active: true, id: { in: filter.employeeIds } },
-        })
-      : db.employee.count({
-          where: {
-            active: true,
-            ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
-            ...(filter.divisionId ? { divisionId: filter.divisionId } : {}),
-          },
-        }),
-
+  const [byCompetency, byPerson] = await Promise.all([
     db.$queryRaw<CompetencyAggregate[]>`
       ${scored}
       SELECT

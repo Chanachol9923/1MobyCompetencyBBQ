@@ -202,6 +202,8 @@ export type MatrixCompetency = {
   definitionEn: string | null;
   definitionTh: string | null;
   levels: CompetencyLevelRow[];
+  /** FUNCTIONAL only: in the set every position without its own uses */
+  defaultFunctional: boolean;
 };
 
 /** One person's standing in the open cycle. */
@@ -234,6 +236,14 @@ export type AssessmentAdminData = {
    * that competency in the open cycle. This is the blast radius of a change.
    */
   scored: Record<string, number>;
+  /**
+   * Same key → how many active people the cell reaches: the whole role for a
+   * core or managerial competency, only those whose position's functional set
+   * includes it for a functional one.
+   */
+  affected: Record<string, number>;
+  /** migration 0017 has run: functional sets per position can be used */
+  functionalSetsReady: boolean;
   employees: CycleStatusRow[];
   counts: {
     headcount: number;
@@ -248,6 +258,35 @@ export type AssessmentAdminData = {
     assessedCells: number;
     notAssessedCells: number;
   };
+};
+
+/** Functional competencies per job position (server/functional-sets.ts). */
+export type FunctionalSetsData = {
+  /** migration 0017 has run; before it, sets can be seen but not changed */
+  ready: boolean;
+  /** the brief's number of functional competencies per position */
+  briefSetSize: number;
+  competencies: { id: string; nameEn: string; nameTh: string | null; defaultFunctional: boolean }[];
+  /** positionId → its own set; a position missing here uses the default set */
+  sets: Record<string, string[]>;
+};
+
+/** What changing a position's functional set would do, shown before it is saved. */
+export type FunctionalSetImpact = {
+  positionName: string;
+  usesDefault: boolean;
+  setSize: number;
+  /** the set is not the brief's five — a warning, not a refusal */
+  notBriefSize: boolean;
+  /** active people in the position */
+  people: number;
+  /** of them, how many end up assessed on something different */
+  peopleChanged: number;
+  /** competency ids someone gains / loses */
+  added: string[];
+  removed: string[];
+  /** scores already given this cycle on competencies that leave someone's set */
+  scoresOrphaned: number;
 };
 
 /** What changing one matrix cell actually did, so the screen can say so. */

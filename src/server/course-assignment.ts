@@ -1,11 +1,13 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { getAssessedSets, loadAssessmentRules } from "@/server/assessed-competencies";
 
 /**
  * Courses assigned from the assessment ("คอร์ส auto assign ตามคะแนนที่ถูกประเมิน").
  *
  * The inputs are the supervisor's scores (the official result), the levels the
- * person's position expects (`ExpectedLevel` of their career role) and each
+ * person is expected to reach (their assessed set: `assessed-competencies.ts`,
+ * career role and job position) and each
  * course's own level — the competency level it brings a learner up to. For
  * every competency where the score is below what the position expects, the
  * published courses on that competency whose level sits between the two are
@@ -23,22 +25,20 @@ type Desired = { courseId: string; competencyId: string; score: number; expected
 export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ added: number; removed: number }> {
   const people = await db.employee.findMany({
     where: { active: true, ...(employeeIds ? { id: { in: employeeIds } } : {}) },
-    select: { id: true, jobRoleId: true },
+    select: { id: true, jobRoleId: true, positionId: true },
   });
   if (!people.length) return { added: 0, removed: 0 };
   const ids = people.map((p) => p.id);
 
-  const [reviews, expected, courses, existing, started] = await Promise.all([
+  const [reviews, rules, courses, existing, started] = await Promise.all([
     // the latest submitted supervisor review of each person, whatever the cycle
     db.assessment.findMany({
       where: { mode: "SUPERVISOR", submittedAt: { not: null }, subjectId: { in: ids } },
       orderBy: { submittedAt: "desc" },
       select: { subjectId: true, cycleId: true, scores: { select: { competencyId: true, score: true } } },
     }),
-    db.expectedLevel.findMany({
-      where: { jobRoleId: { in: [...new Set(people.map((p) => p.jobRoleId))] }, level: { not: null } },
-      select: { jobRoleId: true, competencyId: true, level: true },
-    }),
+    // read fresh, never from a render cache: this runs right after the rules change
+    loadAssessmentRules(),
     db.course.findMany({
       where: { status: "PUBLISHED", level: { not: null }, competencyId: { not: null } },
       orderBy: [{ level: "asc" }, { titleEn: "asc" }],
@@ -57,12 +57,7 @@ export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ a
 
   const latestReview = new Map<string, (typeof reviews)[number]>();
   for (const r of reviews) if (!latestReview.has(r.subjectId)) latestReview.set(r.subjectId, r);
-  const expectedOf = new Map<string, Map<string, number>>();
-  for (const e of expected) {
-    const m = expectedOf.get(e.jobRoleId) ?? new Map<string, number>();
-    m.set(e.competencyId, e.level!);
-    expectedOf.set(e.jobRoleId, m);
-  }
+  const expectedOf = await getAssessedSets(people, rules);
   const startedKey = new Set(started.map((s) => `${s.employeeId}:${s.courseId}`));
 
   let added = 0;
@@ -73,7 +68,7 @@ export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ a
     const review = latestReview.get(person.id);
     // no official result yet: nothing to assign from, and nothing is withdrawn
     if (!review) continue;
-    const expects = expectedOf.get(person.jobRoleId) ?? new Map<string, number>();
+    const expects = expectedOf.get(person.id) ?? new Map<string, number>();
 
     const desired = new Map<string, Desired>();
     for (const { competencyId, score } of review.scores) {

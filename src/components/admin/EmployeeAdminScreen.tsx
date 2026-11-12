@@ -11,8 +11,11 @@ import { CareerPathCard } from "@/components/admin/CareerPathCard";
 import type {
   ActionResult,
   EmployeeAdminData,
+  FunctionalSetsData,
 } from "@/components/admin/content-types";
 import { useT } from "@/lib/i18n";
+import { usePermission } from "@/lib/viewer";
+import { PERMISSIONS } from "@/lib/permissions";
 import { SmoothPanel } from "@/components/ui/SmoothPanel";
 
 export type EmployeeTabKey =
@@ -30,12 +33,16 @@ type TabKey = EmployeeTabKey;
  */
 export function EmployeeAdminScreen({
   data,
+  functional,
   initialTab = "employees",
 }: {
   data: EmployeeAdminData;
+  /** each position's functional competency set */
+  functional: FunctionalSetsData;
   initialTab?: TabKey;
 }) {
   const { t, tt } = useT();
+  const { can } = usePermission();
   const [tab, setTabState] = useState<TabKey>(initialTab);
   // the tab lives in the URL too, so a reload or a shared link opens the same one
   const setTab = (next: TabKey) => {
@@ -103,6 +110,8 @@ export function EmployeeAdminScreen({
               rows={positions}
               departments={departments}
               onResult={setResult}
+              functional={functional}
+              canEditFunctional={can(PERMISSIONS.MANAGE_FRAMEWORK)}
             />
           ) : null}
 

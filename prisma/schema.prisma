@@ -170,8 +170,10 @@ model Position {
   name         String
   departmentId String?
 
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  employees  Employee[]
+  department   Department?           @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employees    Employee[]
+  /// this position's own functional set; none = the default set
+  competencies PositionCompetency[]
 
   @@unique([name, departmentId])
   @@index([departmentId])
@@ -275,8 +277,12 @@ model Competency {
   subTh         String?
   indicatorsEn  String[]        @default([])
   sortOrder     Int             @default(0)
+  /// FUNCTIONAL only: in the set used by every position without its own
+  /// (migration 0017; the five original functional competencies)
+  defaultFunctional Boolean     @default(false)
 
   levels         CompetencyLevel[]
+  positions      PositionCompetency[]
   expectedLevels ExpectedLevel[]
   scores         AssessmentScore[]
   idpGoals       IdpGoal[]
@@ -286,6 +292,23 @@ model Competency {
   assignments    CourseAssignment[]
 
   @@index([group])
+}
+
+/// The FUNCTIONAL competencies one job position is assessed on (handoff task
+/// 8). A position with no rows here uses the default functional set
+/// (`Competency.defaultFunctional`); one with rows is assessed on exactly
+/// those. The expected level still comes from `ExpectedLevel` by career role.
+/// Only FUNCTIONAL competencies may be linked (a trigger in 0017 checks it).
+model PositionCompetency {
+  positionId   String
+  competencyId String
+  createdAt    DateTime @default(now())
+
+  position   Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@id([positionId, competencyId])
+  @@index([competencyId])
 }
 
 /// What a 1, 2, 3 or 4 actually looks like for this competency.

@@ -139,6 +139,7 @@ async function seedFramework() {
       where: { key: f.id },
       update: {
         group: GROUP[f.group]!,
+        defaultFunctional: GROUP[f.group] === "FUNCTIONAL",
         nameEn: f.name,
         definitionEn: en?.definition ?? null,
         definitionTh: f.definitionTh || null,
@@ -149,6 +150,7 @@ async function seedFramework() {
       create: {
         key: f.id,
         group: GROUP[f.group]!,
+        defaultFunctional: GROUP[f.group] === "FUNCTIONAL",
         nameEn: f.name,
         nameTh: NAME_TH[f.id] ?? null,
         definitionEn: en?.definition ?? null,

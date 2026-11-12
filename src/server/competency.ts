@@ -1,14 +1,16 @@
 import "server-only";
 import { cache } from "react";
 import { db } from "@/lib/db";
+import { getAssessedSet } from "@/server/assessed-competencies";
 
 /**
  * The gap engine, reading from Postgres.
  *
  * Two rules from the client's framework are enforced here so no screen can get
  * them wrong:
- *   1. a competency with no expected level for that career role is NOT assessed
- *      and must be absent, never rendered as a zero;
+ *   1. a competency outside the person's assessed set (career role, and job
+ *      position for functional ones — `assessed-competencies.ts`) is NOT
+ *      assessed and must be absent, never rendered as a zero;
  *   2. gap = supervisor score − expected level, and the verdict wording is the
  *      client's own.
  */
@@ -57,41 +59,16 @@ export const getActiveCycle = cache(async () => {
 });
 
 /**
- * Every competency this person's career role is assessed on, with their scores.
- * One query per source rather than one per competency.
+ * Every competency this person is assessed on, with their scores. One query
+ * per source rather than one per competency.
  */
 export const getGapRows = cache(async (employeeId: string): Promise<GapRow[]> => {
   const cycle = await getActiveCycle();
   if (!cycle) return [];
 
-  // the role's expectations and the person's scores are independent reads
-  const [employee, assessments] = await Promise.all([
-    db.employee.findUnique({
-      where: { id: employeeId },
-      select: {
-        jobRoleId: true,
-        jobRole: {
-          select: {
-            expectedLevels: {
-              select: {
-                level: true,
-                competency: {
-                  select: {
-                    id: true,
-                    key: true,
-                    group: true,
-                    nameEn: true,
-                    definitionEn: true,
-                    definitionTh: true,
-                    sortOrder: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    }),
+  // the assessed set and the person's scores are independent reads
+  const [assessed, assessments] = await Promise.all([
+    getAssessedSet(employeeId),
     db.assessment.findMany({
       where: { cycleId: cycle.id, subjectId: employeeId },
       select: {
@@ -101,7 +78,12 @@ export const getGapRows = cache(async (employeeId: string): Promise<GapRow[]> =>
       },
     }),
   ]);
-  if (!employee) return [];
+  if (assessed.size === 0) return [];
+  const competencies = await db.competency.findMany({
+    where: { id: { in: [...assessed.keys()] } },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, key: true, group: true, nameEn: true, definitionEn: true, definitionTh: true },
+  });
 
   const selfScores = new Map<string, number>();
   const managerScores = new Map<string, number>();
@@ -110,33 +92,28 @@ export const getGapRows = cache(async (employeeId: string): Promise<GapRow[]> =>
     for (const s of a.scores) target.set(s.competencyId, s.score);
   }
 
-  return employee.jobRole.expectedLevels
-    // rule 1: no expected level means this role is not assessed on it
-    .filter((e) => e.level !== null)
-    .map((e) => {
-      const expected = e.level!;
-      const self = selfScores.get(e.competency.id) ?? null;
-      const manager = managerScores.get(e.competency.id) ?? null;
-      const score = manager ?? self;
-      const gap = score === null ? 0 : score - expected;
-      return {
-        competencyId: e.competency.id,
-        key: e.competency.key,
-        group: e.competency.group,
-        nameEn: e.competency.nameEn,
-        definitionEn: e.competency.definitionEn,
-        definitionTh: e.competency.definitionTh,
-        expected,
-        self,
-        manager,
-        score,
-        gap,
-        verdict: verdictFor(gap),
-        sortOrder: e.competency.sortOrder,
-      };
-    })
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(({ sortOrder: _sortOrder, ...row }) => row);
+  // rule 1: only the assessed set becomes rows
+  return competencies.map((c) => {
+    const expected = assessed.get(c.id)!;
+    const self = selfScores.get(c.id) ?? null;
+    const manager = managerScores.get(c.id) ?? null;
+    const score = manager ?? self;
+    const gap = score === null ? 0 : score - expected;
+    return {
+      competencyId: c.id,
+      key: c.key,
+      group: c.group,
+      nameEn: c.nameEn,
+      definitionEn: c.definitionEn,
+      definitionTh: c.definitionTh,
+      expected,
+      self,
+      manager,
+      score,
+      gap,
+      verdict: verdictFor(gap),
+    };
+  });
 });
 
 export type PersonSummary = {

@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { db } from "@/lib/db";
 import { getActiveCycle, verdictFor, type GapVerdict } from "@/server/competency";
+import { getAssessedSet, getAssessedSets } from "@/server/assessed-competencies";
 
 /**
  * Everything the 180° assessment reads out of Postgres.
@@ -12,9 +13,11 @@ import { getActiveCycle, verdictFor, type GapVerdict } from "@/server/competency
  *
  * Three rules are enforced here so no screen can get them wrong:
  *
- *   1. the steps of a wizard come from the *target's* career role through
- *      `ExpectedLevel`. A competency with a null expected level is not assessed
- *      and never appears — not as a step, not as a row, not as a zero;
+ *   1. the steps of a wizard are the *target's* assessed set
+ *      (`assessed-competencies.ts`: career role for core and managerial,
+ *      job position for functional, level from `ExpectedLevel`). A competency
+ *      outside it is not assessed and never appears — not as a step, not as a
+ *      row, not as a zero;
  *   2. a self assessment is always `subjectId === reviewerId`; a supervisor
  *      assessment is always written by the subject's own manager;
  *   3. an assessment carries its answers as they are made. `submittedAt` is the
@@ -115,87 +118,46 @@ export type CompetencyQuestion = AssessedCompetency & {
 };
 
 /**
- * Every competency this person's career role is assessed on, with the whole
- * rating scale attached. One query: the expected levels for the role, joined to
- * the competency and its four level descriptions.
+ * Every competency this person is assessed on (their assessed set), with the
+ * whole rating scale attached: the set, then the competencies and their four
+ * level descriptions in one query.
  */
 export const getCompetencyQuestions = cache(
   async (employeeId: string): Promise<CompetencyQuestion[]> => {
-    const employee = await db.employee.findUnique({
-      where: { id: employeeId },
-      select: { jobRoleId: true },
-    });
-    if (!employee) return [];
+    const assessed = await getAssessedSet(employeeId);
+    if (assessed.size === 0) return [];
 
-    const rows = await db.expectedLevel.findMany({
-      where: { jobRoleId: employee.jobRoleId, level: { not: null } },
+    const rows = await db.competency.findMany({
+      where: { id: { in: [...assessed.keys()] } },
+      orderBy: { sortOrder: "asc" },
       select: {
-        level: true,
-        competency: {
+        id: true,
+        key: true,
+        group: true,
+        nameEn: true,
+        nameTh: true,
+        definitionEn: true,
+        definitionTh: true,
+        subTh: true,
+        indicatorsEn: true,
+        levels: {
+          orderBy: { score: "asc" },
           select: {
-            id: true,
-            key: true,
-            group: true,
-            nameEn: true,
-            nameTh: true,
-            definitionEn: true,
-            definitionTh: true,
-            subTh: true,
-            indicatorsEn: true,
-            sortOrder: true,
-            levels: {
-              orderBy: { score: "asc" },
-              select: {
-                score: true,
-                labelEn: true,
-                labelTh: true,
-                descEn: true,
-                descTh: true,
-                behaviorEn: true,
-                behaviorTh: true,
-              },
-            },
+            score: true,
+            labelEn: true,
+            labelTh: true,
+            descEn: true,
+            descTh: true,
+            behaviorEn: true,
+            behaviorTh: true,
           },
         },
       },
     });
 
-    return rows
-      .filter((r) => r.level !== null)
-      .sort((a, b) => a.competency.sortOrder - b.competency.sortOrder)
-      .map((r) => ({
-        id: r.competency.id,
-        key: r.competency.key,
-        group: r.competency.group,
-        nameEn: r.competency.nameEn,
-        nameTh: r.competency.nameTh,
-        definitionEn: r.competency.definitionEn,
-        definitionTh: r.competency.definitionTh,
-        subTh: r.competency.subTh,
-        indicatorsEn: r.competency.indicatorsEn,
-        expected: r.level as number,
-        levels: r.competency.levels,
-      }));
+    return rows.map((c) => ({ ...c, expected: assessed.get(c.id)! }));
   },
 );
-
-/** The competency ids each of several career roles is assessed on, in one query. */
-export async function getAssessedIdsByJobRole(
-  jobRoleIds: string[],
-): Promise<Map<string, Set<string>>> {
-  const out = new Map<string, Set<string>>();
-  if (jobRoleIds.length === 0) return out;
-  const rows = await db.expectedLevel.findMany({
-    where: { jobRoleId: { in: jobRoleIds }, level: { not: null } },
-    select: { jobRoleId: true, competencyId: true },
-  });
-  for (const r of rows) {
-    let set = out.get(r.jobRoleId);
-    if (!set) out.set(r.jobRoleId, (set = new Set()));
-    set.add(r.competencyId);
-  }
-  return out;
-}
 
 /* ------------------------------------------------------------ assessments */
 
@@ -446,8 +408,8 @@ const EMPTY_PROGRESS: HubProgress = {
 
 /**
  * The hub in a fixed number of queries no matter how many direct reports the
- * viewer has: the people, their career roles' assessed competencies, every
- * and every relevant assessment with its scores, each read in bulk.
+ * viewer has: the people, their assessed sets (one read of the rules) and
+ * every relevant assessment with its scores, each read in bulk.
  */
 export async function getHubData(input: {
   employeeId: string;
@@ -477,6 +439,7 @@ export async function getHubData(input: {
         name: true,
         nickname: true,
         jobRoleId: true,
+        positionId: true,
         position: { select: { name: true } },
         jobRole: { select: { name: true, level: true } },
       },
@@ -502,13 +465,11 @@ export async function getHubData(input: {
     }),
   ]);
 
-  const assessedByRole = await getAssessedIdsByJobRole([
-    ...new Set(people.map((p) => p.jobRoleId)),
-  ]);
+  const assessedById = await getAssessedSets(people);
 
   /** How much of an assessment is done, counting only what actually applies. */
   const progressOf = (
-    jobRoleId: string,
+    employeeId: string,
     row:
       | {
           submittedAt: Date | null;
@@ -516,7 +477,7 @@ export async function getHubData(input: {
         }
       | undefined,
   ): HubProgress => {
-    const assessed = assessedByRole.get(jobRoleId) ?? new Set<string>();
+    const assessed = assessedById.get(employeeId) ?? new Map<string, number>();
     const rated = (row?.scores ?? []).filter((s) =>
       assessed.has(s.competencyId),
     ).length;
@@ -533,7 +494,7 @@ export async function getHubData(input: {
 
   const selfRow = assessments.find((a) => a.mode === "SELF" && a.subjectId === me);
   const self = {
-    ...progressOf(mine?.jobRoleId ?? "", selfRow),
+    ...progressOf(me, selfRow),
     competencyCount: myCompetencies.length,
   };
 
@@ -553,7 +514,7 @@ export async function getHubData(input: {
         position: p.position?.name ?? null,
         jobRole: p.jobRole.name,
         level: p.jobRole.level,
-        ...progressOf(p.jobRoleId, row),
+        ...progressOf(p.id, row),
       };
     });
 

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { PERMISSIONS } from "@/lib/permissions";
 import { requirePermission } from "@/server/session";
 import { getEmployeeAdminData } from "@/server/admin-content";
+import { getFunctionalSetsData } from "@/server/functional-sets";
 import {
   EmployeeAdminScreen,
   type EmployeeTabKey,
@@ -23,7 +24,7 @@ export default async function ManageEmployeePage({
   const { tab } = await searchParams;
   // accounts were a tab here for a while; keep those links working
   if (tab === "accounts") redirect("/admin/employee/accounts");
-  const data = await getEmployeeAdminData();
+  const [data, functional] = await Promise.all([getEmployeeAdminData(), getFunctionalSetsData()]);
   const initialTab = TABS.includes(tab as EmployeeTabKey) ? (tab as EmployeeTabKey) : "employees";
-  return <EmployeeAdminScreen data={data} initialTab={initialTab} />;
+  return <EmployeeAdminScreen data={data} functional={functional} initialTab={initialTab} />;
 }
