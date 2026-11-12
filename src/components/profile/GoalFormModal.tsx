@@ -79,7 +79,6 @@ const NO_COURSE = "__none__";
  */
 export function GoalFormModal({
   memberName,
-  self = false,
   rows,
   courses,
   goal,
@@ -89,8 +88,6 @@ export function GoalFormModal({
   onSubmit,
 }: {
   memberName: string;
-  /** the plan's owner is writing their own activity, not a manager */
-  self?: boolean;
   rows: GapRow[];
   courses: CourseChoice[];
   goal: GoalSeed | null;
@@ -193,13 +190,9 @@ export function GoalFormModal({
       onClose={onClose}
       width="max-w-2xl"
       title={
-        self
-          ? editing
-            ? tt("Edit your development activity", "แก้ไขกิจกรรมพัฒนาของคุณ")
-            : tt("Add a development activity", "เพิ่มกิจกรรมพัฒนา")
-          : editing
-            ? tt(`Edit goal for ${memberName}`, `แก้ไขเป้าหมายของ ${memberName}`)
-            : tt(`Add a goal for ${memberName}`, `เพิ่มเป้าหมายให้ ${memberName}`)
+        editing
+          ? tt(`Edit goal for ${memberName}`, `แก้ไขเป้าหมายของ ${memberName}`)
+          : tt(`Add a goal for ${memberName}`, `เพิ่มเป้าหมายให้ ${memberName}`)
       }
       subtitle={tt("Choose online course, coaching or on-the-job training, the target level and the timeline.",
         "เลือกวิธีพัฒนา เรียนออนไลน์ โค้ชชิ่ง หรือฝึกจากงานจริง พร้อมระดับเป้าหมายและกรอบเวลา",
@@ -326,17 +319,10 @@ export function GoalFormModal({
         <Field
           className="sm:col-span-2"
           label={t("label.remark")}
-          hint={
-            self
-              ? tt(
-                  "Shown on your plan and to your manager.",
-                  "จะแสดงในแผนของคุณและหัวหน้าจะเห็นด้วย",
-                )
-              : tt(
-                  "Shown on the employee's plan as the reason you assigned it.",
-                  "จะแสดงในแผนของพนักงานเพื่อบอกเหตุผลที่คุณมอบหมาย",
-                )
-          }
+          hint={tt(
+            "Shown on the employee's plan as the reason you assigned it.",
+            "จะแสดงในแผนของพนักงานเพื่อบอกเหตุผลที่คุณมอบหมาย",
+          )}
         >
           <Input
             value={note}

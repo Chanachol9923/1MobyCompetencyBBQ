@@ -233,8 +233,6 @@ export type GoalRow = {
   complete: boolean;
   /** who wrote the goal; null for seeded goals and authors since removed */
   createdByName: string | null;
-  /** the plan's owner added it themselves — only they may edit or delete it */
-  selfAdded: boolean;
   /** made by the system from a course assigned by the assessment; the owner
    *  cannot delete it, their manager keeps the usual rights */
   fromAssessment: boolean;
@@ -345,7 +343,6 @@ export async function getGoalRowsForMany(
       progress: Math.max(0, Math.min(100, progress)),
       complete: g.completedAt !== null || progress >= 100,
       createdByName: g.createdBy?.name ?? null,
-      selfAdded: g.createdById === g.employeeId,
       fromAssessment: isAssessmentGoal(g),
     });
   }

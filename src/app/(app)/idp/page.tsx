@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { can, PERMISSIONS } from "@/lib/permissions";
 import { requireEmployee } from "@/server/session";
 import { getIdpView } from "@/server/learning";
-import { getCourseOptions, getNamedGapRows } from "@/server/team";
 import { IdpView } from "./IdpView";
 
 export const metadata: Metadata = { title: "IDP" };
@@ -20,18 +18,12 @@ export const metadata: Metadata = { title: "IDP" };
  * that person's chapter completions — one definition of the rule, shared with
  * the Team Profile.
  *
- * With `work_own_idp` the owner may also add activities of their own, and edit
- * or delete only those; the gap rows and course list feed that form.
+ * The owner reads the plan and attaches evidence; the goals themselves come
+ * from the courses the assessment assigned and from their supervisor.
  */
 export default async function IdpPage() {
   const viewer = await requireEmployee();
-  const canEdit = can(viewer.permissions, PERMISSIONS.WORK_OWN_IDP);
-  const [{ goals, certificates, assessedGroups, resume }, rows, courses] =
-    await Promise.all([
-      getIdpView(viewer.employeeId),
-      canEdit ? getNamedGapRows(viewer.employeeId) : Promise.resolve([]),
-      canEdit ? getCourseOptions() : Promise.resolve([]),
-    ]);
+  const { goals, certificates, assessedGroups, resume } = await getIdpView(viewer.employeeId);
 
   return (
     <IdpView
@@ -39,15 +31,6 @@ export default async function IdpPage() {
       certificates={certificates}
       assessedGroups={assessedGroups}
       resume={resume}
-      // a career role assessed on nothing has no gap to plan against
-      canEdit={canEdit && rows.length > 0}
-      rows={rows}
-      courses={courses.map((c) => ({
-        id: c.id,
-        titleEn: c.titleEn,
-        titleTh: c.titleTh,
-        competencyId: c.competencyId,
-      }))}
     />
   );
 }

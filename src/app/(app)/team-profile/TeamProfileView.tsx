@@ -109,8 +109,6 @@ export type TeamGoal = {
   remark: string | null;
   progress: number;
   complete: boolean;
-  /** the report added it to their own plan */
-  selfAdded: boolean;
   createdByName: string | null;
   /** made by the system from a course the assessment assigned */
   fromAssessment: boolean;
@@ -615,14 +613,7 @@ export function TeamProfileView({
                             `ระดับ ${g.fromLevel} → ${g.toLevel}`,
                           )}
                         </span>
-                        {g.selfAdded ? (
-                          <Pill tone="warn" className="mt-1">
-                            {tt(
-                              `Added by ${g.createdByName ?? firstName}`,
-                              `เพิ่มโดย ${g.createdByName ?? firstName}`,
-                            )}
-                          </Pill>
-                        ) : g.fromAssessment ? (
+                        {g.fromAssessment ? (
                           <Pill tone="brand" className="mt-1">
                             {tt("From assessment", "จากผลประเมิน")}
                           </Pill>

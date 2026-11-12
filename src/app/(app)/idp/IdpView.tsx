@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,13 +8,10 @@ import {
   CalendarDays,
   MessageSquare,
   Paperclip,
-  Pencil,
   Play,
   PlayCircle,
-  Plus,
   RefreshCw,
   Target,
-  Trash2,
 } from "lucide-react";
 import {
   Button,
@@ -26,18 +23,6 @@ import {
   Pill,
   Progress,
 } from "@/components/ui";
-import {
-  GoalFormModal,
-  type CourseChoice,
-  type GoalDraft,
-} from "@/components/profile/GoalFormModal";
-import type { GapRow } from "@/components/profile/gap";
-import { useUi } from "@/lib/ui-state";
-import {
-  deleteOwnGoalAction,
-  saveOwnGoalAction,
-  type OwnGoalError,
-} from "./actions";
 import {
   FALLBACK_COVER,
   categoryDictKey,
@@ -71,18 +56,15 @@ const ACTIVITY_LABEL: Record<
  * laptop, because both are reading the same `ChapterProgress` rows.
  *
  * Goals come from the manager (Team Profile) and, automatically, from the
- * courses the assessment assigned (`syncAssignedGoals`). With `canEdit` the
- * owner may add activities of their own and edit or delete only those — the
- * server enforces the same rule; the buttons merely follow it. The learning
- * evidence panel is the other write this screen makes.
+ * courses the assessment assigned (`syncAssignedGoals`); the owner does not
+ * add, edit or delete goals (the product owner's decision: the system decides
+ * what to study, from the position and career track). The learning evidence
+ * panel is the only write this screen makes.
  */
 export function IdpView({
   goals,
   certificates,
   resume,
-  canEdit = false,
-  rows = [],
-  courses: courseChoices = [],
 }: {
   goals: IdpGoalView[];
   certificates: CertificateOption[];
@@ -90,98 +72,19 @@ export function IdpView({
   assessedGroups?: CourseCategory[];
   /** the course studied most recently, chosen on the server */
   resume: ResumeCourse | null;
-  /** the viewer may add activities to their own plan */
-  canEdit?: boolean;
-  /** the viewer's own gap rows: the competencies an activity may target */
-  rows?: GapRow[];
-  courses?: CourseChoice[];
 }) {
   const { t, tt, lang } = useT();
-  // the stored stamp is "Assigned by NAME — note" (manager) or "Added by NAME
-  // — note" (the owner); show the stamp in the reader's language and the
-  // author's own words as written
+  // the manager's stamp is "Assigned by NAME — note"; show the stamp in the
+  // reader's language and the manager's own words as written
   const remarkText = (remark: string) => {
-    const m = /^(Assigned|Added) by (.+?)(?: — ([\s\S]*))?$/.exec(remark);
+    const m = /^Assigned by (.+?)(?: — ([\s\S]*))?$/.exec(remark);
     if (!m) return remark;
-    const stamp =
-      m[1] === "Added"
-        ? tt(`Added by ${m[2]}`, `เพิ่มโดย ${m[2]}`)
-        : tt(`Assigned by ${m[2]}`, `มอบหมายโดย ${m[2]}`);
-    return m[3] ? `${stamp} — ${m[3]}` : stamp;
+    const stamp = tt(`Assigned by ${m[1]}`, `มอบหมายโดย ${m[1]}`);
+    return m[2] ? `${stamp} — ${m[2]}` : stamp;
   };
   const router = useRouter();
 
-  /* ------------------------------------------------ the owner's own goals */
-  const { notify } = useUi();
-  const [form, setForm] = useState<{ goal: IdpGoalView | null } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<IdpGoalView | null>(null);
-  const [formError, setFormError] = useState<OwnGoalError | null>(null);
-  const [saving, startSaving] = useTransition();
-
-  const errorText = (code: OwnGoalError) =>
-    ({
-      not_authorised: tt("You cannot change this plan.", "คุณไม่มีสิทธิ์แก้ไขแผนนี้"),
-      invalid: tt("Check the form and try again.", "ตรวจสอบข้อมูลแล้วลองใหม่"),
-      unknown_competency: tt(
-        "Your role is not assessed on that competency.",
-        "บทบาทของคุณไม่ได้ประเมินสมรรถนะดังกล่าว",
-      ),
-      unknown_course: tt("That course is not available.", "หลักสูตรนี้ไม่เปิดให้เรียนแล้ว"),
-      course_in_plan: tt(
-        "That course is already in another goal of your plan.",
-        "หลักสูตรนี้อยู่ในเป้าหมายอื่นของแผนคุณแล้ว",
-      ),
-      bad_dates: tt(
-        "Due date must be after the start date.",
-        "วันสิ้นสุดต้องอยู่หลังวันเริ่มต้น",
-      ),
-      bad_levels: tt(
-        "The target level must be above the current level.",
-        "ระดับเป้าหมายต้องสูงกว่าระดับปัจจุบัน",
-      ),
-      not_found: tt("That goal no longer exists.", "ไม่พบเป้าหมายนี้แล้ว"),
-      not_yours: tt(
-        "Only your manager can change a goal they set.",
-        "เป้าหมายที่หัวหน้ากำหนด แก้ไขได้เฉพาะหัวหน้าเท่านั้น",
-      ),
-    })[code];
-
-  const runOwn = (
-    fn: () => Promise<{ ok: true } | { ok: false; error: OwnGoalError }>,
-    done: () => void,
-    success: string,
-  ) => {
-    setFormError(null);
-    startSaving(async () => {
-      const result = await fn();
-      if (result.ok) {
-        done();
-        notify(success);
-        router.refresh();
-      } else if (form) {
-        setFormError(result.error);
-      } else {
-        notify(errorText(result.error), "error");
-      }
-    });
-  };
-
-  const saveOwn = (draft: GoalDraft) =>
-    runOwn(
-      () => saveOwnGoalAction({ goalId: form?.goal?.id ?? null, ...draft }),
-      () => setForm(null),
-      form?.goal
-        ? tt("Activity updated.", "อัปเดตกิจกรรมแล้ว")
-        : tt("Activity added to your plan.", "เพิ่มกิจกรรมในแผนของคุณแล้ว"),
-    );
-
-  const removeOwn = (goal: IdpGoalView) =>
-    runOwn(
-      () => deleteOwnGoalAction({ goalId: goal.id }),
-      () => setPendingDelete(null),
-      tt("Activity removed.", "ลบกิจกรรมแล้ว"),
-    );
-  /** the goal whose details (evidence, other courses, own edits) are open */
+  /** the goal whose details (evidence, other courses) are open */
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const details = goals.find((g) => g.id === detailsId) ?? null;
   const statusLabel = useStatusLabel();
@@ -278,9 +181,7 @@ export function IdpView({
           <span className="truncate text-muted">
             {g.fromAssessment
               ? tt("Assigned from your assessment", "มอบหมายจากผลการประเมิน")
-              : g.selfAdded
-                ? tt("Added by you", "คุณเพิ่มเอง")
-                : pick(lang, ACTIVITY_LABEL[g.activity].en, ACTIVITY_LABEL[g.activity].th)}
+              : pick(lang, ACTIVITY_LABEL[g.activity].en, ACTIVITY_LABEL[g.activity].th)}
           </span>
         </div>
 
@@ -379,12 +280,6 @@ export function IdpView({
             {tt("Most urgent first", "เรียงจากเร่งด่วนที่สุด")}
           </p>
         </div>
-        {canEdit ? (
-          <Button onClick={() => setForm({ goal: null })} disabled={saving}>
-            <Plus size={15} />
-            {tt("Add activity", "เพิ่มกิจกรรม")}
-          </Button>
-        ) : null}
       </div>
 
       {open.length ? (
@@ -396,23 +291,15 @@ export function IdpView({
           <EmptyState
             title={
               goals.length === 0
-                ? tt(
-                    "Your manager has not set a development plan yet",
-                    "หัวหน้ายังไม่ได้กำหนดแผนพัฒนาให้คุณ",
-                  )
+                ? tt("No development goals yet", "ยังไม่มีเป้าหมายการพัฒนา")
                 : tt("Every goal is complete", "ทุกเป้าหมายเสร็จสิ้นแล้ว")
             }
             hint={
               goals.length === 0
-                ? canEdit
-                  ? tt(
-                      "Courses assigned from your assessment appear here automatically. Your manager can add goals too, and you can add your own with Add activity.",
-                      "คอร์สที่ได้รับมอบหมายจากผลประเมินจะแสดงที่นี่โดยอัตโนมัติ หัวหน้าเพิ่มเป้าหมายได้ และคุณเพิ่มกิจกรรมของตนเองได้ด้วยปุ่มเพิ่มกิจกรรม",
-                    )
-                  : tt(
-                      "Courses assigned from your assessment appear here automatically, and your manager can add goals from your competency gaps.",
-                      "คอร์สที่ได้รับมอบหมายจากผลประเมินจะแสดงที่นี่โดยอัตโนมัติ และหัวหน้าเพิ่มเป้าหมายจากช่องว่างสมรรถนะได้",
-                    )
+                ? tt(
+                    "Your goals are set for you. Courses are assigned from your assessment: where your supervisor's score is below the level your position and career role expect, the courses in between are added here. Your supervisor can also set goals.",
+                    "เป้าหมายถูกกำหนดให้คุณ คอร์สมอบหมายจากผลประเมิน: สมรรถนะที่หัวหน้าให้คะแนนต่ำกว่าระดับที่ตำแหน่งและสายงานของคุณคาดหวัง ระบบจะเพิ่มคอร์สที่ต้องเรียนไว้ที่นี่ หัวหน้าก็กำหนดเป้าหมายเพิ่มได้",
+                  )
                 : tt(
                     "Finished goals are listed below.",
                     "เป้าหมายที่เสร็จแล้วแสดงอยู่ด้านล่าง",
@@ -465,37 +352,9 @@ export function IdpView({
             : undefined
         }
         footer={
-          details && canEdit && details.selfAdded ? (
-            <>
-              <Button
-                variant="ghost"
-                className="text-accent hover:text-accent"
-                disabled={saving}
-                onClick={() => {
-                  setPendingDelete(details);
-                  setDetailsId(null);
-                }}
-              >
-                <Trash2 size={14} />
-                {t("action.delete")}
-              </Button>
-              <Button
-                variant="outline"
-                disabled={saving}
-                onClick={() => {
-                  setForm({ goal: details });
-                  setDetailsId(null);
-                }}
-              >
-                <Pencil size={14} />
-                {t("action.edit")}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" onClick={() => setDetailsId(null)}>
-              {t("action.close")}
-            </Button>
-          )
+          <Button variant="outline" onClick={() => setDetailsId(null)}>
+            {t("action.close")}
+          </Button>
         }
       >
         {details ? (
@@ -580,67 +439,6 @@ export function IdpView({
         ) : null}
       </Modal>
 
-      {/* ------------------------------------------ add / edit own activity */}
-      {form ? (
-        <GoalFormModal
-          key={form.goal?.id ?? "new"}
-          memberName=""
-          self
-          rows={rows}
-          courses={courseChoices}
-          goal={
-            form.goal
-              ? {
-                  competencyId: form.goal.competencyId,
-                  courseId: form.goal.courseId,
-                  fromLevel: form.goal.fromLevel,
-                  toLevel: form.goal.toLevel,
-                  activity: form.goal.activity,
-                  startDate: form.goal.startDate,
-                  dueDate: form.goal.dueDate,
-                  remark: form.goal.remark,
-                }
-              : null
-          }
-          pending={saving}
-          error={formError ? errorText(formError) : null}
-          onClose={() => {
-            setForm(null);
-            setFormError(null);
-          }}
-          onSubmit={saveOwn}
-        />
-      ) : null}
-
-      <Modal
-        open={pendingDelete != null}
-        onClose={() => setPendingDelete(null)}
-        width="max-w-md"
-        title={tt("Remove this activity?", "ลบกิจกรรมนี้หรือไม่?")}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setPendingDelete(null)}>
-              {t("action.cancel")}
-            </Button>
-            <Button
-              variant="danger"
-              disabled={saving}
-              onClick={() => pendingDelete && removeOwn(pendingDelete)}
-            >
-              {t("action.delete")}
-            </Button>
-          </>
-        }
-      >
-        {pendingDelete ? (
-          <p className="text-sm text-muted">
-            {tt(
-              `${goalName(pendingDelete)} (level ${pendingDelete.fromLevel} → ${pendingDelete.toLevel}) will be taken off your development plan. Your manager is told.`,
-              `${goalName(pendingDelete)} (ระดับ ${pendingDelete.fromLevel} → ${pendingDelete.toLevel}) จะถูกนำออกจากแผนพัฒนาของคุณ และหัวหน้าจะได้รับแจ้ง`,
-            )}
-          </p>
-        ) : null}
-      </Modal>
     </div>
   );
 }

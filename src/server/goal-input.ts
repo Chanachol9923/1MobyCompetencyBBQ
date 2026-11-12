@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 /**
- * The fields of a development goal, shared by the two places that write one:
- * a manager in Team Profile (`team-profile/actions.ts`) and the employee on
- * their own plan (`idp/actions.ts`). Each adds its own ids and decides who may
- * write; what a valid goal *is* is written once, here.
+ * The fields of a development goal a manager writes in Team Profile
+ * (`team-profile/actions.ts`), which adds its own ids and decides who may
+ * write; what a valid goal *is* is written once, here. (Employees no longer
+ * write goals; the system makes the rest from assigned courses.)
  */
 
 export const GOAL_ACTIVITIES = ["ONLINE_COURSE", "COACHING", "ON_THE_JOB"] as const;
