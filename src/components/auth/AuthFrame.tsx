@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
+import Image from "next/image";
 import { AlertCircle, Check, Eye, EyeOff, Languages } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
@@ -38,41 +39,20 @@ export function AuthFrame({ children }: { children: ReactNode }) {
           ))}
         </div>
 
-        {/* brand panel */}
-        <div className="relative hidden min-h-[560px] overflow-hidden bg-[#0b1b3f] md:block">
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 100% at 85% 20%, #f05123 0%, #faa21b 18%, rgba(240,81,35,0) 55%), radial-gradient(120% 120% at 10% 0%, #006bff 0%, #0b1b3f 60%), linear-gradient(160deg,#0b1b3f 0%,#123a7a 45%,#0b1b3f 100%)",
-            }}
+        {/* brand panel: the company's key visual, which carries the logo and
+            the product name itself */}
+        <div className="relative hidden min-h-[560px] overflow-hidden bg-[#001a6e] md:block">
+          <Image
+            src="/login-brand.webp"
+            alt={tt(
+              "1Moby — Comprehensive Assessment System",
+              "1Moby — ระบบประเมินสมรรถนะแบบครบวงจร",
+            )}
+            fill
+            priority
+            sizes="(min-width: 1024px) 512px, 50vw"
+            className="object-cover"
           />
-          <div
-            className="absolute -left-24 bottom-[-30%] size-[520px] rounded-full opacity-70"
-            style={{
-              background:
-                "radial-gradient(circle at 40% 40%, rgba(0,107,255,.85), rgba(11,27,63,0) 65%)",
-            }}
-          />
-          <div className="relative flex h-full flex-col justify-center px-12 py-10">
-            <Logo className="text-5xl" />
-            <div className="mt-4 h-px w-24 bg-white/40" />
-            <p className="mt-4 text-2xl font-bold leading-snug text-white">
-              {lang === "th" ? (
-                <>
-                  ระบบประเมินสมรรถนะ
-                  <br />
-                  แบบครบวงจร
-                </>
-              ) : (
-                <>
-                  Comprehensive
-                  <br />
-                  Assessment System
-                </>
-              )}
-            </p>
-          </div>
         </div>
 
         <div className="flex flex-col justify-center px-6 pb-10 pt-16 sm:px-14 md:py-12">
