@@ -217,6 +217,16 @@ The requirement document names shadcn/ui and antd. This build uses hand-written 
 `src/components/ui` that follow the shadcn composition style, so they can be swapped
 component-for-component without redoing the layouts.
 
+## Deliberate differences from the brief
+
+Each of these was decided by the product owner; they are not omissions.
+
+- **No KPI.** The final score is built from the three competency groups only; KPIs are run outside this system.
+- **No peer assessment.** The assessment is 180° (self and supervisor); there is no peer review.
+- **SSO not connected yet.** Sign-in is by company account and password; single sign-on can be added later.
+- **UI stack.** Own Tailwind components (`src/components/ui`) and zod instead of shadcn/ui + antd and class-validator; moving would add no capability.
+- **No email yet.** Notifications, reminders and announcements are in-app only; the email channel choices are hidden until a mailer is set up (`src/lib/delivery.ts`).
+
 ## Deploying
 
 1. Push to a Git repository and import it in Vercel, framework preset **Next.js**.
@@ -251,6 +261,6 @@ docs/                    design brief and the phase briefs
 ## Known limits
 
 - Scheduled announcements publish the next time anyone opens the system after their time, not by a background job.
-- `channel` records that something should also be emailed, but no mailer is wired.
+- No mailer is wired: older rows with channel EMAIL/BOTH are shown in the app only (see `src/lib/delivery.ts`).
 - Exports are CSV rather than `.xlsx`; certificates render in the browser, not as PDFs.
 - Activation and reset links are handed over by the administrator; no mailer sends them.
