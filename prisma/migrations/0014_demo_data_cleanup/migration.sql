@@ -86,3 +86,13 @@ UPDATE "Employee" e
 SET "grade" = CASE e."grade" WHEN 'EP3' THEN 'G09' WHEN 'EP4' THEN 'G10' END
 FROM "JobRole" j
 WHERE e."jobRoleId" = j."id" AND j."key" = 'director' AND e."grade" IN ('EP3', 'EP4');
+
+-- "How To Be Funny" goes back to DRAFT above, but two development goals
+-- (8554 and 8526, Collaboration 2 -> 3, nothing studied yet) were built on it.
+-- They move to the standard Collaboration course, "Working Across Teams"
+-- (level 3), so their owners still have a course to open. Neither person has
+-- another goal on that course.
+UPDATE "IdpGoal" g
+SET "courseId" = n."id"
+FROM "Course" o, "Course" n
+WHERE g."courseId" = o."id" AND o."slug" = 'how-to-be-funny' AND n."slug" = 'cross-team-collaboration';
