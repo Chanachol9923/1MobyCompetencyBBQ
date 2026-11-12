@@ -389,7 +389,12 @@ export function IdpView({
                   ) : null}
                 </div>
 
-                {g.remark ? (
+                {g.fromAssessment ? (
+                  <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-tint px-3 py-2 text-xs text-brand">
+                    <Target size={13} className="mt-0.5 shrink-0" />
+                    <span>{tt("Assigned from your assessment", "มอบหมายจากผลการประเมินของคุณ")}</span>
+                  </p>
+                ) : g.remark ? (
                   <p className="mt-3 flex items-start gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-muted">
                     <MessageSquare size={13} className="mt-0.5 shrink-0" />
                     <span>{remarkText(g.remark)}</span>

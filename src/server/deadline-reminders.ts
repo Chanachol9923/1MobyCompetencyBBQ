@@ -77,7 +77,8 @@ export async function planDeadlineReminders(now = new Date()): Promise<Candidate
     const rows = await getGoalRowsForMany([...new Set(goals.map((g) => g.employeeId))]);
     for (const list of rows.values()) {
       for (const g of list) {
-        if (!wanted.has(g.id) || g.complete) continue;
+        // a goal made from an assigned course is reminded once, as the course below
+        if (!wanted.has(g.id) || g.complete || g.fromAssessment) continue;
         const daysLeft = daysUntil(g.dueDate, today);
         const stage = stageFor(daysLeft);
         if (!stage) continue;

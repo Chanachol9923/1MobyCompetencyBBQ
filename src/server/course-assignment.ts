@@ -116,6 +116,9 @@ export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ a
     if (create.length) notify.push({ employeeId: person.id, count: create.length });
   }
 
+  // every assignment is also a goal in the plan, kept in step here
+  await syncAssignedGoals(ids);
+
   if (notify.length) {
     await db.notification.createMany({
       data: notify.map((n) => ({
@@ -131,6 +134,130 @@ export async function syncCourseAssignments(employeeIds?: string[]): Promise<{ a
     });
   }
   return { added, removed };
+}
+
+/**
+ * The stamp on a goal the system made from an assignment. Such a goal has no
+ * author (`createdById` null) and exactly this remark, which is how the IDP
+ * labels it and how the sync tells it from a goal somebody wrote. A manager
+ * who edits it re-stamps the remark, and from then on it is theirs.
+ */
+export const ASSESSMENT_GOAL_REMARK = "Assigned from your assessment";
+
+/** Whether a goal is one `syncAssignedGoals` made and still looks after. */
+export const isAssessmentGoal = (g: { createdById: string | null; remark: string | null }) =>
+  g.createdById === null && g.remark === ASSESSMENT_GOAL_REMARK;
+
+/**
+ * "คอร์สที่ assign ให้ควรมาอยู่ใน IDP เลย auto": each assigned course appears
+ * in the person's development plan as a goal nobody had to write — the
+ * assignment's competency, from its score to its expected level, the course
+ * as the activity, from the day it was assigned to its due date. Being a real
+ * `IdpGoal`, its progress, points, notifications and the manager's Team
+ * Profile all come from the code that already handles goals.
+ *
+ *   - A course that already backs a goal of theirs (a manager's, their own) is
+ *     already in the plan, so no second goal is made for it.
+ *   - When the assignment goes, its goal goes too — unless it has progress or
+ *     evidence, which are never thrown away.
+ *   - A new score or expected level moves the goal's levels with it.
+ *
+ * Safe to run again at any time: it only ever converges on the assignments.
+ */
+export async function syncAssignedGoals(
+  employeeIds?: string[],
+): Promise<{ created: number; removed: number; updated: number }> {
+  const where = employeeIds ? { employeeId: { in: employeeIds } } : {};
+  const [assignments, goals] = await Promise.all([
+    db.courseAssignment.findMany({
+      where,
+      select: {
+        id: true,
+        employeeId: true,
+        courseId: true,
+        competencyId: true,
+        score: true,
+        expected: true,
+        createdAt: true,
+      },
+    }),
+    db.idpGoal.findMany({
+      where: { ...where, courseId: { not: null } },
+      select: {
+        id: true,
+        employeeId: true,
+        courseId: true,
+        createdById: true,
+        remark: true,
+        fromLevel: true,
+        toLevel: true,
+        completedAt: true,
+        _count: { select: { evidence: true } },
+      },
+    }),
+  ]);
+
+  const key = (employeeId: string, courseId: string) => `${employeeId}:${courseId}`;
+  const assigned = new Map(assignments.map((a) => [key(a.employeeId, a.courseId), a]));
+  const goalFor = new Map<string, (typeof goals)[number]>();
+  for (const g of goals) {
+    const k = key(g.employeeId, g.courseId!);
+    // an author's goal on the course wins over a system one in the lookup
+    if (!goalFor.has(k) || !isAssessmentGoal(g)) goalFor.set(k, g);
+  }
+
+  const missing = assignments.filter((a) => !goalFor.has(key(a.employeeId, a.courseId)));
+  const due = await dueDatesOf(missing);
+
+  const orphans = goals.filter((g) => isAssessmentGoal(g) && !assigned.has(key(g.employeeId, g.courseId!)));
+  // progress is a chapter row or a completion on that course
+  const started = orphans.length
+    ? await db.enrollment.findMany({
+        where: {
+          OR: orphans.map((g) => ({ employeeId: g.employeeId, courseId: g.courseId! })),
+          AND: [{ OR: [{ completedAt: { not: null } }, { chapters: { some: {} } }] }],
+        },
+        select: { employeeId: true, courseId: true },
+      })
+    : [];
+  const startedKey = new Set(started.map((s) => key(s.employeeId, s.courseId)));
+  const removable = orphans.filter(
+    (g) => !g.completedAt && g._count.evidence === 0 && !startedKey.has(key(g.employeeId, g.courseId!)),
+  );
+
+  const moved = goals.flatMap((g) => {
+    const a = isAssessmentGoal(g) ? assigned.get(key(g.employeeId, g.courseId!)) : undefined;
+    return a && !g.completedAt && (a.score !== g.fromLevel || a.expected !== g.toLevel)
+      ? [{ id: g.id, fromLevel: a.score, toLevel: a.expected }]
+      : [];
+  });
+
+  if (!missing.length && !removable.length && !moved.length) return { created: 0, removed: 0, updated: 0 };
+  await db.$transaction([
+    ...(missing.length
+      ? [
+          db.idpGoal.createMany({
+            data: missing.map((a) => ({
+              employeeId: a.employeeId,
+              competencyId: a.competencyId,
+              courseId: a.courseId,
+              fromLevel: a.score,
+              toLevel: a.expected,
+              activity: "ONLINE_COURSE" as const,
+              startDate: a.createdAt,
+              dueDate: due.get(a.id)!,
+              remark: ASSESSMENT_GOAL_REMARK,
+              createdById: null,
+            })),
+          }),
+        ]
+      : []),
+    ...(removable.length ? [db.idpGoal.deleteMany({ where: { id: { in: removable.map((g) => g.id) } } })] : []),
+    ...moved.map((m) =>
+      db.idpGoal.update({ where: { id: m.id }, data: { fromLevel: m.fromLevel, toLevel: m.toLevel }, select: { id: true } }),
+    ),
+  ]);
+  return { created: missing.length, removed: removable.length, updated: moved.length };
 }
 
 export type AssignedCourse = {

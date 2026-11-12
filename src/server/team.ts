@@ -3,6 +3,7 @@ import { cache } from "react";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAssessedSets } from "@/server/assessed-competencies";
+import { isAssessmentGoal } from "@/server/course-assignment";
 import {
   getActiveCycle,
   getGapRows,
@@ -234,6 +235,9 @@ export type GoalRow = {
   createdByName: string | null;
   /** the plan's owner added it themselves — only they may edit or delete it */
   selfAdded: boolean;
+  /** made by the system from a course assigned by the assessment; the owner
+   *  cannot delete it, their manager keeps the usual rights */
+  fromAssessment: boolean;
 };
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -342,6 +346,7 @@ export async function getGoalRowsForMany(
       complete: g.completedAt !== null || progress >= 100,
       createdByName: g.createdBy?.name ?? null,
       selfAdded: g.createdById === g.employeeId,
+      fromAssessment: isAssessmentGoal(g),
     });
   }
   return out;
