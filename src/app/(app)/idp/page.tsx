@@ -26,7 +26,7 @@ export const metadata: Metadata = { title: "IDP" };
 export default async function IdpPage() {
   const viewer = await requireEmployee();
   const canEdit = can(viewer.permissions, PERMISSIONS.WORK_OWN_IDP);
-  const [{ goals, certificates, assessedGroups }, rows, courses] =
+  const [{ goals, certificates, assessedGroups, resume }, rows, courses] =
     await Promise.all([
       getIdpView(viewer.employeeId),
       canEdit ? getNamedGapRows(viewer.employeeId) : Promise.resolve([]),
@@ -38,6 +38,7 @@ export default async function IdpPage() {
       goals={goals}
       certificates={certificates}
       assessedGroups={assessedGroups}
+      resume={resume}
       // a career role assessed on nothing has no gap to plan against
       canEdit={canEdit && rows.length > 0}
       rows={rows}

@@ -767,7 +767,85 @@ export type IdpView = {
   certificates: CertificateOption[];
   /** the competency groups this person's career role is assessed on */
   assessedGroups: CourseCategory[];
+  /** the course this person studied most recently, for "pick up where you left off" */
+  resume: ResumeCourse | null;
 };
+
+export type ResumeCourse = {
+  slug: string;
+  titleEn: string;
+  titleTh: string | null;
+  /** the same gradient the catalogue card draws */
+  cover: string | null;
+  hours: number;
+  chapterCount: number;
+  doneCount: number;
+  progress: number;
+  complete: boolean;
+  /** the first chapter in syllabus order not done yet; null once all are */
+  next: { id: string; number: number; titleEn: string; titleTh: string | null } | null;
+};
+
+/**
+ * "Pick up where you left off": the course whose chapter this person finished
+ * last (`ChapterProgress.completedAt`), preferring one they have not finished
+ * yet; without any chapter, the course they opened last (`Enrollment.startedAt`).
+ * Decided here, so every device shows the same course.
+ */
+async function getResumeCourse(employeeId: string): Promise<ResumeCourse | null> {
+  const published = { employeeId, course: { status: "PUBLISHED" as const } };
+  const lastChapter = (unfinished: boolean) =>
+    db.chapterProgress.findFirst({
+      where: { enrollment: { ...published, ...(unfinished ? { completedAt: null } : {}) } },
+      orderBy: { completedAt: "desc" },
+      select: { enrollment: { select: { courseId: true } } },
+    });
+  const courseId =
+    (await lastChapter(true))?.enrollment.courseId ??
+    (
+      await db.enrollment.findFirst({
+        where: { ...published, completedAt: null },
+        orderBy: { startedAt: "desc" },
+        select: { courseId: true },
+      })
+    )?.courseId ??
+    (await lastChapter(false))?.enrollment.courseId;
+  if (!courseId) return null;
+
+  const course = await db.course.findUnique({
+    where: { id: courseId },
+    select: {
+      slug: true,
+      titleEn: true,
+      titleTh: true,
+      cover: true,
+      hours: true,
+      chapters: { orderBy: { sortOrder: "asc" }, select: { id: true, titleEn: true, titleTh: true } },
+      enrollments: {
+        where: { employeeId },
+        select: { completedAt: true, chapters: { select: { chapterId: true } } },
+      },
+    },
+  });
+  if (!course) return null;
+  const enrollment = course.enrollments[0];
+  const done = new Set(enrollment?.chapters.map((c) => c.chapterId) ?? []);
+  const nextIndex = course.chapters.findIndex((c) => !done.has(c.id));
+  const next = nextIndex >= 0 ? course.chapters[nextIndex]! : null;
+  const progress = courseProgress(done.size, course.chapters.length, enrollment?.completedAt ?? null);
+  return {
+    slug: course.slug,
+    titleEn: course.titleEn,
+    titleTh: course.titleTh,
+    cover: course.cover,
+    hours: course.hours,
+    chapterCount: course.chapters.length,
+    doneCount: Math.min(done.size, course.chapters.length),
+    progress,
+    complete: progress >= 100,
+    next: next ? { id: next.id, number: nextIndex + 1, titleEn: next.titleEn, titleTh: next.titleTh } : null,
+  };
+}
 
 const GROUP_ORDER: CourseCategory[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
 
@@ -781,11 +859,12 @@ const GROUP_ORDER: CourseCategory[] = ["CORE", "FUNCTIONAL", "MANAGERIAL"];
  * of `in` queries whatever the plan size.
  */
 export async function getIdpView(employeeId: string): Promise<IdpView> {
-  const [goals, dict, gapRows, assignments] = await Promise.all([
+  const [goals, dict, gapRows, assignments, resume] = await Promise.all([
     getGoalRows(employeeId),
     getCompetencyDictionary(),
     getGapRows(employeeId),
     getAssignments(employeeId),
+    getResumeCourse(employeeId),
   ]);
 
   const competencyIds = [...new Set(goals.map((g) => g.competencyId))];
@@ -930,5 +1009,6 @@ export async function getIdpView(employeeId: string): Promise<IdpView> {
       issuedAt: c.issuedAt.toISOString(),
     })),
     assessedGroups: GROUP_ORDER.filter((g) => assessed.has(g)),
+    resume,
   };
 }

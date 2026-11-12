@@ -466,6 +466,9 @@ export function Modal({
     }, 30);
 
     const onKey = (e: KeyboardEvent) => {
+      // with a dialog opened from inside another, only the top one answers
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (dialogs.length > 1 && dialogs[dialogs.length - 1] !== dialogRef.current) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         onCloseRef.current();
